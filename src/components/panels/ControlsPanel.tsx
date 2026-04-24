@@ -69,7 +69,7 @@ export function ControlsPanel() {
       </div>
 
       <ScrollArea className="flex-1">
-        {selectedGroup ? (
+        {scene && selectedGroup ? (
           <GroupEditor
             key={selectedGroup.id}
             group={selectedGroup}
