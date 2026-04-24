@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 320" width="400" height="320">
+  <!-- Card background -->
+  <g id="background">
+    <rect x="0" y="0" width="400" height="320" fill="#F7F7F8" rx="16"/>
+  </g>
+
+  <!-- Header text -->
+  <g id="header-text">
+    <text x="32" y="52" font-family="Nunito, sans-serif" font-size="22" font-weight="700" fill="#0A0A0A">ZEN Balance</text>
+    <text x="32" y="76" font-family="Nunito, sans-serif" font-size="13" fill="#5A5A60">Current account</text>
+  </g>
+
+  <!-- Balance amount -->
+  <g id="balance">
+    <text x="32" y="138" font-family="Nunito, sans-serif" font-size="40" font-weight="700" fill="#0A0A0A">€ 4,821.50</text>
+  </g>
+
+  <!-- Separator -->
+  <g id="divider">
+    <line x1="32" y1="164" x2="368" y2="164" stroke="#E5E5E8" stroke-width="1"/>
+  </g>
+
+  <!-- Action buttons -->
+  <g id="action-send">
+    <rect x="32" y="184" width="96" height="36" rx="18" fill="#0A0A0A"/>
+    <text x="80" y="207" font-family="Nunito, sans-serif" font-size="13" font-weight="600" fill="#FFFFFF" text-anchor="middle">Send</text>
+  </g>
+
+  <g id="action-receive">
+    <rect x="140" y="184" width="96" height="36" rx="18" fill="#EFEFF1"/>
+    <text x="188" y="207" font-family="Nunito, sans-serif" font-size="13" font-weight="600" fill="#0A0A0A" text-anchor="middle">Receive</text>
+  </g>
+
+  <!-- Recent transactions label -->
+  <g id="transactions-label">
+    <text x="32" y="254" font-family="Nunito, sans-serif" font-size="12" font-weight="600" fill="#9A9AA0" letter-spacing="0.5">RECENT</text>
+  </g>
+
+  <!-- Transaction row -->
+  <g id="transaction-item">
+    <circle cx="48" cy="289" r="16" fill="#EFEFF1"/>
+    <text x="48" y="294" font-family="Nunito, sans-serif" font-size="11" fill="#5A5A60" text-anchor="middle">ZN</text>
+    <text x="76" y="286" font-family="Nunito, sans-serif" font-size="13" font-weight="600" fill="#0A0A0A">Spotify</text>
+    <text x="76" y="300" font-family="Nunito, sans-serif" font-size="11" fill="#9A9AA0">Today · 09:41</text>
+    <text x="368" y="293" font-family="Nunito, sans-serif" font-size="13" font-weight="600" fill="#0A0A0A" text-anchor="end">-€ 9.99</text>
+  </g>
+</svg>
