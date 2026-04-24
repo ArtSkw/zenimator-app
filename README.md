@@ -1,73 +1,105 @@
-# React + TypeScript + Vite
+# ZENimator
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A browser-based SVG animation tool that uses Claude AI to semantically group illustration layers and generate polished entrance animations, exportable as WebM, GIF, HTML, or JSON.
 
-Currently, two official plugins are available:
+**Live app → [artskw.github.io/zenimator-app](https://artskw.github.io/zenimator-app/)**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## What it does
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Upload an SVG illustration or screen design. ZENimator sends it to Claude, which analyses the visual structure and proposes semantic groups (e.g. "card body", "headline", "icon") each with a suggested entrance animation. You can then tweak every parameter — template, duration, easing, start delay, direction — and export the result.
 
-## Expanding the ESLint configuration
+**Animation templates:** fade-in, slide-up/down/left/right, scale-in, pop-in, draw-stroke, stagger-children
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+**Exports:** WebM video, GIF, standalone HTML, JSON (for developer handoff)
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Features
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- **LLM-powered grouping** — Claude claude-sonnet-4-6 analyses the SVG structure and a rasterised preview to propose meaningful animation groups. Falls back to a heuristic grouper when no API key is provided.
+- **Draw-stroke animation** — animates `stroke-dashoffset` along path contours; falls back to a clip-path reveal for filled shapes. Forward / reverse direction toggle.
+- **Per-group controls** — template picker, duration slider, start-time offset, easing picker (with live curve preview), and template-specific params (distance, scale-from, stagger interval).
+- **Regenerate** — re-run Claude on a single selected group without rebuilding the whole scene.
+- **Keyboard shortcuts** — `Space` play/pause, `R` restart, `1–8` switch template on selected layer.
+- **Dark mode** — Light / System / Dark toggle, FOUC-free.
+- **SVG sanitisation** — strips `<script>` tags and `on*` event handlers before rendering.
+
+---
+
+## Tech stack
+
+| Layer | Library |
+|---|---|
+| UI framework | React 19 + TypeScript |
+| Build | Vite 8 |
+| Styling | Tailwind CSS v4 + shadcn/ui (base-nova) |
+| Animation | Web Animations API (WAAPI) |
+| State | Zustand |
+| AI | Anthropic SDK (`claude-sonnet-4-6`) |
+| GIF encoding | gifenc |
+| Video export | MediaRecorder API |
+
+---
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 20+
+- A [Claude API key](https://platform.claude.com/settings/workspaces/default/keys) (your own key, stored in the browser's `localStorage`)
+
+### Local development
+
+```bash
+git clone https://github.com/ArtSkw/zenimator-app.git
+cd zenimator-app
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open `http://localhost:5173`. Enter your Claude API key when prompted — it is stored only in your browser and never sent anywhere except Anthropic's API.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Build
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build   # outputs to dist/
+npm run preview # serve the build locally
 ```
+
+---
+
+## Project structure
+
+```
+src/
+  engine/
+    detector/       # SVG parsing, ID normalisation, sanitisation
+    llm/            # Claude grouper, regenerator, prompt templates, cache
+    restructurer/   # Wrap/per-element group injection
+    proposer/       # Animation proposal + validation
+    animations/     # Template definitions and easing curves
+    scene/          # Types, bounds, timing utilities
+    export/         # WebM, GIF, HTML, JSON exporters + canvas renderer
+  components/
+    shell/          # TopBar, TransportBar, AppShell
+    panels/         # LayersPanel, ControlsPanel, PreviewCanvas
+    player/         # SvgPlayer, ScenePlayer, StaticSceneView
+    controls/       # ParamSlider, EasingPicker, EasingCurve, TemplatePicker
+    upload/         # UploadZone, CategorySelector
+    settings/       # SettingsDrawer
+    onboarding/     # ApiKeyDialog
+  store/            # Zustand stores (scene, playback, settings, category)
+  hooks/            # useKeyboardShortcuts
+```
+
+---
+
+## Roadmap
+
+| Version | Scope |
+|---|---|
+| **v1.0** ✅ | Entrance animations, SVG-only, LLM grouping, full export suite |
+| v1.1 | Ambient loop animations (breathe, float, drift) |
+| v1.2 | Rigged character motion, PNG/bitmap support |
