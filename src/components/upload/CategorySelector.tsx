@@ -1,11 +1,15 @@
-import { ArrowRight, Waves } from 'lucide-react'
+import { ArrowRight, Waves, Wand2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCategoryStore } from '@/store/categoryStore'
+import { useGenerateStore } from '@/store/generateStore'
 import type { AnimationCategory } from '@/engine/scene/types'
 import type { ComponentType } from 'react'
 
+/** Tile ids = the two SVG categories plus the prompt-based generate lane. */
+type TileId = AnimationCategory | 'generate'
+
 type TileDef = {
-  id: AnimationCategory
+  id: TileId
   title: string
   description: string
   Icon: ComponentType<{ size?: number; className?: string }>
@@ -24,10 +28,29 @@ const TILES: TileDef[] = [
     description: 'Subtle continuous motion — breathing, floating.',
     Icon: Waves,
   },
+  {
+    id: 'generate',
+    title: 'Generate',
+    description: 'Describe an animation — optionally ground it with an SVG.',
+    Icon: Wand2,
+  },
 ]
 
 export function CategorySelector() {
   const { category, setCategory } = useCategoryStore()
+  const { active: generateActive, setActive } = useGenerateStore()
+
+  const isSelected = (id: TileId) =>
+    id === 'generate' ? generateActive : !generateActive && category === id
+
+  const pick = (id: TileId) => {
+    if (id === 'generate') {
+      setActive(true)
+    } else {
+      setActive(false)
+      setCategory(id)
+    }
+  }
 
   return (
     <div className="w-full max-w-xl mx-auto mb-6">
@@ -36,14 +59,14 @@ export function CategorySelector() {
           Animation category
         </span>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {TILES.map((tile) => {
-          const selected = category === tile.id
+          const selected = isSelected(tile.id)
           return (
             <button
               key={tile.id}
               type="button"
-              onClick={() => setCategory(tile.id)}
+              onClick={() => pick(tile.id)}
               aria-pressed={selected}
               className={cn(
                 'group flex flex-col items-start gap-2 p-4 rounded-xl border text-left',
