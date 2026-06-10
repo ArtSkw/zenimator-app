@@ -39,14 +39,17 @@ export function ParamSlider({
   onChange,
   onCommit,
 }: Props) {
-  const [local, setLocal]     = useState(value)
+  // Clamp to range so an out-of-range stored value (e.g. an LLM-set 0.1 where
+  // the floor is 2) never renders the thumb off the track or fills it whole.
+  const clampToRange = (n: number) => Math.min(max, Math.max(min, n))
+  const [local, setLocal]     = useState(clampToRange(value))
   const [editing, setEditing] = useState(false)
   const [draft, setDraft]     = useState('')
   const [error, setError]     = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Sync when the prop changes from outside (store update / reset).
-  useEffect(() => { setLocal(value) }, [value])
+  useEffect(() => { setLocal(clampToRange(value)) }, [value, min, max])
 
   // Auto-select the entire value on entry so the user can type immediately.
   useEffect(() => {

@@ -68,6 +68,7 @@ export function SkottiePlayer({
             pause: () => engine.pause(),
             toggle: () => engine.toggle(),
             replay: () => { engine.seek(0); engine.play() },
+            seek: (f) => engine.seek(f),
             setLoop: (l) => engine.setLoop(l),
           },
           loop,

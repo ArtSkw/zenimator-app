@@ -4,6 +4,8 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/
 import { Layers, AlertTriangle, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSceneStore } from '@/store/sceneStore'
+import { useGenerateStore } from '@/store/generateStore'
+import { GenerateLayersPanel } from '@/components/generate/GenerateLayersPanel'
 import type { AnimatableGroup, GroupTag } from '@/engine/scene/types'
 
 const TAG_LABELS: Record<GroupTag, string> = {
@@ -53,6 +55,11 @@ function GroupRow({
 
 export function LayersPanel() {
   const { scene, selectedGroupId, selectGroup } = useSceneStore()
+  const genActive = useGenerateStore((s) => s.active)
+  const genProject = useGenerateStore((s) => s.project)
+
+  // In the generate lane, show the generated project's layers instead.
+  if (genActive && genProject) return <GenerateLayersPanel />
 
   return (
     <aside className="w-[280px] border-r border-border bg-background flex flex-col shrink-0">

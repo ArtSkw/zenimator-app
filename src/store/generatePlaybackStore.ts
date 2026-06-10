@@ -7,6 +7,8 @@ export type SkottieControls = {
   toggle: () => void
   /** Seek to frame 0 and play — "play it once more" for entry animations. */
   replay: () => void
+  /** Seek to an absolute frame and render it (without changing play state). */
+  seek: (frame: number) => void
   setLoop: (loop: boolean) => void
 }
 

@@ -1,8 +1,9 @@
 import { toast } from 'sonner'
-import { Sparkles, Loader2, Wand2, RotateCcw, Download, X, Paperclip } from 'lucide-react'
+import { Loader2, Wand2, RotateCcw, Download, X, Paperclip } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { SkottiePlayer } from '@/components/player/SkottiePlayer'
+import { SelectionOverlay } from '@/components/generate/SelectionOverlay'
 import { useGenerateStore, type Subject, type Kind, type Method } from '@/store/generateStore'
 import { useGeneratePlayback } from '@/store/generatePlaybackStore'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -19,7 +20,7 @@ export function GenerateView() {
   const {
     subject, kind, method, prompt, grounding, lottieJson, resultSignature, resultKind, status, stage, error,
     setSubject, setKind, setMethod, setPrompt, setGrounding,
-    startGenerating, setStage, setResult, setError, clearResult,
+    startGenerating, setStage, setResult, setError, clearResult, setSelectedLayer,
   } = useGenerateStore()
   const { attach, detach, setPlaying, setProgress } = useGeneratePlayback()
   const { apiKey, model } = useSettingsStore()
@@ -39,7 +40,7 @@ export function GenerateView() {
     if (!canGenerate) return
     startGenerating()
     try {
-      const json = await generateLottie(
+      const { lottieJson: json, project } = await generateLottie(
         {
           prompt: method === 'manual' ? prompt.trim() : '',
           grounding: grounding
@@ -49,7 +50,7 @@ export function GenerateView() {
         },
         { apiKey, model, onStage: setStage },
       )
-      setResult(json, signature, kind)
+      setResult(json, signature, kind, project)
     } catch (err) {
       const msg = humanizeLlmError(err)
       setError(msg)
@@ -84,9 +85,44 @@ export function GenerateView() {
   }
 
   return (
-    <div className="flex flex-col items-center w-full h-full p-8 overflow-auto">
-      <div className="w-full max-w-xl space-y-5">
-        {/* Property axes */}
+    <div className="h-full w-full overflow-auto">
+      <div
+        className="min-h-full flex flex-col items-center justify-center p-8"
+        onClick={(e) => { if (e.target === e.currentTarget) setSelectedLayer(null) }}
+      >
+        <div className="w-full max-w-xl">
+          {/* Preview — sits above the controls and becomes the focus when ready.
+              Kept in clean normal flow (no height-animating / overflow wrappers)
+              so the WebGL canvas sizes correctly; it eases in via a transform. */}
+          {lottieJson && (
+            <div className="mb-6 space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-500 ease-out">
+              <div className="rounded-2xl border border-border p-2" style={CHECKER_BG}>
+                <div className="relative mx-auto aspect-square w-full max-w-[360px]">
+                  <SkottiePlayer
+                    lottieJson={lottieJson}
+                    loop={resultKind === 'loop'}
+                    onReady={(c, lp) => (c ? attach(c, lp) : detach())}
+                    onPlayStateChange={setPlaying}
+                    onFrame={setProgress}
+                    className="h-full w-full"
+                  />
+                  <SelectionOverlay />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" className="rounded-full gap-1.5" onClick={clearResult}>
+                  <RotateCcw size={12} /> Clear
+                </Button>
+                <Button variant="default" size="sm" className="rounded-full gap-1.5 ml-auto" onClick={handleExport}>
+                  <Download size={12} /> Export Lottie
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Controls + prompt */}
+          <div className="space-y-5">
+            {/* Property axes */}
         <div className="flex flex-wrap gap-x-6 gap-y-3">
           <Seg<Subject>
             label="Subject"
@@ -181,40 +217,8 @@ export function GenerateView() {
           {error && <p className="text-xs text-destructive leading-snug">{error}</p>}
         </div>
 
-        {/* Result */}
-        {lottieJson ? (
-          <div className="space-y-3">
-            <div className="rounded-2xl border border-border p-2" style={CHECKER_BG}>
-              <div className="mx-auto aspect-square w-full max-w-[360px]">
-                <SkottiePlayer
-                  lottieJson={lottieJson}
-                  loop={resultKind === 'loop'}
-                  onReady={(c, lp) => (c ? attach(c, lp) : detach())}
-                  onPlayStateChange={setPlaying}
-                  onFrame={setProgress}
-                  className="h-full w-full"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm" className="rounded-full gap-1.5" onClick={clearResult}>
-                <RotateCcw size={12} /> Clear
-              </Button>
-              <Button variant="default" size="sm" className="rounded-full gap-1.5 ml-auto" onClick={handleExport}>
-                <Download size={12} /> Export Lottie
-              </Button>
-            </div>
           </div>
-        ) : (
-          !generating && (
-            <div className="rounded-2xl border border-dashed border-border py-12 text-center">
-              <Sparkles size={20} className="mx-auto text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground">
-                Your animation will appear here.
-              </p>
-            </div>
-          )
-        )}
+        </div>
       </div>
     </div>
   )

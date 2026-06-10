@@ -45,10 +45,24 @@ export const staticVec = (v: number[]): Prop => ({ a: 0, k: v })
 
 const handles = (b: Bezier) => ({ o: { x: [b[0]], y: [b[1]] }, i: { x: [b[2]], y: [b[3]] } })
 
-/** A 2-keyframe animated property from `from`→`to`. Bodymovin convention puts
- *  the segment's easing handles on the start keyframe; the end keyframe is bare. */
+/** General N-keyframe animated property. Each key carries its value `s` and the
+ *  easing `bez` for the segment INTO the next key (Bodymovin puts handles on the
+ *  start keyframe of a segment). The last key is always bare; a missing `bez`
+ *  also yields a bare key (hold). This is the primitive the tracks model emits;
+ *  `animed2`/`animed3` are just special cases kept for the prompt-path code. */
+export function animedKeys(keys: { t: number; s: number[]; bez?: Bezier }[]): Prop {
+  const last = keys.length - 1
+  return {
+    a: 1,
+    k: keys.map((kf, i) =>
+      i < last && kf.bez ? { t: kf.t, s: kf.s, ...handles(kf.bez) } : { t: kf.t, s: kf.s },
+    ),
+  }
+}
+
+/** A 2-keyframe animated property from `from`→`to`. */
 export function animed2(start: number, end: number, from: number[], to: number[], bez: Bezier): Prop {
-  return { a: 1, k: [{ t: start, s: from, ...handles(bez) }, { t: end, s: to }] }
+  return animedKeys([{ t: start, s: from, bez }, { t: end, s: to }])
 }
 
 /** A 3-keyframe oscillation v0→v1→v0 for seamless loops (v0 must equal v2). */
@@ -57,14 +71,7 @@ export function animed3(
   v0: number[], v1: number[], v2: number[],
   bez: Bezier,
 ): Prop {
-  return {
-    a: 1,
-    k: [
-      { t: t0, s: v0, ...handles(bez) },
-      { t: t1, s: v1, ...handles(bez) },
-      { t: t2, s: v2 },
-    ],
-  }
+  return animedKeys([{ t: t0, s: v0, bez }, { t: t1, s: v1, bez }, { t: t2, s: v2 }])
 }
 
 // ── Faithful per-layer rasterization ─────────────────────────────────────────

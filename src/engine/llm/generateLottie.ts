@@ -3,6 +3,11 @@ import { LOTTIE_SYSTEM_PROMPT } from './prompts/lottie'
 import { REFINE_LOTTIE_INSTRUCTION } from './prompts/refine'
 import { generateGroundedLottie } from './generateGroundedLottie'
 import { renderLottieFrames, pickFrames } from '@/engine/lottie/render'
+import type { GenerateProject } from '@/engine/lottie/project'
+
+/** A generation result: the Lottie JSON, plus the editable project when the
+ *  grounded path produced one (pure-prompt results aren't layer-editable). */
+export type GenerateResult = { lottieJson: string; project: GenerateProject | null }
 
 /** The three property axes that configure a generation. */
 export type GenConfig = {
@@ -50,7 +55,7 @@ const RENDER_TOOL = {
 export async function generateLottie(
   input: GenerateLottieInput,
   opts: GenerateLottieOptions,
-): Promise<string> {
+): Promise<GenerateResult> {
   // Grounded by an SVG → faithful geometry + LLM motion plan (the model never
   // redraws the artwork). Pure-prompt ideas fall through to shape authoring.
   if (input.grounding) {
@@ -62,14 +67,15 @@ export async function generateLottie(
   const v1 = await drawLottie(input.prompt + kindHint, opts)
 
   // Refine: render frames of v1, let the model correct what it can see.
-  // Resilient — any failure falls back to the first pass.
+  // Resilient — any failure falls back to the first pass. Pure-prompt results
+  // have no editable project (the shapes are free-form, not faithful geometry).
   try {
     opts.onStage?.('Refining…')
     const op = readOp(v1)
     const frames = await renderLottieFrames(v1, pickFrames(op), 320)
-    return await refineLottie(input.prompt, v1, frames, opts)
+    return { lottieJson: await refineLottie(input.prompt, v1, frames, opts), project: null }
   } catch {
-    return v1
+    return { lottieJson: v1, project: null }
   }
 }
 

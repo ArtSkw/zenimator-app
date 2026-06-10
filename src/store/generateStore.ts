@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { assembleProject, TRACK_KEYS, type GenerateProject, type LayerTracks, type Track } from '@/engine/lottie/project'
 
 export type GenStatus = 'idle' | 'generating' | 'done' | 'error'
 
@@ -30,6 +31,11 @@ type GenerateState = {
    *  loop/hold behaviour, independent of the live Kind selector so toggling it
    *  never disturbs the running preview. */
   resultKind: Kind | null
+  /** The editable project (geometry + per-layer motion) for grounded results;
+   *  null for pure-prompt results, which aren't layer-editable. */
+  project: GenerateProject | null
+  /** Index of the layer currently selected in the editor. */
+  selectedLayer: number | null
   status: GenStatus
   /** Sub-stage label shown while generating (e.g. "Refining motion…"). */
   stage: string | null
@@ -43,7 +49,12 @@ type GenerateState = {
   setGrounding: (g: Grounding | null) => void
   startGenerating: () => void
   setStage: (s: string) => void
-  setResult: (json: string, signature: string, kind: Kind) => void
+  setResult: (json: string, signature: string, kind: Kind, project: GenerateProject | null) => void
+  /** Edit one layer's tracks → re-assemble the Lottie (cheap, no re-raster). */
+  setLayerTracks: (index: number, tracks: LayerTracks) => void
+  /** Change the total length (frames), scaling every effect's timing to fit. */
+  setTotalFrames: (frames: number) => void
+  setSelectedLayer: (index: number | null) => void
   setError: (msg: string) => void
   clearResult: () => void
 }
@@ -63,6 +74,8 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   lottieJson: null,
   resultSignature: null,
   resultKind: null,
+  project: null,
+  selectedLayer: null,
   status: 'idle',
   stage: null,
   error: null,
@@ -75,9 +88,43 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   setGrounding: (grounding) => set({ grounding }),
   startGenerating: () => set({ status: 'generating', stage: null, error: null }),
   setStage: (stage) => set({ stage }),
-  setResult: (lottieJson, resultSignature, resultKind) =>
-    set({ lottieJson, resultSignature, resultKind, status: 'done', stage: null, error: null }),
+  setResult: (lottieJson, resultSignature, resultKind, project) =>
+    set({
+      lottieJson, resultSignature, resultKind, project,
+      selectedLayer: project && project.layers.length ? 0 : null,
+      status: 'done', stage: null, error: null,
+    }),
+  setLayerTracks: (index, tracks) =>
+    set((s) => {
+      if (!s.project) return {}
+      const layers = s.project.layers.map((l, i) => (i === index ? { ...l, tracks } : l))
+      const project = { ...s.project, layers }
+      return { project, lottieJson: JSON.stringify(assembleProject(project)) }
+    }),
+  setTotalFrames: (frames) =>
+    set((s) => {
+      if (!s.project) return {}
+      const op = Math.max(12, Math.min(1800, Math.round(frames)))
+      const r = op / s.project.op
+      if (r === 1) return {}
+      const scaleTrack = (t: Track | undefined): Track | undefined =>
+        t ? { ...t, keys: t.keys.map((k) => ({ ...k, t: Math.round(k.t * r) })) } : undefined
+      const layers = s.project.layers.map((l) => {
+        const tracks: LayerTracks = {}
+        for (const key of TRACK_KEYS) {
+          const scaled = scaleTrack(l.tracks[key])
+          if (scaled) tracks[key] = scaled
+        }
+        return { ...l, tracks }
+      })
+      const project = { ...s.project, op, layers }
+      return { project, lottieJson: JSON.stringify(assembleProject(project)) }
+    }),
+  setSelectedLayer: (selectedLayer) => set({ selectedLayer }),
   setError: (error) => set({ status: 'error', stage: null, error }),
   clearResult: () =>
-    set({ lottieJson: null, resultSignature: null, resultKind: null, status: 'idle', stage: null, error: null }),
+    set({
+      lottieJson: null, resultSignature: null, resultKind: null, project: null,
+      selectedLayer: null, status: 'idle', stage: null, error: null,
+    }),
 }))

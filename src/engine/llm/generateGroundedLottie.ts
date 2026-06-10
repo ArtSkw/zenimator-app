@@ -7,48 +7,53 @@ import { rasterizeSvg } from '@/engine/detector/rasterize'
 import { MOTION_PLAN_PROMPT } from './prompts/motionPlan'
 import { REFINE_MOTION_PROMPT } from './prompts/refine'
 import { renderLottieFrames, pickFrames } from '@/engine/lottie/render'
+import { rasterizeLayers, type LayerDef, type EasingKey } from '@/engine/lottie/core'
 import {
-  rasterizeLayers,
-  animed2,
-  animed3,
-  staticNum,
-  staticVec,
-  EASING_BEZIER,
-  type EasingKey,
-  type Transform,
-  type LayerDef,
-  type LottieDoc,
-  type ImageAsset,
-  type ImageLayer,
-} from '@/engine/lottie/core'
+  assembleProject,
+  clampInt,
+  clampNum,
+  EASINGS,
+  type GenerateProject,
+  type ProjectLayer,
+  type LayerTracks,
+} from '@/engine/lottie/project'
 
 // ── Motion plan shape (mirrors the plan_motion tool schema) ─────────────────
+// Each layer authors KEYFRAMES directly, one list per animatable property.
+// There is no preset vocabulary — the model places keyframes freely.
 
-const MOTION_TYPES = [
-  'rise', 'fall', 'slide-left', 'slide-right', 'fade', 'scale-in', 'pop',
-  'float', 'drift', 'pulse', 'rotate', 'shimmer', 'none',
-] as const
-type MotionType = (typeof MOTION_TYPES)[number]
-
+type ScalarKey = { t: number; v: number; easing?: string }
+type PosKey = { t: number; x: number; y: number; easing?: string }
 type PlanLayer = {
   name: string
   elementIds: string[]
-  type: MotionType
-  amplitude?: number
-  distance?: number
-  scaleFrom?: number
-  direction?: 'cw' | 'ccw'
-  driftAxis?: 'x' | 'y'
-  easing?: EasingKey
-  startFrame?: number
-  durationFrames?: number
+  opacity?: ScalarKey[]
+  position?: PosKey[]
+  scale?: ScalarKey[]
+  rotation?: ScalarKey[]
 }
 type MotionPlan = { fps?: number; totalFrames?: number; layers: PlanLayer[] }
+
+const EASE_ENUM = [...EASINGS]
+
+const SCALAR_KEYS = (desc: string) => ({
+  type: 'array' as const,
+  description: desc,
+  items: {
+    type: 'object' as const,
+    properties: {
+      t: { type: 'number' as const, description: 'Frame (0..totalFrames).' },
+      v: { type: 'number' as const },
+      easing: { type: 'string' as const, enum: EASE_ENUM, description: 'Curve INTO the next keyframe.' },
+    },
+    required: ['t', 'v'],
+  },
+})
 
 const PLAN_TOOL = {
   name: 'plan_motion',
   description:
-    'Group the illustration\'s elements into animated layers and assign each a motion. Do NOT draw or redraw shapes.',
+    "Group the illustration's elements into layers and animate each by placing KEYFRAMES on its property tracks (opacity, position, scale, rotation). Do NOT draw or redraw shapes.",
   input_schema: {
     type: 'object' as const,
     properties: {
@@ -65,20 +70,25 @@ const PLAN_TOOL = {
               items: { type: 'string' as const },
               description: 'IDs of the SVG elements that form this layer.',
             },
-            type: { type: 'string' as const, enum: [...MOTION_TYPES] },
-            amplitude: { type: 'number' as const },
-            distance: { type: 'number' as const },
-            scaleFrom: { type: 'number' as const },
-            direction: { type: 'string' as const, enum: ['cw', 'ccw'] },
-            driftAxis: { type: 'string' as const, enum: ['x', 'y'] },
-            easing: {
-              type: 'string' as const,
-              enum: ['linear', 'easeIn', 'easeOut', 'easeInOut', 'spring-gentle', 'spring-bouncy', 'spring-stiff'],
+            opacity: SCALAR_KEYS('Opacity keyframes; v is percent 0–100 (rest 100).'),
+            scale: SCALAR_KEYS('Scale keyframes; v is percent, uniform (rest 100, e.g. 60 = 60%).'),
+            rotation: SCALAR_KEYS('Rotation keyframes; v is degrees (rest 0; 360 = one full turn).'),
+            position: {
+              type: 'array' as const,
+              description: 'Position keyframes; x/y are an OFFSET in px from the layer\'s rest centre (rest 0,0).',
+              items: {
+                type: 'object' as const,
+                properties: {
+                  t: { type: 'number' as const, description: 'Frame (0..totalFrames).' },
+                  x: { type: 'number' as const },
+                  y: { type: 'number' as const },
+                  easing: { type: 'string' as const, enum: EASE_ENUM, description: 'Curve INTO the next keyframe.' },
+                },
+                required: ['t', 'x', 'y'],
+              },
             },
-            startFrame: { type: 'number' as const },
-            durationFrames: { type: 'number' as const },
           },
-          required: ['name', 'elementIds', 'type'],
+          required: ['name', 'elementIds'],
         },
       },
     },
@@ -90,22 +100,22 @@ export type GenerateOptions = {
   apiKey: string
   model: string
   signal?: AbortSignal
-  /** Progress callback for the multi-stage pipeline. */
   onStage?: (stage: string) => void
 }
 
+export type GroundedResult = { lottieJson: string; project: GenerateProject }
+
 /**
- * Grounded hybrid: render the real SVG faithfully, let the LLM only choreograph.
- * Two passes — plan, then render real frames and let the model critique and
- * adjust the motion (geometry stays fixed, so the refine only re-applies new
- * motion to the already-rasterized layers). Returns a Lottie JSON string.
+ * Grounded hybrid: render the real SVG faithfully, let the LLM only choreograph
+ * by authoring keyframes. Two passes — plan, then render real frames and let the
+ * model critique and adjust. Returns the Lottie JSON + the editable project.
  */
 export async function generateGroundedLottie(
   svgText: string,
   prompt: string,
   config: GenConfig,
   opts: GenerateOptions,
-): Promise<string> {
+): Promise<GroundedResult> {
   const index = detectSvg(sanitizeSvg(svgText))
   opts.onStage?.('Analyzing artwork…')
   const previewPng = await rasterizeSvg(index.enrichedSvg)
@@ -114,19 +124,17 @@ export async function generateGroundedLottie(
   const plan = await planMotion(index, previewPng, prompt, config, opts)
 
   opts.onStage?.('Rendering layers…')
-  const prepared = await prepareLayers(index, plan)
-  const v1 = assemble(prepared)
+  const project = await prepareLayers(index, plan)
+  const v1 = assembleProject(project)
 
-  // Refine: render frames of v1, let the model adjust the per-layer motion.
-  // Resilient — any failure falls back to the (already good) first pass.
   try {
     opts.onStage?.('Refining motion…')
-    const frames = await renderLottieFrames(JSON.stringify(v1), pickFrames(prepared.op), 320)
-    const refined = await refineMotionPlan(prepared, prompt, frames, opts)
-    applyRefinedMotions(prepared, refined)
-    return JSON.stringify(assemble(prepared))
+    const frames = await renderLottieFrames(JSON.stringify(v1), pickFrames(project.op), 320)
+    const refined = await refineMotionPlan(project, prompt, frames, opts)
+    applyRefined(project, refined)
+    return { lottieJson: JSON.stringify(assembleProject(project)), project }
   } catch {
-    return JSON.stringify(v1)
+    return { lottieJson: JSON.stringify(v1), project }
   }
 }
 
@@ -168,7 +176,7 @@ async function planMotion(
   const response = await client.messages.create(
     {
       model: opts.model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: MOTION_PLAN_PROMPT,
       tools: [PLAN_TOOL as unknown as Anthropic.Tool],
       tool_choice: { type: 'tool', name: PLAN_TOOL.name },
@@ -186,25 +194,15 @@ async function planMotion(
   return plan
 }
 
-// ── Step 2: render faithful layers (once) + apply the plan ───────────────────
+// ── Step 2: render faithful layers (once) → editable project ─────────────────
 
-/** A faithful, already-rasterized layer + its assigned motion. Geometry here is
- *  fixed; the refine pass only swaps `motion` and re-assembles. */
-type PreparedLayer = {
-  name: string
-  elementIds: string[]
-  dataUrl: string
-  cx: number
-  cy: number
-  motion: PlanLayer
-}
-type Prepared = { fps: number; op: number; S: number; Wc: number; Hc: number; layers: PreparedLayer[] }
+const hasMotion = (l: PlanLayer): boolean =>
+  !!(l.opacity?.length || l.position?.length || l.scale?.length || l.rotation?.length)
 
-async function prepareLayers(index: StructuralIndex, plan: MotionPlan): Promise<Prepared> {
+async function prepareLayers(index: StructuralIndex, plan: MotionPlan): Promise<GenerateProject> {
   const { width: W, height: H } = index.viewport
   const fps = clampInt(plan.fps, 12, 120, 60)
   const op = clampInt(plan.totalFrames, 30, 1800, fps * 4)
-  // Supersample so raster layers stay crisp when scaled onto a retina canvas.
   const S = dpiScale(W, H)
 
   const boundsById = new Map(index.elements.map((e) => [e.id, e.bounds]))
@@ -215,9 +213,8 @@ async function prepareLayers(index: StructuralIndex, plan: MotionPlan): Promise<
   )
   if (planLayers.length === 0) throw new Error('The motion plan referenced no known elements.')
 
-  // Every visual element belongs to exactly ONE layer — otherwise the same
-  // pixels render twice (a static copy + an animated copy = the "ghost"/dupe).
-  // Animated layers claim their elements first; static layers take the rest.
+  // Every visual element belongs to exactly ONE layer — animated layers (those
+  // with motion) claim their elements first; static layers take the rest.
   const VISUAL = new Set(['path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline', 'line', 'use', 'text', 'image'])
   const leaves = index.elements.filter((e) => VISUAL.has(e.tag))
   const coversLeaf = (set: Set<string>, leafId: string): boolean => {
@@ -238,74 +235,94 @@ async function prepareLayers(index: StructuralIndex, plan: MotionPlan): Promise<
         if (coversLeaf(set, leaf.id)) owner.set(leaf.id, li)
       }
     })
-  assign((l) => l.type !== 'none') // animated layers win
-  assign((l) => l.type === 'none') // then static layers
+  assign(hasMotion)
+  assign((l) => !hasMotion(l))
 
   const defs: LayerDef[] = []
-  const motions: PlanLayer[] = []
+  const fx: LayerTracks[] = []
   planLayers.forEach((l, li) => {
     const owned = leaves.filter((lf) => owner.get(lf.id) === li).map((lf) => lf.id)
     if (owned.length === 0) return
     defs.push({ name: l.name || 'layer', elementIds: owned })
-    motions.push(l)
+    fx.push(planToTracks(l, op))
   })
   const uncovered = leaves.filter((lf) => !owner.has(lf.id)).map((lf) => lf.id)
   if (uncovered.length) {
     defs.push({ name: '(static)', elementIds: uncovered })
-    motions.push({ name: '(static)', elementIds: uncovered, type: 'none' })
+    fx.push({})
   }
 
   const rasters = await rasterizeLayers(index.enrichedSvg, index.viewport, defs, S)
 
-  const layers: PreparedLayer[] = rasters
+  const layers: ProjectLayer[] = rasters
     .map((r) => {
       const elementIds = defs[r.defIndex].elementIds
-      const c = unionCentre(elementIds, boundsById, W, H)
-      return { layer: { name: r.name, elementIds, dataUrl: r.dataUrl, cx: c.cx * S, cy: c.cy * S, motion: motions[r.defIndex] }, docIndex: r.docIndex }
+      const b = unionBox(elementIds, boundsById, W, H)
+      return {
+        layer: {
+          name: r.name, elementIds, dataUrl: r.dataUrl,
+          cx: b.cx * S, cy: b.cy * S,
+          bounds: { x: b.x * S, y: b.y * S, w: b.w * S, h: b.h * S },
+          tracks: fx[r.defIndex],
+        } satisfies ProjectLayer,
+        docIndex: r.docIndex,
+      }
     })
-    // Topmost-first: later in paint order → earlier in the layers array.
     .sort((a, b) => b.docIndex - a.docIndex)
     .map((e) => e.layer)
 
-  return { fps, op, S, Wc: W * S, Hc: H * S, layers }
+  return { fps, op, scale: S, w: W * S, h: H * S, layers }
 }
 
-function assemble(prepared: Prepared): LottieDoc {
-  const { fps, op, S, Wc, Hc, layers } = prepared
-  const assets: ImageAsset[] = []
-  const lottieLayers: ImageLayer[] = []
-  layers.forEach((l, i) => {
-    const id = `img_${i}`
-    assets.push({ id, w: Wc, h: Hc, u: '', p: l.dataUrl, e: 1 })
-    lottieLayers.push({
-      ddd: 0, ind: i + 1, ty: 2, nm: l.name, refId: id,
-      sr: 1, ks: buildTransform(l.motion, l.cx, l.cy, op, fps, S), ao: 0, ip: 0, op, st: 0, bm: 0,
-    })
-  })
-  return { v: '5.7.0', fr: fps, ip: 0, op, w: Wc, h: Hc, assets, layers: lottieLayers }
-}
-
-/** Target ~1024px on the long side; clamp to 1–4×. */
 function dpiScale(W: number, H: number): number {
   return Math.min(4, Math.max(1, Math.round(1024 / Math.max(W, H))))
 }
 
-// ── Step 3: refine — show the model real frames, adjust per-layer motion ─────
+/** Convert a plan layer's raw keyframe lists into clamped, validated tracks. */
+function planToTracks(l: PlanLayer, op: number): LayerTracks {
+  const t: LayerTracks = {}
+  const ease = (e?: string): EasingKey | undefined =>
+    e && (EASINGS as string[]).includes(e) ? (e as EasingKey) : undefined
+
+  const scalar = (arr: ScalarKey[] | undefined, min: number, max: number, fb: number) =>
+    arr?.length
+      ? { keys: arr.map((k) => ({ t: clampInt(k.t, 0, op, 0), v: clampNum(k.v, min, max, fb), easing: ease(k.easing) })) }
+      : undefined
+
+  const o = scalar(l.opacity, 0, 100, 100)
+  if (o) t.opacity = o
+  const s = scalar(l.scale, 0, 400, 100)
+  if (s) t.scale = s
+  const r = scalar(l.rotation, -3600, 3600, 0)
+  if (r) t.rotation = r
+  if (l.position?.length) {
+    t.position = {
+      keys: l.position.map((k) => ({
+        t: clampInt(k.t, 0, op, 0),
+        v: [clampNum(k.x, -2000, 2000, 0), clampNum(k.y, -2000, 2000, 0)] as [number, number],
+        easing: ease(k.easing),
+      })),
+    }
+  }
+  return t
+}
+
+// ── Step 3: refine — show the model real frames, adjust the keyframes ────────
 
 async function refineMotionPlan(
-  prepared: Prepared,
+  project: GenerateProject,
   prompt: string,
   frames: string[],
   opts: GenerateOptions,
-): Promise<Map<string, PlanLayer>> {
+): Promise<Map<string, LayerTracks>> {
   const client = new Anthropic({ apiKey: opts.apiKey, dangerouslyAllowBrowser: true })
 
-  const planSummary = prepared.layers.map((l) => ({ name: l.name, motion: l.motion }))
+  const planSummary = project.layers.map((l) => ({ name: l.name, tracks: tracksToPlan(l.tracks) }))
   const content: Anthropic.ContentBlockParam[] = [
     {
       type: 'text',
       text:
-        `Current plan (layers and their motions):\n${JSON.stringify(planSummary, null, 2)}\n\n` +
+        `Current plan (layers and their keyframe tracks):\n${JSON.stringify(planSummary, null, 2)}\n\n` +
         `User request:\n${prompt}\n\n` +
         `Rendered frames of the current result follow, in order across the loop:`,
     },
@@ -315,7 +332,7 @@ async function refineMotionPlan(
   const response = await client.messages.create(
     {
       model: opts.model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: REFINE_MOTION_PROMPT,
       tools: [PLAN_TOOL as unknown as Anthropic.Tool],
       tool_choice: { type: 'tool', name: PLAN_TOOL.name },
@@ -329,121 +346,46 @@ async function refineMotionPlan(
   )
   if (!toolBlock) throw new Error('The refine pass returned no plan.')
   const plan = toolBlock.input as MotionPlan
-  const byName = new Map<string, PlanLayer>()
-  for (const l of plan.layers ?? []) if (l?.name) byName.set(l.name, l)
+  const byName = new Map<string, LayerTracks>()
+  for (const l of plan.layers ?? []) if (l?.name) byName.set(l.name, planToTracks(l, project.op))
   return byName
 }
 
-/** Re-apply refined motion to the prepared layers, keeping each layer's
- *  geometry (elementIds, raster, centre) untouched. */
-function applyRefinedMotions(prepared: Prepared, refined: Map<string, PlanLayer>): void {
-  for (const layer of prepared.layers) {
+function applyRefined(project: GenerateProject, refined: Map<string, LayerTracks>): void {
+  for (const layer of project.layers) {
     const r = refined.get(layer.name)
-    if (!r) continue
-    layer.motion = {
-      name: layer.name,
-      elementIds: layer.elementIds,
-      type: r.type ?? layer.motion.type,
-      amplitude: r.amplitude,
-      distance: r.distance,
-      scaleFrom: r.scaleFrom,
-      direction: r.direction,
-      driftAxis: r.driftAxis,
-      easing: r.easing,
-      startFrame: r.startFrame,
-      durationFrames: r.durationFrames,
-    }
-  }
-}
-
-function imageBlock(dataUrl: string): Anthropic.ContentBlockParam {
-  const { mediaType, base64 } = splitDataUrl(dataUrl)
-  return {
-    type: 'image',
-    source: {
-      type: 'base64',
-      media_type: mediaType as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif',
-      data: base64,
-    },
-  }
-}
-
-// ── Motion → Lottie transform ────────────────────────────────────────────────
-
-function buildTransform(
-  m: PlanLayer, cx: number, cy: number, total: number, fps: number, scale: number,
-): Transform {
-  const a = staticVec([cx, cy, 0])
-  const baseP = [cx, cy, 0]
-  const base: Transform = {
-    o: staticNum(100), r: staticNum(0), p: staticVec(baseP), a, s: staticVec([100, 100, 100]),
-  }
-
-  const start = clampInt(m.startFrame, 0, total, 0)
-  const dur = clampInt(m.durationFrames, 1, total, Math.max(1, Math.round(fps * 0.6)))
-  const end = Math.min(total, start + dur)
-  const eIn = EASING_BEZIER[pickEasing(m.easing, 'easeOut')]
-  const eLoop = EASING_BEZIER[pickEasing(m.easing, 'easeInOut')]
-  const half = Math.max(1, Math.round(total / 2))
-  const fadeIn = animed2(start, end, [0], [100], eIn)
-  // Pixel-based params are authored in viewport units → scale to comp space.
-  const dist = clampNum(m.distance, 8, 140, 40) * scale
-
-  switch (m.type) {
-    case 'fade':
-      return { ...base, o: fadeIn }
-    case 'rise':
-      return { ...base, o: fadeIn, p: animed2(start, end, [cx, cy + dist, 0], baseP, eIn) }
-    case 'fall':
-      return { ...base, o: fadeIn, p: animed2(start, end, [cx, cy - dist, 0], baseP, eIn) }
-    case 'slide-left':
-      return { ...base, o: fadeIn, p: animed2(start, end, [cx + dist, cy, 0], baseP, eIn) }
-    case 'slide-right':
-      return { ...base, o: fadeIn, p: animed2(start, end, [cx - dist, cy, 0], baseP, eIn) }
-    case 'scale-in': {
-      const sf = clampNum(m.scaleFrom, 0.3, 0.98, 0.85) * 100
-      return { ...base, o: fadeIn, s: animed2(start, end, [sf, sf, 100], [100, 100, 100], eIn) }
-    }
-    case 'pop': {
-      const sf = clampNum(m.scaleFrom, 0.3, 0.98, 0.6) * 100
-      return { ...base, o: fadeIn, s: animed2(start, end, [sf, sf, 100], [100, 100, 100], EASING_BEZIER['spring-bouncy']) }
-    }
-    case 'float': {
-      const amp = clampNum(m.amplitude, 2, 30, 8) * scale
-      return { ...base, p: animed3(0, half, total, baseP, [cx, cy - amp, 0], baseP, eLoop) }
-    }
-    case 'drift': {
-      const amp = clampNum(m.amplitude, 2, 30, 8) * scale
-      const mid = m.driftAxis === 'y' ? [cx, cy + amp, 0] : [cx + amp, cy, 0]
-      return { ...base, p: animed3(0, half, total, baseP, mid, baseP, eLoop) }
-    }
-    case 'pulse': {
-      const amp = clampNum(m.amplitude, 0.01, 0.2, 0.04)
-      const up = (1 + amp) * 100
-      return { ...base, s: animed3(0, half, total, [100, 100, 100], [up, up, 100], [100, 100, 100], eLoop) }
-    }
-    case 'rotate': {
-      const dir = m.direction === 'ccw' ? -1 : 1
-      return { ...base, r: animed2(0, total, [0], [360 * dir], EASING_BEZIER.linear) }
-    }
-    case 'shimmer': {
-      const amp = clampNum(m.amplitude, 0.05, 0.7, 0.3)
-      return { ...base, o: animed3(0, half, total, [100], [100 * (1 - amp)], [100], eLoop) }
-    }
-    case 'none':
-    default:
-      return base
+    if (r) layer.tracks = r
   }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function unionCentre(
+/** Tracks → the plan tool's flat keyframe shape (for the refine prompt). */
+function tracksToPlan(tracks: LayerTracks): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const scalar = (key: 'opacity' | 'scale' | 'rotation') => {
+    const keys = tracks[key]?.keys
+    if (keys?.length) out[key] = keys.map((k) => ({ t: k.t, v: Array.isArray(k.v) ? k.v[0] : k.v, easing: k.easing }))
+  }
+  scalar('opacity'); scalar('scale'); scalar('rotation')
+  const pos = tracks.position?.keys
+  if (pos?.length) {
+    out.position = pos.map((k) => {
+      const [x, y] = Array.isArray(k.v) ? k.v : [k.v, 0]
+      return { t: k.t, x, y, easing: k.easing }
+    })
+  }
+  return out
+}
+
+/** Union bounding box (user space) of a layer's elements, plus its centre.
+ *  Falls back to the full viewport when no element has finite bounds. */
+function unionBox(
   ids: string[],
   boundsById: Map<string, { x: number; y: number; width: number; height: number }>,
   W: number,
   H: number,
-): { cx: number; cy: number } {
+): { x: number; y: number; w: number; h: number; cx: number; cy: number } {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
   for (const id of ids) {
     const b = boundsById.get(id)
@@ -453,11 +395,10 @@ function unionCentre(
     x1 = Math.max(x1, b.x + b.width)
     y1 = Math.max(y1, b.y + b.height)
   }
-  if (!Number.isFinite(x0)) return { cx: W / 2, cy: H / 2 }
-  return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 }
+  if (!Number.isFinite(x0)) return { x: 0, y: 0, w: W, h: H, cx: W / 2, cy: H / 2 }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 }
 }
 
-/** Subject + Kind guidance prepended to the plan request. */
 function guidanceFor(config: GenConfig): string {
   const subject =
     config.subject === 'screen'
@@ -465,22 +406,9 @@ function guidanceFor(config: GenConfig): string {
       : 'This is a single illustration. Animate its parts expressively but tastefully.'
   const kind =
     config.kind === 'loop'
-      ? 'Make a LOOPING animation: use continuous, seamless motions (float, drift, pulse, rotate, shimmer) whose first and last keyframes match. Pick totalFrames around 120-240.'
-      : 'Make an ENTRY animation: elements animate in once and settle into place — use entrance motions (rise, fall, slide, fade, scale-in, pop) and do NOT use continuous looping motions. Pick a short totalFrames (~60-120) so it plays once and holds.'
+      ? 'Make a LOOPING animation: every track must return to its starting value at totalFrames so the loop is seamless (first and last keyframe equal). Prefer continuous motion. Pick totalFrames around 120–240.'
+      : 'Make an ENTRY animation: elements animate in once and settle, then hold. Keyframes finish well before totalFrames and stay put. Pick a short totalFrames (~60–120).'
   return `${subject}\n${kind}`
-}
-
-function pickEasing(key: EasingKey | undefined, fallback: EasingKey): EasingKey {
-  return key && EASING_BEZIER[key] ? key : fallback
-}
-
-function clampNum(v: number | undefined, min: number, max: number, fallback: number): number {
-  if (typeof v !== 'number' || Number.isNaN(v)) return fallback
-  return Math.min(max, Math.max(min, v))
-}
-
-function clampInt(v: number | undefined, min: number, max: number, fallback: number): number {
-  return Math.round(clampNum(v, min, max, fallback))
 }
 
 function slimIndex(index: StructuralIndex) {
@@ -498,6 +426,18 @@ function slimIndex(index: StructuralIndex) {
       ...(e.fill ? { fill: e.fill } : {}),
       parentId: e.parentId,
     })),
+  }
+}
+
+function imageBlock(dataUrl: string): Anthropic.ContentBlockParam {
+  const { mediaType, base64 } = splitDataUrl(dataUrl)
+  return {
+    type: 'image',
+    source: {
+      type: 'base64',
+      media_type: mediaType as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif',
+      data: base64,
+    },
   }
 }
 

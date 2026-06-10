@@ -18,6 +18,8 @@ import { ControlRow } from '@/components/controls/ControlRow'
 import { useSceneStore } from '@/store/sceneStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { usePlaybackStore } from '@/store/playbackStore'
+import { useGenerateStore } from '@/store/generateStore'
+import { GenerateControlsPanel } from '@/components/generate/GenerateControlsPanel'
 import { ParamSlider } from '@/components/controls/ParamSlider'
 import { TemplatePicker } from '@/components/controls/TemplatePicker'
 import { EasingPicker } from '@/components/controls/EasingPicker'
@@ -60,6 +62,11 @@ export function ControlsPanel() {
   } = useSceneStore()
   const { showRationale, apiKey, model, useLlmGrouping } = useSettingsStore()
   const { restart } = usePlaybackStore()
+  const genActive = useGenerateStore((s) => s.active)
+  const genProject = useGenerateStore((s) => s.project)
+
+  // In the generate lane, edit the generated project's per-layer motion instead.
+  if (genActive && genProject) return <GenerateControlsPanel />
 
   const selectedGroup = scene?.groups.find((g) => g.id === selectedGroupId) ?? null
   const canRegenerate =
