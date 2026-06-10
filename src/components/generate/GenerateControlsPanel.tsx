@@ -2,11 +2,13 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { SlidersHorizontal, Plus, X } from 'lucide-react'
+import { SlidersHorizontal, Plus, X, Sliders } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ParamSlider } from '@/components/controls/ParamSlider'
 import { useGenerateStore } from '@/store/generateStore'
 import {
   TRACKS, PRESETS_BY_TRACK, PRESET_BY_ID, EASINGS, stampPreset,
+  deriveLayerHandles, applyHandle,
   type TrackMeta, type LayerTracks, type Track, type Keyframe,
 } from '@/engine/lottie/project'
 import type { EasingKey } from '@/engine/lottie/core'
@@ -64,8 +66,36 @@ function LayerEditor({
     onChange(next)
   }
 
+  // Designer-facing knobs derived from the current keyframes (one per animated
+  // track). Dragging one rewrites that track deterministically — no re-prompt.
+  const handles = deriveLayerHandles(tracks, op)
+
   return (
     <div className="pb-4">
+      {handles.length > 0 && (
+        <div className="px-4 pt-4 pb-5 space-y-3 border-b border-border bg-muted/20">
+          <div className="flex items-center gap-1.5">
+            <Sliders size={11} className="text-muted-foreground" />
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Controls</p>
+          </div>
+          <div className="space-y-3">
+            {handles.map((h) => (
+              <ParamSlider
+                key={`${h.track}-${h.type}`}
+                label={h.label}
+                value={h.value}
+                min={h.min}
+                max={h.max}
+                step={h.step}
+                unit={h.unit}
+                onChange={() => {}}
+                onCommit={(v) => onChange({ ...tracks, [h.track]: applyHandle(h, tracks[h.track]!, op, v) })}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <p className="text-[11px] text-muted-foreground leading-snug px-4 pt-4 pb-2">
         Each property is a track of keyframes. Use a quick-add for a head start, then edit the
         keyframes directly — sequence anything you like.

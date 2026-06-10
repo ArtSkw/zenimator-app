@@ -287,6 +287,136 @@ function valueAt(keys: Keyframe[], f: number): number | [number, number] | null 
   return lerp(a.v as number, b.v as number, e)
 }
 
+// ── Semantic handles (designer-facing knobs over keyframes) ──────────────────
+//
+// A handle is a named, single-slider control derived from a track's keyframes.
+// It is SELF-ANCHORING — its value (amplitude, delay, or duration) is read back
+// from the current keyframes, and dragging transforms them — so there is nothing
+// to persist and no base to keep in sync through refine/rescale. Drag rewrites
+// the keyframes deterministically, no model round-trip.
+
+export type HandleType = 'amount' | 'delay' | 'duration'
+export type LayerHandle = {
+  track: TrackKey
+  type: HandleType
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  unit: string
+}
+
+const baselineOf = (key: TrackKey): number => (key === 'opacity' || key === 'scale' ? 100 : 0)
+
+/** A keyframe value's distance from the track's resting value. */
+function devOf(v: Keyframe['v'], key: TrackKey): number {
+  if (key === 'position') {
+    const [x, y] = Array.isArray(v) ? v : [v, 0]
+    return Math.hypot(x, y)
+  }
+  return Math.abs(num(v) - baselineOf(key))
+}
+const maxDev = (keys: Keyframe[], key: TrackKey): number =>
+  keys.reduce((m, k) => Math.max(m, devOf(k.v, key)), 0)
+
+/** Whether two keyframe values are effectively equal (loop returns to start). */
+function close(a: Keyframe['v'], b: Keyframe['v'], key: TrackKey): boolean {
+  if (key === 'position') {
+    const [ax, ay] = Array.isArray(a) ? a : [a, 0]
+    const [bx, by] = Array.isArray(b) ? b : [b, 0]
+    return Math.hypot(ax - bx, ay - by) < 2
+  }
+  return Math.abs(num(a) - num(b)) < 2
+}
+
+/** Dominant axis of a position track (which way it mostly moves). */
+function posAxis(keys: Keyframe[]): 'x' | 'y' {
+  let mx = 0, my = 0
+  for (const k of keys) {
+    const [x, y] = Array.isArray(k.v) ? k.v : [k.v, 0]
+    mx = Math.max(mx, Math.abs(x))
+    my = Math.max(my, Math.abs(y))
+  }
+  return my >= mx ? 'y' : 'x'
+}
+
+/** Derive the single most-useful handle for a track, or null if it has no
+ *  meaningful motion. Labels reflect the detected motion shape. */
+export function deriveHandle(key: TrackKey, track: Track | undefined, op: number): LayerHandle | null {
+  const keys = sortedKeys(track)
+  if (keys.length < 2) return null
+  const span = keys[keys.length - 1].t - keys[0].t
+  const osc = close(keys[0].v, keys[keys.length - 1].v, key)
+  const dev = maxDev(keys, key)
+
+  if (key === 'rotation') {
+    const net = Math.abs(num(keys[keys.length - 1].v) - num(keys[0].v))
+    if (net >= 180) {
+      return { track: key, type: 'duration', label: 'Spin duration', value: span, min: 6, max: Math.max(span, op), step: 1, unit: 'f' }
+    }
+    if (dev < 0.5) return null
+    return { track: key, type: 'amount', label: 'Tilt amount', value: Math.round(dev), min: 0, max: Math.max(20, Math.round(dev * 2)), step: 1, unit: '°' }
+  }
+
+  if (key === 'opacity') {
+    if (osc) {
+      if (dev < 0.5) return null
+      return { track: key, type: 'amount', label: 'Flicker amount', value: Math.round(dev), min: 0, max: 100, step: 1, unit: '%' }
+    }
+    const rising = num(keys[keys.length - 1].v) >= num(keys[0].v)
+    return { track: key, type: 'delay', label: rising ? 'Fade-in start' : 'Fade-out start', value: keys[0].t, min: 0, max: Math.max(0, op - span), step: 1, unit: 'f' }
+  }
+
+  // position / scale → amplitude
+  if (dev < 0.5) return null
+  let label: string
+  if (key === 'scale') label = osc ? 'Pulse strength' : 'Scale amount'
+  else label = osc ? (posAxis(keys) === 'y' ? 'Float height' : 'Drift amount') : 'Slide distance'
+  return { track: key, type: 'amount', label, value: Math.round(dev), min: 0, max: Math.max(40, Math.round(dev * 2)), step: 1, unit: key === 'scale' ? '%' : 'px' }
+}
+
+/** All derived handles for a layer (one per animated track). */
+export function deriveLayerHandles(tracks: LayerTracks, op: number): LayerHandle[] {
+  const out: LayerHandle[] = []
+  for (const key of TRACK_KEYS) {
+    const h = deriveHandle(key, tracks[key], op)
+    if (h) out.push(h)
+  }
+  return out
+}
+
+function scaleVal(v: Keyframe['v'], key: TrackKey, factor: number): Keyframe['v'] {
+  if (key === 'position') {
+    const [x, y] = Array.isArray(v) ? v : [v, 0]
+    return [Math.round(x * factor), Math.round(y * factor)]
+  }
+  const baseline = baselineOf(key)
+  return Math.round(baseline + (num(v) - baseline) * factor)
+}
+
+/** Apply a new handle value to its track, transforming the keyframes. The track
+ *  becomes "Custom" (preset provenance dropped). */
+export function applyHandle(h: LayerHandle, track: Track, op: number, value: number): Track {
+  const keys = sortedKeys(track)
+  if (keys.length < 2) return track
+  let next: Keyframe[]
+  if (h.type === 'delay') {
+    const offset = value - keys[0].t
+    next = keys.map((k) => ({ ...k, t: clampInt(k.t + offset, 0, op, k.t) }))
+  } else if (h.type === 'duration') {
+    const first = keys[0].t
+    const curSpan = keys[keys.length - 1].t - first
+    const f = curSpan > 0 ? value / curSpan : 1
+    next = keys.map((k) => ({ ...k, t: clampInt(Math.round(first + (k.t - first) * f), 0, op, k.t) }))
+  } else {
+    const cur = maxDev(keys, h.track)
+    const f = cur > 0 ? value / cur : 1
+    next = keys.map((k) => ({ ...k, v: scaleVal(k.v, h.track, f) }))
+  }
+  return { ...track, keys: next, preset: undefined }
+}
+
 export type SampledTransform = { dx: number; dy: number; scale: number; rotation: number; opacity: number }
 
 /** Sample a layer's tracks at frame `f` into its live transform — used to make
