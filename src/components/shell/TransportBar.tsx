@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button'
 import { Play, Pause, RotateCcw, Pencil, Repeat } from 'lucide-react'
 import { usePlaybackStore } from '@/store/playbackStore'
 import { useSceneStore } from '@/store/sceneStore'
+import { useGenerateStore } from '@/store/generateStore'
+import { GenerateTransport } from './GenerateTransport'
 import { getSceneDuration, getLoopCycleDuration, formatDuration } from '@/engine/scene/timing'
 
 const MIN_DURATION_S = 0.5
@@ -11,6 +13,8 @@ const MAX_DURATION_S = 10
 export function TransportBar() {
   const { isPlaying, animationKey, loop, play, pause, restart, setLoop } = usePlaybackStore()
   const { scene, scaleAnimationDuration } = useSceneStore()
+  const generateActive = useGenerateStore((s) => s.active)
+  const generateResult = useGenerateStore((s) => s.lottieJson)
   const disabled = !scene
   const [progressFilled, setProgressFilled] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -82,6 +86,9 @@ export function TransportBar() {
 
   const sceneDuration = scene ? getSceneDuration(scene) : 0
   const cycleMs = scene && hasInfiniteLoop ? getLoopCycleDuration(scene) : 0
+
+  // In the generate lane, the footer drives the live Skottie preview instead.
+  if (generateActive && generateResult) return <GenerateTransport />
 
   return (
     <footer className="h-16 border-t border-border bg-background flex items-center gap-3 px-5 shrink-0">

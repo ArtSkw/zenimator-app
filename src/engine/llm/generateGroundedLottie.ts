@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { StructuralIndex } from '@/engine/scene/types'
+import type { GenConfig } from './generateLottie'
 import { detectSvg } from '@/engine/detector/detectSvg'
 import { sanitizeSvg } from '@/engine/detector/sanitizeSvg'
 import { rasterizeSvg } from '@/engine/detector/rasterize'
@@ -102,6 +103,7 @@ export type GenerateOptions = {
 export async function generateGroundedLottie(
   svgText: string,
   prompt: string,
+  config: GenConfig,
   opts: GenerateOptions,
 ): Promise<string> {
   const index = detectSvg(sanitizeSvg(svgText))
@@ -109,7 +111,7 @@ export async function generateGroundedLottie(
   const previewPng = await rasterizeSvg(index.enrichedSvg)
 
   opts.onStage?.('Planning motion…')
-  const plan = await planMotion(index, previewPng, prompt, opts)
+  const plan = await planMotion(index, previewPng, prompt, config, opts)
 
   opts.onStage?.('Rendering layers…')
   const prepared = await prepareLayers(index, plan)
@@ -134,10 +136,16 @@ async function planMotion(
   index: StructuralIndex,
   previewPng: string,
   prompt: string,
+  config: GenConfig,
   opts: GenerateOptions,
 ): Promise<MotionPlan> {
   const client = new Anthropic({ apiKey: opts.apiKey, dangerouslyAllowBrowser: true })
   const { mediaType, base64 } = splitDataUrl(previewPng)
+
+  const request =
+    config.method === 'auto'
+      ? 'No specific instruction is given — propose a tasteful animation that fits.'
+      : `User request:\n${prompt}`
 
   const content: Anthropic.ContentBlockParam[] = [
     {
@@ -151,8 +159,9 @@ async function planMotion(
     {
       type: 'text',
       text:
+        `${guidanceFor(config)}\n\n` +
         `Elements (JSON):\n${JSON.stringify(slimIndex(index), null, 2)}\n\n` +
-        `Animation request:\n${prompt}`,
+        request,
     },
   ]
 
@@ -446,6 +455,19 @@ function unionCentre(
   }
   if (!Number.isFinite(x0)) return { cx: W / 2, cy: H / 2 }
   return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 }
+}
+
+/** Subject + Kind guidance prepended to the plan request. */
+function guidanceFor(config: GenConfig): string {
+  const subject =
+    config.subject === 'screen'
+      ? 'This is a whole app/screen UI. Treat each major section (header, cards, list items, buttons) as a layer and reveal them with a tasteful stagger.'
+      : 'This is a single illustration. Animate its parts expressively but tastefully.'
+  const kind =
+    config.kind === 'loop'
+      ? 'Make a LOOPING animation: use continuous, seamless motions (float, drift, pulse, rotate, shimmer) whose first and last keyframes match. Pick totalFrames around 120-240.'
+      : 'Make an ENTRY animation: elements animate in once and settle into place — use entrance motions (rise, fall, slide, fade, scale-in, pop) and do NOT use continuous looping motions. Pick a short totalFrames (~60-120) so it plays once and holds.'
+  return `${subject}\n${kind}`
 }
 
 function pickEasing(key: EasingKey | undefined, fallback: EasingKey): EasingKey {

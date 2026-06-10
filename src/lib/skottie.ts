@@ -57,6 +57,8 @@ export class SkottiePlayer {
   private currentFrame = 0
   private lastTs = 0
   private dirty = true
+  /** When false the animation plays once and holds the last frame (entry kind). */
+  private loop = true
   private readonly fps: number
   private readonly totalFrames: number
 
@@ -86,11 +88,20 @@ export class SkottiePlayer {
     canvas: HTMLCanvasElement,
     lottieJson: string,
     callbacks?: SkottieCallbacks,
+    opts?: { loop?: boolean },
   ): Promise<SkottiePlayer> {
     const ck = await loadCanvasKit()
     const animation = ck.MakeManagedAnimation(lottieJson)
     if (!animation) throw new Error('CanvasKit could not parse the Lottie file.')
-    return new SkottiePlayer(ck, canvas, animation, callbacks)
+    const player = new SkottiePlayer(ck, canvas, animation, callbacks)
+    if (opts?.loop === false) player.loop = false
+    return player
+  }
+
+  /** Toggle looping; when turned off the playhead holds at the final frame. */
+  setLoop(loop: boolean): void {
+    this.loop = loop
+    this.dirty = true
   }
 
   getFps(): number {
@@ -111,6 +122,8 @@ export class SkottiePlayer {
 
   play(): void {
     if (this.playing) return
+    // If parked at the end (a finished entry animation), Play restarts it.
+    if (this.currentFrame >= this.totalFrames) this.currentFrame = 0
     this.playing = true
     this.lastTs = 0
     this.callbacks.onPlayStateChange?.(true)
@@ -199,7 +212,16 @@ export class SkottiePlayer {
       if (this.lastTs !== 0) {
         const dt = (ts - this.lastTs) / 1000
         this.currentFrame += dt * this.fps
-        if (this.currentFrame >= this.totalFrames) this.currentFrame %= this.totalFrames
+        if (this.currentFrame >= this.totalFrames) {
+          if (this.loop) {
+            this.currentFrame %= this.totalFrames
+          } else {
+            // Entry kind: hold the final frame and stop advancing.
+            this.currentFrame = this.totalFrames
+            this.playing = false
+            this.callbacks.onPlayStateChange?.(false)
+          }
+        }
       }
       this.lastTs = ts
       this.draw()

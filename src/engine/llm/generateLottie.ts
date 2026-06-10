@@ -4,11 +4,19 @@ import { REFINE_LOTTIE_INSTRUCTION } from './prompts/refine'
 import { generateGroundedLottie } from './generateGroundedLottie'
 import { renderLottieFrames, pickFrames } from '@/engine/lottie/render'
 
+/** The three property axes that configure a generation. */
+export type GenConfig = {
+  subject: 'illustration' | 'screen'
+  kind: 'entry' | 'loop'
+  method: 'manual' | 'auto'
+}
+
 export type GenerateLottieInput = {
-  /** The user's short intent prompt. */
+  /** The user's short intent prompt (empty for method: 'auto'). */
   prompt: string
   /** Optional reference SVG to ground the generation. */
   grounding?: { svgText: string; pngDataUrl: string }
+  config: GenConfig
 }
 
 export type GenerateLottieOptions = {
@@ -46,11 +54,12 @@ export async function generateLottie(
   // Grounded by an SVG → faithful geometry + LLM motion plan (the model never
   // redraws the artwork). Pure-prompt ideas fall through to shape authoring.
   if (input.grounding) {
-    return generateGroundedLottie(input.grounding.svgText, input.prompt, opts)
+    return generateGroundedLottie(input.grounding.svgText, input.prompt, input.config, opts)
   }
 
   opts.onStage?.('Generating…')
-  const v1 = await drawLottie(input.prompt, opts)
+  const kindHint = input.config.kind === 'loop' ? ' Make it a seamless loop.' : ' Make it an entrance that plays once and holds.'
+  const v1 = await drawLottie(input.prompt + kindHint, opts)
 
   // Refine: render frames of v1, let the model correct what it can see.
   // Resilient — any failure falls back to the first pass.
