@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# CanvasKit wasm — copied into /public by scripts/copy-canvaskit.mjs on postinstall
+public/canvaskit.wasm
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Download, ChevronDown, FileCode, FileJson, Video, ImageIcon, Copy, Check, Loader2 } from 'lucide-react'
+import { Download, ChevronDown, FileCode, FileJson, Video, ImageIcon, Copy, Check, Loader2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -16,12 +16,14 @@ import { downloadHtml } from '@/export/exportHtml'
 import { downloadJson, copyJson } from '@/export/exportJson'
 import { exportWebm } from '@/export/exportVideo'
 import { exportGif } from '@/export/exportGif'
+import { downloadLottie } from '@/export/exportLottie'
 
 export function ExportDropdown() {
   const { scene } = useSceneStore()
   const [copying, setCopying] = useState(false)
   const [exportingVideo, setExportingVideo] = useState(false)
   const [exportingGif, setExportingGif] = useState(false)
+  const [exportingLottie, setExportingLottie] = useState(false)
 
   const handleDownloadHtml = () => {
     if (!scene) return
@@ -45,6 +47,25 @@ export function ExportDropdown() {
       toast.error('Copy failed — clipboard access denied')
     } finally {
       setCopying(false)
+    }
+  }
+
+  const handleExportLottie = async () => {
+    if (!scene || exportingLottie) return
+    setExportingLottie(true)
+    const toastId = toast.loading('Building Lottie…')
+    try {
+      await downloadLottie(scene)
+      toast.success('Lottie exported', {
+        id: toastId,
+        description:
+          'Plays in any Lottie/dotLottie player. Overlapping & draw-on layers are flattened — use generate mode for the richest layering.',
+      })
+    } catch (err) {
+      console.error('[zenimator] lottie export error:', err)
+      toast.error('Lottie export failed — check console', { id: toastId })
+    } finally {
+      setExportingLottie(false)
     }
   }
 
@@ -127,6 +148,15 @@ export function ExportDropdown() {
             <div className="flex flex-col">
               <span>Download HTML</span>
               <span className="text-[10px] text-muted-foreground font-normal">SVG + CSS animations, opens in browser</span>
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleExportLottie} disabled={exportingLottie}>
+            {exportingLottie
+              ? <Loader2 size={14} className="mr-2 shrink-0 animate-spin" />
+              : <Sparkles size={14} className="mr-2 shrink-0" />}
+            <div className="flex flex-col">
+              <span>{exportingLottie ? 'Building…' : 'Export Lottie'}</span>
+              <span className="text-[10px] text-muted-foreground font-normal">.json for web, iOS & Android players</span>
             </div>
           </DropdownMenuItem>
         </DropdownMenuGroup>
