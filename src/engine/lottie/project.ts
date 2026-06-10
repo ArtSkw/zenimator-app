@@ -80,6 +80,9 @@ export type ProjectLayer = {
   /** Scaled (comp-space) rest bounding box — drives the preview selection box. */
   bounds: { x: number; y: number; w: number; h: number }
   tracks: LayerTracks
+  /** Optional LLM-authored, illustration-specific labels for a track's handle,
+   *  overriding the auto-derived name (e.g. position → "Card launch"). */
+  handleLabels?: Partial<Record<TrackKey, string>>
 }
 
 export type GenerateProject = {
@@ -376,12 +379,21 @@ export function deriveHandle(key: TrackKey, track: Track | undefined, op: number
   return { track: key, type: 'amount', label, value: Math.round(dev), min: 0, max: Math.max(40, Math.round(dev * 2)), step: 1, unit: key === 'scale' ? '%' : 'px' }
 }
 
-/** All derived handles for a layer (one per animated track). */
-export function deriveLayerHandles(tracks: LayerTracks, op: number): LayerHandle[] {
+/** All derived handles for a layer (one per animated track). Optional `labels`
+ *  (LLM-authored) override the auto-derived name per track. */
+export function deriveLayerHandles(
+  tracks: LayerTracks,
+  op: number,
+  labels?: Partial<Record<TrackKey, string>>,
+): LayerHandle[] {
   const out: LayerHandle[] = []
   for (const key of TRACK_KEYS) {
     const h = deriveHandle(key, tracks[key], op)
-    if (h) out.push(h)
+    if (h) {
+      const label = labels?.[key]?.trim()
+      if (label) h.label = label
+      out.push(h)
+    }
   }
   return out
 }

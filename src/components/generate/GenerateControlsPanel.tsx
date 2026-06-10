@@ -33,6 +33,7 @@ export function GenerateControlsPanel() {
           <LayerEditor
             key={selectedLayer}
             tracks={layer.tracks}
+            labels={layer.handleLabels}
             op={project!.op}
             fps={project!.fps}
             onChange={(t) => setLayerTracks(selectedLayer, t)}
@@ -52,9 +53,10 @@ export function GenerateControlsPanel() {
 }
 
 function LayerEditor({
-  tracks, op, fps, onChange,
+  tracks, labels, op, fps, onChange,
 }: {
   tracks: LayerTracks
+  labels?: Partial<Record<TrackMeta['key'], string>>
   op: number
   fps: number
   onChange: (t: LayerTracks) => void
@@ -68,7 +70,7 @@ function LayerEditor({
 
   // Designer-facing knobs derived from the current keyframes (one per animated
   // track). Dragging one rewrites that track deterministically — no re-prompt.
-  const handles = deriveLayerHandles(tracks, op)
+  const handles = deriveLayerHandles(tracks, op, labels)
 
   return (
     <div className="pb-4">

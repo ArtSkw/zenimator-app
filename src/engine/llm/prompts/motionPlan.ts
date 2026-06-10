@@ -27,6 +27,9 @@ This is the whole point: you are NOT limited to presets. Anything expressible as
 ## Easing (curve into the next keyframe)
 "linear" | "easeIn" | "easeOut" | "easeInOut" | "spring-gentle" | "spring-bouncy" | "spring-stiff". Use "linear" for continuous spins; "easeOut" for entrances; "easeInOut" for oscillations.
 
+## Designer controls (optional)
+Each animated track becomes a draggable slider for the user. You may give 1–3 of a layer's tracks a plain, illustration-specific NAME via \`controls\` (e.g. {track:'position', label:'Card launch'}, {track:'scale', label:'Cloud puff'}). Name what the motion MEANS in this picture, not the mechanism. Omit it where a generic name (Float height, Spin duration) already fits — don't force a label.
+
 ## Composition
 - fps: default 60.
 - totalFrames: the whole composition length; it LOOPS. Pick 90–240.

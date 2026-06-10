@@ -13,9 +13,11 @@ import {
   clampInt,
   clampNum,
   EASINGS,
+  TRACK_KEYS,
   type GenerateProject,
   type ProjectLayer,
   type LayerTracks,
+  type TrackKey,
 } from '@/engine/lottie/project'
 
 // ── Motion plan shape (mirrors the plan_motion tool schema) ─────────────────
@@ -24,6 +26,7 @@ import {
 
 type ScalarKey = { t: number; v: number; easing?: string }
 type PosKey = { t: number; x: number; y: number; easing?: string }
+type ControlSpec = { track: string; label: string }
 type PlanLayer = {
   name: string
   elementIds: string[]
@@ -31,6 +34,7 @@ type PlanLayer = {
   position?: PosKey[]
   scale?: ScalarKey[]
   rotation?: ScalarKey[]
+  controls?: ControlSpec[]
 }
 type MotionPlan = { fps?: number; totalFrames?: number; layers: PlanLayer[] }
 
@@ -85,6 +89,18 @@ const PLAN_TOOL = {
                   easing: { type: 'string' as const, enum: EASE_ENUM, description: 'Curve INTO the next keyframe.' },
                 },
                 required: ['t', 'x', 'y'],
+              },
+            },
+            controls: {
+              type: 'array' as const,
+              description: "Optional designer-facing labels for this layer's motion knobs — name 1–3 with plain, illustration-specific words (e.g. {track:'position', label:'Card launch'}).",
+              items: {
+                type: 'object' as const,
+                properties: {
+                  track: { type: 'string' as const, enum: ['opacity', 'position', 'scale', 'rotation'] },
+                  label: { type: 'string' as const },
+                },
+                required: ['track', 'label'],
               },
             },
           },
@@ -240,16 +256,19 @@ async function prepareLayers(index: StructuralIndex, plan: MotionPlan): Promise<
 
   const defs: LayerDef[] = []
   const fx: LayerTracks[] = []
+  const labels: (Partial<Record<TrackKey, string>> | undefined)[] = []
   planLayers.forEach((l, li) => {
     const owned = leaves.filter((lf) => owner.get(lf.id) === li).map((lf) => lf.id)
     if (owned.length === 0) return
     defs.push({ name: l.name || 'layer', elementIds: owned })
     fx.push(planToTracks(l, op))
+    labels.push(controlsToLabels(l.controls))
   })
   const uncovered = leaves.filter((lf) => !owner.has(lf.id)).map((lf) => lf.id)
   if (uncovered.length) {
     defs.push({ name: '(static)', elementIds: uncovered })
     fx.push({})
+    labels.push(undefined)
   }
 
   const rasters = await rasterizeLayers(index.enrichedSvg, index.viewport, defs, S)
@@ -264,6 +283,7 @@ async function prepareLayers(index: StructuralIndex, plan: MotionPlan): Promise<
           cx: b.cx * S, cy: b.cy * S,
           bounds: { x: b.x * S, y: b.y * S, w: b.w * S, h: b.h * S },
           tracks: fx[r.defIndex],
+          handleLabels: labels[r.defIndex],
         } satisfies ProjectLayer,
         docIndex: r.docIndex,
       }
@@ -305,6 +325,17 @@ function planToTracks(l: PlanLayer, op: number): LayerTracks {
     }
   }
   return t
+}
+
+/** Validate the model's control labels into a per-track label map. */
+function controlsToLabels(controls: ControlSpec[] | undefined): Partial<Record<TrackKey, string>> | undefined {
+  if (!controls?.length) return undefined
+  const out: Partial<Record<TrackKey, string>> = {}
+  for (const c of controls) {
+    const label = typeof c?.label === 'string' ? c.label.trim().slice(0, 40) : ''
+    if (label && (TRACK_KEYS as readonly string[]).includes(c.track)) out[c.track as TrackKey] = label
+  }
+  return Object.keys(out).length ? out : undefined
 }
 
 // ── Step 3: refine — show the model real frames, adjust the keyframes ────────
