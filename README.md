@@ -1,6 +1,6 @@
 # ZENimator
 
-A browser-based SVG animation tool that uses Claude AI to semantically group illustration layers and generate polished entrance animations, exportable as WebM, GIF, HTML, or JSON.
+A browser-based SVG animation tool that uses Claude AI to semantically group illustration layers and generate polished animations, exportable as WebM, GIF, HTML, or JSON.
 
 **Live app → [artskw.github.io/zenimator-app](https://artskw.github.io/zenimator-app/)**
 
@@ -8,7 +8,7 @@ A browser-based SVG animation tool that uses Claude AI to semantically group ill
 
 ## What it does
 
-Upload an SVG illustration or screen design. ZENimator sends it to Claude, which analyses the visual structure and proposes semantic groups (e.g. "card body", "headline", "icon") each with a suggested entrance animation. You can then tweak every parameter — template, duration, easing, start delay, direction — and export the result.
+Upload an SVG illustration or screen design. ZENimator sends it to Claude, which analyses the visual structure and proposes semantic groups (e.g. "card body", "headline", "icon") each with a suggested animation. You can then tweak every parameter — template, duration, easing, start delay, direction — and export the result.
 
 **Animation templates:** fade-in, slide-up/down/left/right, scale-in, pop-in, draw-stroke, stagger-children
 
@@ -101,5 +101,4 @@ src/
 | Version | Scope |
 |---|---|
 | **v1.0** ✅ | Entrance animations, SVG-only, LLM grouping, full export suite |
-| v1.1 | Ambient loop animations (breathe, float, drift) |
-| v1.2 | Rigged character motion, PNG/bitmap support |
+| **v1.1** ✅ | Ambient loop animations (breathe, float, drift, shimmer, rotate, blink) |

@@ -51,7 +51,12 @@ type GroupState = {
   strokeProgress?: number  // draw-stroke only: 0 = hidden, 1 = fully drawn
 }
 
-export function computeGroupState(group: AnimatableGroup, t: number): GroupState {
+export function computeGroupState(
+  group: AnimatableGroup,
+  t: number,
+  pivotX = 0,
+  pivotY = 0,
+): GroupState {
   const anim = group.animation
   if (!anim || anim.template === 'none' || anim.template === 'stagger-children') {
     return { opacity: 1, transform: '' }
@@ -59,19 +64,34 @@ export function computeGroupState(group: AnimatableGroup, t: number): GroupState
   const elapsed = t - anim.timing.start
   const dur = anim.params.duration
   const ease = EASING_FNS[anim.params.easing] ?? EASING_FNS.easeOut
+  const looping = anim.looping
 
   let p: number
-  if (elapsed < 0) p = 0
-  else if (elapsed >= dur) p = 1
-  else p = ease(elapsed / dur)
+  if (elapsed < 0) {
+    p = 0
+  } else if (looping && (looping.iterations === 'infinite' || looping.iterations > 1)) {
+    // Wrap into a single cycle, applying alternate direction if requested.
+    const cycleIdx = Math.floor(elapsed / dur)
+    const cyclePos = (elapsed - cycleIdx * dur) / dur
+    const reversed = looping.direction === 'alternate' && cycleIdx % 2 === 1
+    p = ease(reversed ? 1 - cyclePos : cyclePos)
+  } else if (elapsed >= dur) {
+    p = 1
+  } else {
+    p = ease(elapsed / dur)
+  }
 
-  return stateForTemplate(anim.template, anim.params, p)
+  return stateForTemplate(anim.template, anim.params, p, pivotX, pivotY)
 }
+
+
 
 function stateForTemplate(
   tpl: AnimationTemplateId,
   params: AnimationParams,
   p: number,
+  pivotX = 0,
+  pivotY = 0,
 ): GroupState {
   const d = params.distance ?? 24
   switch (tpl) {
@@ -95,6 +115,45 @@ function stateForTemplate(
     }
     case 'draw-stroke':
       return { opacity: 1, transform: '', strokeProgress: p }
+    // ── Ambient ─────────────────────────────────────────────────────────
+    // Triangle wave: 0 → 1 → 0 across the cycle, peaks at p = 0.5.
+    case 'breathe': {
+      const a = params.amplitude ?? 0.02
+      const factor = 1 - Math.abs(2 * p - 1)
+      return { opacity: 1, transform: `scale(${1 + a * factor})` }
+    }
+    case 'float': {
+      const a = params.amplitude ?? 6
+      const factor = 1 - Math.abs(2 * p - 1)
+      return { opacity: 1, transform: `translateY(${-a * factor}px)` }
+    }
+    case 'drift': {
+      const a = params.amplitude ?? 8
+      const axis = params.driftAxis ?? 'x'
+      const factor = 1 - Math.abs(2 * p - 1)
+      const fn = axis === 'y' ? 'translateY' : 'translateX'
+      return { opacity: 1, transform: `${fn}(${a * factor}px)` }
+    }
+    case 'shimmer': {
+      const a = params.amplitude ?? 0.3
+      const factor = 1 - Math.abs(2 * p - 1)
+      return { opacity: 1 - a * factor, transform: '' }
+    }
+    case 'rotate': {
+      const dir = params.rotateDirection === 'ccw' ? -1 : 1
+      const deg = 360 * dir * p
+      return {
+        opacity: 1,
+        transform: `translate(${pivotX}px,${pivotY}px) rotate(${deg}deg) translate(${-pivotX}px,${-pivotY}px)`,
+      }
+    }
+    case 'blink': {
+      // Triangle ramp during the 4% window centred at p=0.5.
+      let scale = 1
+      if (p >= 0.48 && p < 0.5) scale = 1 - ((p - 0.48) / 0.02) * 0.95
+      else if (p >= 0.5 && p < 0.52) scale = 0.05 + ((p - 0.5) / 0.02) * 0.95
+      return { opacity: 1, transform: `scaleY(${scale})` }
+    }
     default:
       return { opacity: 1, transform: '' }
   }
@@ -181,15 +240,36 @@ export async function drawSvgFrame(
   root.setAttribute('width', String(w))
   root.setAttribute('height', String(h))
 
+  const vpW = scene.viewport.width
+  const vpH = scene.viewport.height
+
   for (const group of scene.groups) {
-    const state = computeGroupState(group, t)
+    const tpl = group.animation?.template
+    const params = group.animation?.params
+    const isRotate = tpl === 'rotate'
+
+    // Pivot: rotate uses rotateOriginX/Y override or group centre.
+    // Other templates always use group centre.
+    const cx = (isRotate && params?.rotateOriginX !== undefined)
+      ? (params.rotateOriginX / 100) * vpW
+      : group.bounds.x + group.bounds.width / 2
+    const cy = (isRotate && params?.rotateOriginY !== undefined)
+      ? (params.rotateOriginY / 100) * vpH
+      : group.bounds.y + group.bounds.height / 2
+
+    const state = computeGroupState(group, t, cx, cy)
+
     for (const el of resolveTargets(group, root)) {
       const svgEl = el as SVGElement
       svgEl.style.opacity = state.opacity < 1 ? String(state.opacity) : ''
       if (state.transform) {
         svgEl.style.transform = state.transform
-        svgEl.style.transformBox = 'fill-box'
-        svgEl.style.transformOrigin = 'center'
+        svgEl.style.transformBox = 'view-box'
+        // For rotate: pivot is baked into the transform; origin must be at SVG 0,0.
+        // For others: pin to the group's bounding-box centre.
+        svgEl.style.transformOrigin = isRotate
+          ? '0px 0px'
+          : `${((cx / vpW) * 100).toFixed(3)}% ${((cy / vpH) * 100).toFixed(3)}%`
       } else {
         svgEl.style.removeProperty('transform')
         svgEl.style.removeProperty('transform-box')

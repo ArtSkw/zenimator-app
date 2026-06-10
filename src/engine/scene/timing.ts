@@ -19,6 +19,22 @@ export function getSceneDuration(scene: Scene): number {
   return max || 400
 }
 
+/**
+ * Duration of one ambient cycle in ms — the longest single animation duration
+ * among all infinite-looping bindings. Used to pace the progress bar for
+ * ambient scenes so it completes exactly one fill per slowest loop cycle.
+ */
+export function getLoopCycleDuration(scene: Scene): number {
+  let max = 0
+  for (const group of scene.groups) {
+    const anim = group.animation
+    if (!anim || anim.looping?.iterations !== 'infinite') continue
+    const dur = anim.params.duration
+    if (dur > max) max = dur
+  }
+  return max || 3000
+}
+
 /** Format ms as a compact seconds string, e.g. 2500 → "2.5s", 400 → "0.4s" */
 export function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`

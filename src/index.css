@@ -113,3 +113,9 @@
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/* Progress bar cycle animation for ambient (infinite-loop) scenes */
+@keyframes progress-bar-fill {
+  from { width: 0% }
+  to   { width: 100% }
+}

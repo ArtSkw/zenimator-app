@@ -21,7 +21,7 @@ export function ControlRow({ label, value, children, className }: Props) {
           {label}
         </span>
         {value !== undefined && (
-          <span className="text-[11px] font-mono text-muted-foreground tabular-nums">
+          <span className="min-w-0 max-w-[55%] truncate text-right text-[11px] font-mono text-muted-foreground tabular-nums">
             {value}
           </span>
         )}

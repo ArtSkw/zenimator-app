@@ -28,26 +28,57 @@ function easingToCss(key: EasingKey): string {
 // Keyframe shapes — one-to-one with keyframesForTemplate() in SvgPlayer
 // ---------------------------------------------------------------------------
 
-type KfPair = { from: string; to: string }
-
-function keyframesFor(template: AnimationTemplateId, params: AnimationParams): KfPair | null {
+/**
+ * Returns the body of a `@keyframes` rule (everything between the braces).
+ * Templates handle their own waypoint count: entrance is 2-frame
+ * (`from`/`to`), ambient is 3-frame seamless loops (`0%`/`50%`/`100%`).
+ * Returns null for templates that don't emit CSS keyframes (none,
+ * stagger-children, draw-stroke — the latter is wired via inline script).
+ */
+function keyframesFor(template: AnimationTemplateId, params: AnimationParams, pivotX = 0, pivotY = 0): string | null {
   const d = params.distance ?? 24
   const s = params.scaleFrom ?? 0.92
 
   switch (template) {
     case 'fade-in':
-      return { from: 'opacity: 0', to: 'opacity: 1' }
+      return `from { opacity: 0; } to { opacity: 1; }`
     case 'slide-up':
-      return { from: `opacity: 0; transform: translateY(${d}px)`, to: 'opacity: 1; transform: translateY(0)' }
+      return `from { opacity: 0; transform: translateY(${d}px); } to { opacity: 1; transform: translateY(0); }`
     case 'slide-down':
-      return { from: `opacity: 0; transform: translateY(-${d}px)`, to: 'opacity: 1; transform: translateY(0)' }
+      return `from { opacity: 0; transform: translateY(-${d}px); } to { opacity: 1; transform: translateY(0); }`
     case 'slide-left':
-      return { from: `opacity: 0; transform: translateX(${d}px)`, to: 'opacity: 1; transform: translateX(0)' }
+      return `from { opacity: 0; transform: translateX(${d}px); } to { opacity: 1; transform: translateX(0); }`
     case 'slide-right':
-      return { from: `opacity: 0; transform: translateX(-${d}px)`, to: 'opacity: 1; transform: translateX(0)' }
+      return `from { opacity: 0; transform: translateX(-${d}px); } to { opacity: 1; transform: translateX(0); }`
     case 'scale-in':
     case 'pop-in':
-      return { from: `opacity: 0; transform: scale(${s})`, to: 'opacity: 1; transform: scale(1)' }
+      return `from { opacity: 0; transform: scale(${s}); } to { opacity: 1; transform: scale(1); }`
+    case 'breathe': {
+      const a = params.amplitude ?? 0.02
+      return `0% { transform: scale(1); } 50% { transform: scale(${1 + a}); } 100% { transform: scale(1); }`
+    }
+    case 'float': {
+      const a = params.amplitude ?? 6
+      return `0% { transform: translateY(0); } 50% { transform: translateY(${-a}px); } 100% { transform: translateY(0); }`
+    }
+    case 'drift': {
+      const a = params.amplitude ?? 8
+      const fn = params.driftAxis === 'y' ? 'translateY' : 'translateX'
+      return `0% { transform: ${fn}(0); } 50% { transform: ${fn}(${a}px); } 100% { transform: ${fn}(0); }`
+    }
+    case 'shimmer': {
+      const a = params.amplitude ?? 0.3
+      return `0% { opacity: 1; } 50% { opacity: ${1 - a}; } 100% { opacity: 1; }`
+    }
+    case 'rotate': {
+      const dir = params.rotateDirection === 'ccw' ? -1 : 1
+      const t = (deg: number) =>
+        `translate(${pivotX.toFixed(2)}px,${pivotY.toFixed(2)}px) rotate(${deg}deg) translate(${(-pivotX).toFixed(2)}px,${(-pivotY).toFixed(2)}px)`
+      return `from { transform: ${t(0)}; } to { transform: ${t(360 * dir)}; }`
+    }
+    case 'blink': {
+      return `0%, 48% { transform: scaleY(1); } 50% { transform: scaleY(0.05); } 52%, 100% { transform: scaleY(1); }`
+    }
     default:
       return null
   }
@@ -67,7 +98,7 @@ function selectorFor(group: AnimatableGroup): string | null {
 // Per-group CSS block
 // ---------------------------------------------------------------------------
 
-function groupCss(group: AnimatableGroup, idx: number): string {
+function groupCss(group: AnimatableGroup, idx: number, vpW: number, vpH: number): string {
   const anim = group.animation
   if (!anim || anim.template === 'none' || anim.template === 'stagger-children') return ''
   // draw-stroke is handled entirely via the inline script block
@@ -78,23 +109,46 @@ function groupCss(group: AnimatableGroup, idx: number): string {
   const selector = selectorFor(group)
   if (!selector) return ''
 
-  const kf = keyframesFor(anim.template, anim.params)
-  if (!kf) return ''
+  // Pivot: for rotate, encode in the keyframe transform (origin stays 0 0).
+  // For all other templates, use the group's bounding-box centre as origin.
+  const isRotate = anim.template === 'rotate'
+  const cx = (isRotate && anim.params.rotateOriginX !== undefined)
+    ? (anim.params.rotateOriginX / 100) * vpW
+    : group.bounds.x + group.bounds.width / 2
+  const cy = (isRotate && anim.params.rotateOriginY !== undefined)
+    ? (anim.params.rotateOriginY / 100) * vpH
+    : group.bounds.y + group.bounds.height / 2
+
+  const kfBody = keyframesFor(anim.template, anim.params, cx, cy)
+  if (!kfBody) return ''
 
   const name = `zen-anim-${idx}`
   const easing = easingToCss(anim.params.easing)
-  const needsTransformFix = anim.template !== 'fade-in'
+  const needsTransformFix = anim.template !== 'fade-in' && anim.template !== 'shimmer'
+
+  // Loop suffix appended to the `animation` shorthand.
+  const looping = anim.looping
+  const iterations = looping
+    ? looping.iterations === 'infinite'
+      ? 'infinite'
+      : String(looping.iterations)
+    : '1'
+  const direction = looping?.direction ?? 'normal'
+
+  // For rotate: pivot is baked into the keyframe transform; origin must be at
+  // the SVG top-left (0 0 in view-box coordinates) to match SvgPlayer.
+  // For all other templates: pin origin to group centre (view-box %).
+  const originX = ((cx / vpW) * 100).toFixed(3)
+  const originY = ((cy / vpH) * 100).toFixed(3)
+  const transformOrigin = isRotate ? '0px 0px' : `${originX}% ${originY}%`
 
   return [
     `${selector} {`,
-    `  animation: ${name} ${anim.params.duration}ms ${easing} ${anim.timing.start}ms both;`,
-    needsTransformFix ? '  transform-box: fill-box;' : '',
-    needsTransformFix ? '  transform-origin: center;' : '',
+    `  animation: ${name} ${anim.params.duration}ms ${easing} ${anim.timing.start}ms ${iterations} ${direction} both;`,
+    needsTransformFix ? '  transform-box: view-box;' : '',
+    needsTransformFix ? `  transform-origin: ${transformOrigin};` : '',
     `}`,
-    `@keyframes ${name} {`,
-    `  from { ${kf.from}; }`,
-    `  to   { ${kf.to}; }`,
-    `}`,
+    `@keyframes ${name} { ${kfBody} }`,
     '',
   ]
     .filter((l) => l !== '')
@@ -153,9 +207,9 @@ function drawStrokeScript(scene: Scene): string {
 // ---------------------------------------------------------------------------
 
 function buildSvgHtml(scene: Scene): string {
-  const cssBlocks = scene.groups.map((g, i) => groupCss(g, i)).filter(Boolean).join('\n')
-  const scriptBlock = drawStrokeScript(scene)
   const { width, height } = scene.viewport
+  const cssBlocks = scene.groups.map((g, i) => groupCss(g, i, width, height)).filter(Boolean).join('\n')
+  const scriptBlock = drawStrokeScript(scene)
 
   return `<!DOCTYPE html>
 <html lang="en">

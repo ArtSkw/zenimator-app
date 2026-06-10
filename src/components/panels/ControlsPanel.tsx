@@ -8,6 +8,7 @@ import {
   Sparkles,
   AlertTriangle,
   RotateCcw,
+  RotateCw,
   Wand2,
   Loader2,
   ArrowRight,
@@ -37,6 +38,16 @@ const SLIDE_TEMPLATES: AnimationTemplateId[] = [
   'slide-right',
 ]
 const SCALE_TEMPLATES: AnimationTemplateId[] = ['scale-in', 'pop-in']
+
+// Per-template amplitude bounds, mirrors AMPLITUDE_BOUNDS in proposer.
+const AMPLITUDE_CONFIG: Partial<
+  Record<AnimationTemplateId, { min: number; max: number; step: number; unit?: string; format?: (n: number) => string; fallback: number }>
+> = {
+  breathe: { min: 0.005, max: 0.05, step: 0.005, fallback: 0.02, format: (n) => `${(n * 100).toFixed(1)}%` },
+  float:   { min: 2, max: 20, step: 1, unit: 'px', fallback: 6 },
+  drift:   { min: 2, max: 40, step: 1, unit: 'px', fallback: 8 },
+  shimmer: { min: 0.05, max: 0.5, step: 0.05, fallback: 0.3, format: (n) => n.toFixed(2) },
+}
 
 export function ControlsPanel() {
   const {
@@ -74,6 +85,7 @@ export function ControlsPanel() {
             key={selectedGroup.id}
             group={selectedGroup}
             category={scene.category}
+            viewport={scene.viewport}
             showRationale={showRationale}
             onEdit={(patch) => {
               editGroupAnimation(selectedGroup.id, patch)
@@ -127,6 +139,7 @@ export function ControlsPanel() {
 type EditorProps = {
   group: AnimatableGroup
   category: Scene['category']
+  viewport: Scene['viewport']
   showRationale: boolean
   onEdit: (patch: { template?: AnimationTemplateId; params?: Partial<AnimationBinding['params']>; timing?: { start: number } }) => void
   onCommit: () => void
@@ -139,6 +152,7 @@ type EditorProps = {
 function GroupEditor({
   group,
   category,
+  viewport,
   showRationale,
   onEdit,
   onCommit,
@@ -201,7 +215,8 @@ function GroupEditor({
             category={category}
             value={template}
             onChange={(t) => {
-              onEdit({ template: t })
+              // Rotate must use linear easing to avoid overshoot reversal at cycle end.
+              onEdit({ template: t, ...(t === 'rotate' ? { params: { easing: 'linear' } } : {}) })
               onCommit()
             }}
           />
@@ -210,8 +225,8 @@ function GroupEditor({
             label="Duration"
             value={params.duration}
             min={100}
-            max={2000}
-            step={50}
+            max={category === 'ambient' ? 12000 : 2000}
+            step={category === 'ambient' ? 100 : 50}
             unit="ms"
             onChange={(v) => onEdit({ params: { duration: v } })}
             onCommit={onCommit}
@@ -228,13 +243,16 @@ function GroupEditor({
             onCommit={onCommit}
           />
 
-          <EasingPicker
-            value={params.easing}
-            onChange={(e) => {
-              onEdit({ params: { easing: e } })
-              onCommit()
-            }}
-          />
+          {/* Rotate always runs at linear speed — showing the picker would mislead */}
+          {template !== 'rotate' && (
+            <EasingPicker
+              value={params.easing}
+              onChange={(e) => {
+                onEdit({ params: { easing: e } })
+                onCommit()
+              }}
+            />
+          )}
 
           {SLIDE_TEMPLATES.includes(template) && (
             <ParamSlider
@@ -274,6 +292,97 @@ function GroupEditor({
               onCommit={onCommit}
             />
           )}
+
+          {AMPLITUDE_CONFIG[template] && (
+            <ParamSlider
+              label="Amplitude"
+              value={params.amplitude ?? AMPLITUDE_CONFIG[template]!.fallback}
+              min={AMPLITUDE_CONFIG[template]!.min}
+              max={AMPLITUDE_CONFIG[template]!.max}
+              step={AMPLITUDE_CONFIG[template]!.step}
+              unit={AMPLITUDE_CONFIG[template]!.unit}
+              format={AMPLITUDE_CONFIG[template]!.format}
+              onChange={(v) => onEdit({ params: { amplitude: v } })}
+              onCommit={onCommit}
+            />
+          )}
+
+          {template === 'drift' && (
+            <ControlRow label="Axis">
+              <div className="flex gap-1">
+                {([
+                  { value: 'x' as const, label: 'Horizontal' },
+                  { value: 'y' as const, label: 'Vertical' },
+                ]).map(({ value, label }) => (
+                  <Button
+                    key={value}
+                    variant={(params.driftAxis ?? 'x') === value ? 'default' : 'secondary'}
+                    size="sm"
+                    className="rounded-full flex-1"
+                    onClick={() => { onEdit({ params: { driftAxis: value } }); onCommit() }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </ControlRow>
+          )}
+
+          {template === 'rotate' && (
+            <ControlRow label="Direction">
+              <div className="flex gap-1">
+                {([
+                  { value: 'cw'  as const, Icon: RotateCw,  label: 'Clockwise' },
+                  { value: 'ccw' as const, Icon: RotateCcw, label: 'Counter' },
+                ]).map(({ value, Icon, label }) => (
+                  <Button
+                    key={value}
+                    variant={(params.rotateDirection ?? 'cw') === value ? 'default' : 'secondary'}
+                    size="sm"
+                    className="rounded-full flex-1 gap-1.5"
+                    onClick={() => { onEdit({ params: { rotateDirection: value } }); onCommit() }}
+                  >
+                    <Icon size={12} />
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </ControlRow>
+          )}
+
+          {template === 'rotate' && (() => {
+            const defaultX = parseFloat(((group.bounds.x + group.bounds.width / 2) / viewport.width * 100).toFixed(1))
+            const defaultY = parseFloat(((group.bounds.y + group.bounds.height / 2) / viewport.height * 100).toFixed(1))
+            const pivotX = params.rotateOriginX ?? defaultX
+            const pivotY = params.rotateOriginY ?? defaultY
+            return (
+              <>
+                <ParamSlider
+                  label="Pivot X"
+                  value={pivotX}
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  format={(n) => `${n.toFixed(1)}% · ${Math.round(n / 100 * viewport.width)}px`}
+                  onChange={(v) => onEdit({ params: { rotateOriginX: v } })}
+                  onCommit={onCommit}
+                />
+                <ParamSlider
+                  label="Pivot Y"
+                  value={pivotY}
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  format={(n) => `${n.toFixed(1)}% · ${Math.round(n / 100 * viewport.height)}px`}
+                  onChange={(v) => onEdit({ params: { rotateOriginY: v } })}
+                  onCommit={onCommit}
+                />
+                <p className="text-[10px] text-muted-foreground leading-snug">
+                  Set pivot to the rotation center in the SVG (e.g. clock face center). Default is the group's bounding-box center.
+                </p>
+              </>
+            )
+          })()}
 
           {template === 'draw-stroke' && (
             <ControlRow label="Direction">

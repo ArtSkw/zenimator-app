@@ -11,9 +11,18 @@ import { EASINGS as VALID_EASINGS } from '@/engine/llm/schema'
 import { templatesFor, getTemplate } from '@/engine/animations/templates'
 import { fadeIn } from '@/engine/animations/templates/entrance/fadeIn'
 
-const MAX_TOTAL_MS = 2500
+const MAX_TOTAL_MS = 2500     // entrance scenes — total budget across staggered animations
+const MAX_DURATION_MS = 12000 // per-animation cap — ambient loops can be slow (e.g. 8-12s rotation)
 
 const VALID_EASING_SET = new Set<EasingKey>(VALID_EASINGS)
+
+// Per-template amplitude bounds. Ambient animations should always feel subtle.
+const AMPLITUDE_BOUNDS: Record<string, { min: number; max: number; fallback: number }> = {
+  breathe: { min: 0.005, max: 0.05, fallback: 0.02 }, // scale delta
+  float:   { min: 2,     max: 20,   fallback: 6 },    // px
+  drift:   { min: 2,     max: 40,   fallback: 8 },    // px
+  shimmer: { min: 0.05,  max: 0.5,  fallback: 0.3 },  // opacity delta
+}
 
 /**
  * Validate LLM-proposed animations against the scene's category, clamp
@@ -25,7 +34,8 @@ const VALID_EASING_SET = new Set<EasingKey>(VALID_EASINGS)
 export function proposeAnimations(scene: Scene): Scene {
   const allowed = new Set<AnimationTemplateId>(templatesFor(scene.category))
   const groups = scene.groups.map((g) => sanitizeGroup(g, scene.category, allowed))
-  const timed = fitToDurationCap(groups)
+  // Total-duration cap only applies to entrance — ambient loops have no "total scene length".
+  const timed = scene.category === 'entrance' ? fitToDurationCap(groups) : groups
   return { ...scene, groups: timed }
 }
 
@@ -65,7 +75,7 @@ function sanitizeBinding(
     : defaults.easing
 
   const params: AnimationParams = {
-    duration: clamp(b.params?.duration, 100, 2000, defaults.duration),
+    duration: clamp(b.params?.duration, 100, MAX_DURATION_MS, defaults.duration),
     delay: clamp(b.params?.delay, 0, 1500, defaults.delay),
     easing,
   }
@@ -80,20 +90,63 @@ function sanitizeBinding(
     params.staggerMs = clamp(b.params?.staggerMs, 0, 200, defaults.staggerMs ?? 60)
   }
 
+  // Ambient amplitude — clamped to template-specific bounds.
+  const amp = AMPLITUDE_BOUNDS[template]
+  if (amp && (b.params?.amplitude !== undefined || defaults.amplitude !== undefined)) {
+    params.amplitude = clamp(b.params?.amplitude, amp.min, amp.max, defaults.amplitude ?? amp.fallback)
+  }
+  if (template === 'drift') {
+    params.driftAxis = b.params?.driftAxis === 'y' ? 'y' : (defaults.driftAxis ?? 'x')
+  }
+  if (template === 'rotate') {
+    // Rotate must always use linear easing. Non-linear easings (especially
+    // spring-bouncy) overshoot past 360° and snap back, which looks like a
+    // brief reversal near the end of every cycle.
+    params.easing = 'linear'
+    params.rotateDirection = b.params?.rotateDirection === 'ccw' ? 'ccw' : (defaults.rotateDirection ?? 'cw')
+    // Preserve manual pivot overrides (set via the UI, not the LLM).
+    if (b.params?.rotateOriginX !== undefined) params.rotateOriginX = clamp(b.params.rotateOriginX, 0, 100, 50)
+    if (b.params?.rotateOriginY !== undefined) params.rotateOriginY = clamp(b.params.rotateOriginY, 0, 100, 50)
+  }
+
+  // Ambient bindings loop infinitely by default. Preserve any LLM override,
+  // but always force direction: 'normal' for rotate — alternate would reverse
+  // a cog/hand mid-spin on every second iteration.
+  const rawLooping = b.looping ?? (category === 'ambient'
+    ? { iterations: 'infinite' as const, direction: 'normal' as const }
+    : undefined)
+  const looping = rawLooping && template === 'rotate'
+    ? { ...rawLooping, direction: 'normal' as const }
+    : rawLooping
+
   return {
     template,
     params,
     timing: {
       start: clamp(b.timing?.start, 0, MAX_TOTAL_MS, 0),
     },
+    ...(looping ? { looping } : {}),
   }
 }
 
-function safestDefault(_category: AnimationCategory): AnimationTemplateId {
+function safestDefault(category: AnimationCategory): AnimationTemplateId {
+  if (category === 'ambient') return 'breathe'
   return 'fade-in'
 }
 
-function defaultForCategory(_category: AnimationCategory): AnimationBinding {
+function defaultForCategory(category: AnimationCategory): AnimationBinding {
+  if (category === 'ambient') {
+    // Use breathe as the safest ambient default — gentle, works on most tags.
+    const tpl = getTemplate('breathe')
+    if (tpl) {
+      return {
+        template: 'breathe',
+        params: { ...tpl.defaultParams },
+        timing: { start: 0 },
+        looping: { iterations: 'infinite', direction: 'normal' },
+      }
+    }
+  }
   return {
     template: 'fade-in',
     params: { ...fadeIn.defaultParams },

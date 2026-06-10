@@ -26,16 +26,12 @@ export type EasingKey =
   | 'spring-bouncy'
   | 'spring-stiff';
 
-/** Top-level animation category for a Scene. v1 only activates 'entrance'. */
-export type AnimationCategory = 'entrance' | 'ambient' | 'rigged';
+/** Top-level animation category for a Scene. */
+export type AnimationCategory = 'entrance' | 'ambient';
 
-/**
- * Template IDs, grouped by category. Entrance is live in v1. Ambient (v1.1)
- * and Rigged (v1.2) IDs are reserved so the schema and export format are
- * stable across releases.
- */
+/** Template IDs for all supported categories. */
 export type AnimationTemplateId =
-  // --- Entrance (v1) ---
+  // --- Entrance ---
   | 'fade-in'
   | 'slide-up'
   | 'slide-down'
@@ -45,15 +41,13 @@ export type AnimationTemplateId =
   | 'pop-in'
   | 'draw-stroke'
   | 'stagger-children'
-  // --- Ambient (v1.1, reserved) ---
+  // --- Ambient loop ---
   | 'breathe'
   | 'float'
   | 'drift'
   | 'shimmer'
-  // --- Rigged (v1.2, reserved) ---
-  | 'walk-cycle'
-  | 'wave'
-  | 'idle-sway'
+  | 'rotate'
+  | 'blink'
   | 'none';
 
 export type AnimationParams = {
@@ -64,11 +58,14 @@ export type AnimationParams = {
   scaleFrom?: number;
   staggerMs?: number;
   drawReverse?: boolean;
-  // --- Ambient (v1.1, reserved) ---
+  // --- Ambient loop ---
   amplitude?: number;
-  // --- Rigged (v1.2, reserved) ---
-  phaseOffset?: number;
-  joint?: string;
+  driftAxis?: 'x' | 'y';
+  rotateDirection?: 'cw' | 'ccw';
+  /** Override the rotation pivot (% of SVG viewport, 0–100). Defaults to the
+   *  group's computed bounding-box centre when unset. */
+  rotateOriginX?: number;
+  rotateOriginY?: number;
 };
 
 export type Timing = {
@@ -87,8 +84,6 @@ export type AnimationBinding = {
   timing: Timing;
   /** Present on Ambient-category animations. Unset means one-shot. */
   looping?: Looping;
-  /** Per-element rotation pivot for Rigged templates (viewport coords). */
-  pivot?: { x: number; y: number };
 };
 
 export type AnimatableGroup = {
@@ -121,7 +116,6 @@ export type Scene = {
   source: SceneSource;
   viewport: { width: number; height: number };
   groups: AnimatableGroup[];
-  /** Which animation category this Scene was built for. v1 always 'entrance'. */
   category: AnimationCategory;
   background?: string;
   /** Whether the grouping came from the LLM or the heuristic fallback. */

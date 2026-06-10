@@ -42,15 +42,13 @@ export const ANIMATION_TEMPLATES: AnimationTemplateId[] = [
   'pop-in',
   'draw-stroke',
   'stagger-children',
-  // Ambient (v1.1)
+  // Ambient loop
   'breathe',
   'float',
   'drift',
   'shimmer',
-  // Rigged (v1.2)
-  'walk-cycle',
-  'wave',
-  'idle-sway',
+  'rotate',
+  'blink',
   'none',
 ]
 
@@ -81,7 +79,7 @@ export function proposeGroupsToolFor(category: AnimationCategory) {
         groups: {
           type: 'array',
           minItems: 1,
-          maxItems: 8,
+          maxItems: 15,
           items: {
             type: 'object',
             properties: {
@@ -104,12 +102,16 @@ export function proposeGroupsToolFor(category: AnimationCategory) {
                   params: {
                     type: 'object',
                     properties: {
-                      duration: { type: 'number', minimum: 100, maximum: 2000 },
+                      duration: { type: 'number', minimum: 100, maximum: 8000 },
                       delay: { type: 'number', minimum: 0, maximum: 1500 },
                       easing: { type: 'string', enum: EASINGS },
                       distance: { type: 'number', minimum: 8, maximum: 96 },
                       scaleFrom: { type: 'number', minimum: 0.5, maximum: 1 },
                       staggerMs: { type: 'number', minimum: 0, maximum: 200 },
+                      // Ambient
+                      amplitude: { type: 'number', minimum: 0.005, maximum: 40 },
+                      driftAxis: { type: 'string', enum: ['x', 'y'] },
+                      rotateDirection: { type: 'string', enum: ['cw', 'ccw'] },
                     },
                     required: ['duration', 'delay', 'easing'],
                   },
@@ -119,6 +121,20 @@ export function proposeGroupsToolFor(category: AnimationCategory) {
                       start: { type: 'number', minimum: 0, maximum: 2500 },
                     },
                     required: ['start'],
+                  },
+                  looping: {
+                    type: 'object',
+                    description: 'Required for ambient bindings, omit for entrance.',
+                    properties: {
+                      iterations: {
+                        oneOf: [
+                          { type: 'string', enum: ['infinite'] },
+                          { type: 'number', minimum: 1, maximum: 100 },
+                        ],
+                      },
+                      direction: { type: 'string', enum: ['normal', 'alternate'] },
+                    },
+                    required: ['iterations'],
                   },
                 },
                 required: ['template', 'params', 'timing'],

@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Play, Pause, RotateCcw, Pencil } from 'lucide-react'
+import { Play, Pause, RotateCcw, Pencil, Repeat } from 'lucide-react'
 import { usePlaybackStore } from '@/store/playbackStore'
 import { useSceneStore } from '@/store/sceneStore'
-import { getSceneDuration, formatDuration } from '@/engine/scene/timing'
+import { getSceneDuration, getLoopCycleDuration, formatDuration } from '@/engine/scene/timing'
 
 const MIN_DURATION_S = 0.5
 const MAX_DURATION_S = 10
 
 export function TransportBar() {
-  const { isPlaying, animationKey, play, pause, restart } = usePlaybackStore()
+  const { isPlaying, animationKey, loop, play, pause, restart, setLoop } = usePlaybackStore()
   const { scene, scaleAnimationDuration } = useSceneStore()
   const disabled = !scene
   const [progressFilled, setProgressFilled] = useState(false)
@@ -17,12 +17,24 @@ export function TransportBar() {
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Flip back to "Play" when the scene's longest track ends.
+  // True when at least one binding loops infinitely via WAAPI — those scenes
+  // never end on their own, so we skip the auto-pause/restart timer entirely.
+  const hasInfiniteLoop = scene?.groups.some(
+    (g) => g.animation?.looping?.iterations === 'infinite',
+  ) ?? false
+
+  // When the scene's longest track ends:
+  //  - if `loop` is on, restart the scene
+  //  - otherwise pause back to the start state
+  // Skip the timer when the scene already loops infinitely at the WAAPI level.
   useEffect(() => {
-    if (!isPlaying || !scene) return
-    const timer = window.setTimeout(() => pause(), getSceneDuration(scene))
+    if (!isPlaying || !scene || hasInfiniteLoop) return
+    const timer = window.setTimeout(
+      () => (loop ? restart() : pause()),
+      getSceneDuration(scene),
+    )
     return () => window.clearTimeout(timer)
-  }, [isPlaying, animationKey, scene, pause])
+  }, [isPlaying, animationKey, scene, hasInfiniteLoop, loop, pause, restart])
 
   // Snap bar to 0, then animate to 100% over the real scene duration.
   // Double RAF ensures the 0% paint is committed before the fill starts;
@@ -69,6 +81,7 @@ export function TransportBar() {
   }
 
   const sceneDuration = scene ? getSceneDuration(scene) : 0
+  const cycleMs = scene && hasInfiniteLoop ? getLoopCycleDuration(scene) : 0
 
   return (
     <footer className="h-16 border-t border-border bg-background flex items-center gap-3 px-5 shrink-0">
@@ -104,14 +117,44 @@ export function TransportBar() {
         <RotateCcw size={14} />
       </Button>
 
+      <Button
+        variant={loop || hasInfiniteLoop ? 'default' : 'ghost'}
+        size="icon"
+        className="size-8 rounded-full"
+        disabled={disabled || hasInfiniteLoop}
+        onClick={() => setLoop(!loop)}
+        title={
+          hasInfiniteLoop
+            ? 'Scene contains infinite-loop animations'
+            : loop
+              ? 'Loop is on — scene replays after each cycle'
+              : 'Loop is off — scene plays once'
+        }
+        aria-pressed={loop || hasInfiniteLoop}
+      >
+        <Repeat size={14} />
+      </Button>
+
       <div className="flex-1 mx-2 h-1.5 rounded-full bg-muted overflow-hidden">
-        <div
-          className="h-full bg-foreground rounded-full transition-all duration-100"
-          style={{
-            width: progressFilled ? '100%' : '0%',
-            transitionDuration: progressFilled ? `${sceneDuration}ms` : '0ms',
-          }}
-        />
+        {hasInfiniteLoop ? (
+          // Ambient scene: cycle the bar over the slowest loop duration.
+          // key={animationKey} remounts on restart so the fill resets to 0.
+          <div
+            key={animationKey}
+            className="h-full bg-foreground rounded-full"
+            style={isPlaying ? {
+              animation: `progress-bar-fill ${cycleMs}ms linear infinite`,
+            } : { width: '0%' }}
+          />
+        ) : (
+          <div
+            className="h-full bg-foreground rounded-full transition-all duration-100"
+            style={{
+              width: progressFilled ? '100%' : '0%',
+              transitionDuration: progressFilled ? `${sceneDuration}ms` : '0ms',
+            }}
+          />
+        )}
       </div>
 
       {/* Click-to-edit total duration */}
