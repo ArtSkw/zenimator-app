@@ -91,7 +91,7 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   setResult: (lottieJson, resultSignature, resultKind, project) =>
     set({
       lottieJson, resultSignature, resultKind, project,
-      selectedLayer: project && project.layers.length ? 0 : null,
+      selectedLayer: null,
       status: 'done', stage: null, error: null,
     }),
   setLayerTracks: (index, tracks) =>

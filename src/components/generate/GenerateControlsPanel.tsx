@@ -80,19 +80,21 @@ function LayerEditor({
             <Sliders size={11} className="text-muted-foreground" />
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Controls</p>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {handles.map((h) => (
-              <ParamSlider
-                key={`${h.track}-${h.type}`}
-                label={h.label}
-                value={h.value}
-                min={h.min}
-                max={h.max}
-                step={h.step}
-                unit={h.unit}
-                onChange={() => {}}
-                onCommit={(v) => onChange({ ...tracks, [h.track]: applyHandle(h, tracks[h.track]!, op, v) })}
-              />
+              <div key={`${h.track}-${h.type}`} className="space-y-1">
+                <ParamSlider
+                  label={h.label}
+                  value={h.value}
+                  min={h.min}
+                  max={h.max}
+                  step={h.step}
+                  unit={h.unit}
+                  onChange={() => {}}
+                  onCommit={(v) => onChange({ ...tracks, [h.track]: applyHandle(h, tracks[h.track]!, op, v) })}
+                />
+                <p className="text-[10px] leading-snug text-muted-foreground/70">{h.hint}</p>
+              </div>
             ))}
           </div>
         </div>

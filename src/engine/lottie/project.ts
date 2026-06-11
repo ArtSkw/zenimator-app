@@ -303,6 +303,8 @@ export type LayerHandle = {
   track: TrackKey
   type: HandleType
   label: string
+  /** Plain-language explanation of the underlying property and effect. */
+  hint: string
   value: number
   min: number
   max: number
@@ -344,39 +346,51 @@ function posAxis(keys: Keyframe[]): 'x' | 'y' {
   return my >= mx ? 'y' : 'x'
 }
 
+// Stable amplitude ceilings — must NOT depend on the live value, or the thumb
+// would never move (dragging would grow the max in lockstep with the value).
+const AMOUNT_MAX: Record<TrackKey, number> = { position: 200, scale: 120, rotation: 90, opacity: 100 }
+
 /** Derive the single most-useful handle for a track, or null if it has no
- *  meaningful motion. Labels reflect the detected motion shape. */
+ *  meaningful motion or no draggable range. Labels reflect the motion shape;
+ *  the hint always names the underlying property in plain terms. */
 export function deriveHandle(key: TrackKey, track: Track | undefined, op: number): LayerHandle | null {
   const keys = sortedKeys(track)
   if (keys.length < 2) return null
-  const span = keys[keys.length - 1].t - keys[0].t
+  const first = keys[0].t
+  const span = keys[keys.length - 1].t - first
   const osc = close(keys[0].v, keys[keys.length - 1].v, key)
   const dev = maxDev(keys, key)
+
+  const make = (h: Omit<LayerHandle, 'value'> & { value: number }): LayerHandle | null => {
+    if (h.max - h.min < 1) return null // no draggable range
+    return { ...h, value: Math.min(h.max, Math.max(h.min, Math.round(h.value))) }
+  }
 
   if (key === 'rotation') {
     const net = Math.abs(num(keys[keys.length - 1].v) - num(keys[0].v))
     if (net >= 180) {
-      return { track: key, type: 'duration', label: 'Spin duration', value: span, min: 6, max: Math.max(span, op), step: 1, unit: 'f' }
+      return make({ track: key, type: 'duration', label: 'Spin duration', hint: 'Rotation — frames per full turn (lower is faster)', value: span, min: 6, max: op - first, step: 1, unit: 'f' })
     }
     if (dev < 0.5) return null
-    return { track: key, type: 'amount', label: 'Tilt amount', value: Math.round(dev), min: 0, max: Math.max(20, Math.round(dev * 2)), step: 1, unit: '°' }
+    return make({ track: key, type: 'amount', label: 'Tilt amount', hint: 'Rotation — how far it tilts', value: dev, min: 0, max: AMOUNT_MAX.rotation, step: 1, unit: '°' })
   }
 
   if (key === 'opacity') {
     if (osc) {
       if (dev < 0.5) return null
-      return { track: key, type: 'amount', label: 'Flicker amount', value: Math.round(dev), min: 0, max: 100, step: 1, unit: '%' }
+      return make({ track: key, type: 'amount', label: 'Flicker amount', hint: 'Opacity — how deep it dims', value: dev, min: 0, max: AMOUNT_MAX.opacity, step: 1, unit: '%' })
     }
     const rising = num(keys[keys.length - 1].v) >= num(keys[0].v)
-    return { track: key, type: 'delay', label: rising ? 'Fade-in start' : 'Fade-out start', value: keys[0].t, min: 0, max: Math.max(0, op - span), step: 1, unit: 'f' }
+    return make({ track: key, type: 'delay', label: rising ? 'Fade-in start' : 'Fade-out start', hint: 'Opacity — the frame the fade begins', value: first, min: 0, max: op - span, step: 1, unit: 'f' })
   }
 
   // position / scale → amplitude
   if (dev < 0.5) return null
-  let label: string
-  if (key === 'scale') label = osc ? 'Pulse strength' : 'Scale amount'
-  else label = osc ? (posAxis(keys) === 'y' ? 'Float height' : 'Drift amount') : 'Slide distance'
-  return { track: key, type: 'amount', label, value: Math.round(dev), min: 0, max: Math.max(40, Math.round(dev * 2)), step: 1, unit: key === 'scale' ? '%' : 'px' }
+  if (key === 'scale') {
+    return make({ track: key, type: 'amount', label: osc ? 'Pulse strength' : 'Scale amount', hint: 'Scale — how much it grows or shrinks', value: dev, min: 0, max: AMOUNT_MAX.scale, step: 1, unit: '%' })
+  }
+  const label = osc ? (posAxis(keys) === 'y' ? 'Float height' : 'Drift amount') : 'Slide distance'
+  return make({ track: key, type: 'amount', label, hint: 'Position — how far it travels', value: dev, min: 0, max: AMOUNT_MAX.position, step: 1, unit: 'px' })
 }
 
 /** All derived handles for a layer (one per animated track). Optional `labels`

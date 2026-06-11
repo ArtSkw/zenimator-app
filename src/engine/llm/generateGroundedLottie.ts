@@ -5,7 +5,7 @@ import { detectSvg } from '@/engine/detector/detectSvg'
 import { sanitizeSvg } from '@/engine/detector/sanitizeSvg'
 import { rasterizeSvg } from '@/engine/detector/rasterize'
 import { MOTION_PLAN_PROMPT } from './prompts/motionPlan'
-import { REFINE_MOTION_PROMPT } from './prompts/refine'
+import { REFINE_MOTION_PROMPT, ASK_CHANGES_MOTION_PROMPT } from './prompts/refine'
 import { renderLottieFrames, pickFrames } from '@/engine/lottie/render'
 import { rasterizeLayers, type LayerDef, type EasingKey } from '@/engine/lottie/core'
 import {
@@ -387,6 +387,78 @@ function applyRefined(project: GenerateProject, refined: Map<string, LayerTracks
     const r = refined.get(layer.name)
     if (r) layer.tracks = r
   }
+}
+
+// ── Conversational follow-up: apply a user-directed change ───────────────────
+
+/**
+ * Apply a free-text change request to an existing grounded result. Reuses the
+ * cached layer rasters (no re-rasterization) — only the motion plan is re-asked
+ * — so it's cheap. Returns the updated Lottie JSON and project.
+ */
+export async function askProjectChange(
+  project: GenerateProject,
+  instruction: string,
+  opts: GenerateOptions,
+): Promise<GroundedResult> {
+  opts.onStage?.('Reading current animation…')
+  const frames = await renderLottieFrames(JSON.stringify(assembleProject(project)), pickFrames(project.op), 320)
+
+  opts.onStage?.('Applying your change…')
+  const updated = await askChangesPlan(project, instruction, frames, opts)
+
+  const layers = project.layers.map((l) => {
+    const u = updated.get(l.name)
+    return u ? { ...l, tracks: u.tracks, handleLabels: u.labels ?? l.handleLabels } : l
+  })
+  const next: GenerateProject = { ...project, layers }
+  return { lottieJson: JSON.stringify(assembleProject(next)), project: next }
+}
+
+async function askChangesPlan(
+  project: GenerateProject,
+  instruction: string,
+  frames: string[],
+  opts: GenerateOptions,
+): Promise<Map<string, { tracks: LayerTracks; labels?: Partial<Record<TrackKey, string>> }>> {
+  const client = new Anthropic({ apiKey: opts.apiKey, dangerouslyAllowBrowser: true })
+
+  const planSummary = project.layers.map((l) => ({
+    name: l.name,
+    tracks: tracksToPlan(l.tracks),
+    ...(l.handleLabels ? { controls: l.handleLabels } : {}),
+  }))
+  const content: Anthropic.ContentBlockParam[] = [
+    {
+      type: 'text',
+      text:
+        `Current plan (layers, their keyframe tracks, and any control labels):\n${JSON.stringify(planSummary, null, 2)}\n\n` +
+        `The user asks for this change:\n${instruction}\n\n` +
+        `Rendered frames of the current result follow, in order across the loop:`,
+    },
+    ...frames.map((f) => imageBlock(f)),
+  ]
+
+  const response = await client.messages.create(
+    {
+      model: opts.model,
+      max_tokens: 8192,
+      system: ASK_CHANGES_MOTION_PROMPT,
+      tools: [PLAN_TOOL as unknown as Anthropic.Tool],
+      tool_choice: { type: 'tool', name: PLAN_TOOL.name },
+      messages: [{ role: 'user', content }],
+    },
+    { signal: opts.signal },
+  )
+
+  const toolBlock = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
+  if (!toolBlock) throw new Error('The change request returned no plan.')
+  const plan = toolBlock.input as MotionPlan
+  const out = new Map<string, { tracks: LayerTracks; labels?: Partial<Record<TrackKey, string>> }>()
+  for (const l of plan.layers ?? []) {
+    if (l?.name) out.set(l.name, { tracks: planToTracks(l, project.op), labels: controlsToLabels(l.controls) })
+  }
+  return out
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
