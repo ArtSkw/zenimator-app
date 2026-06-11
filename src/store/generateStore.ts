@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { assembleProject, TRACK_KEYS, type GenerateProject, type LayerTracks, type Track } from '@/engine/lottie/project'
+import { assembleProject, withHandleOrigins, TRACK_KEYS, type GenerateProject, type LayerTracks, type Track } from '@/engine/lottie/project'
 
 export type GenStatus = 'idle' | 'generating' | 'done' | 'error'
 
@@ -90,7 +90,8 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   setStage: (stage) => set({ stage }),
   setResult: (lottieJson, resultSignature, resultKind, project) =>
     set({
-      lottieJson, resultSignature, resultKind, project,
+      lottieJson, resultSignature, resultKind,
+      project: project ? withHandleOrigins(project) : null,
       selectedLayer: null,
       status: 'done', stage: null, error: null,
     }),

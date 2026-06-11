@@ -1,8 +1,7 @@
 /**
- * Strip executable content from an SVG string before it enters the scene.
- * Removes <script> elements and inline event-handler attributes (on*) so
- * dangerouslySetInnerHTML, renderToCanvas, and the HTML export can't be used
- * as XSS vectors by a maliciously crafted file.
+ * Strip executable content from an SVG string before it is rasterized.
+ * Removes <script> elements and inline event-handler attributes (on*) so a
+ * maliciously crafted file can't use the SVG as an XSS vector.
  *
  * Uses DOMParser + XMLSerializer so the output remains valid SVG XML.
  */

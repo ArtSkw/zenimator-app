@@ -27,8 +27,12 @@ This is the whole point: you are NOT limited to presets. Anything expressible as
 ## Easing (curve into the next keyframe)
 "linear" | "easeIn" | "easeOut" | "easeInOut" | "spring-gentle" | "spring-bouncy" | "spring-stiff". Use "linear" for continuous spins; "easeOut" for entrances; "easeInOut" for oscillations.
 
-## Designer controls (optional)
-Each animated track becomes a draggable slider for the user. You may give 1–3 of a layer's tracks a plain, illustration-specific NAME via \`controls\` (e.g. {track:'position', label:'Card launch'}, {track:'scale', label:'Cloud puff'}). Name what the motion MEANS in this picture, not the mechanism. Omit it where a generic name (Float height, Spin duration) already fits — don't force a label.
+## Designer controls — REQUIRED for every animated track
+Each track you animate becomes a draggable slider for the user, so it MUST be named. For every layer, add one \`controls\` entry per animated track, each with:
+- **label**: a short, illustration-specific name (≤30 chars) for what the motion MEANS in this picture, not the mechanism. Good: "Card launch", "Steam drift", "Mascot bounce", "Logo settle". Bad: "Position", "Scale amount", "Opacity".
+- **hint**: one short line describing what dragging the slider does, in the picture's own terms. e.g. {track:'position', label:'Card launch', hint:'How far the card flies up off the screen'} · {track:'scale', label:'Cloud puff', hint:'How much the cloud swells as it drifts'}.
+
+Skipping a label leaves the user with a generic, mechanical slider name — so do not omit any animated track. Use the subject from the illustration (the actual character, object, or element), never the property word.
 
 ## Composition
 - fps: default 60.

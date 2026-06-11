@@ -8,13 +8,20 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  origin,
   ...props
-}: SliderPrimitive.Root.Props) {
+}: SliderPrimitive.Root.Props & { origin?: number }) {
   const _values = Array.isArray(value)
     ? value
     : Array.isArray(defaultValue)
       ? defaultValue
       : [min, max]
+
+  // Position of the origin marker along the track (0–100%), if one is given.
+  const originPct =
+    origin != null && max > min
+      ? Math.min(100, Math.max(0, ((origin - min) / (max - min)) * 100))
+      : null
 
   return (
     <SliderPrimitive.Root
@@ -37,6 +44,17 @@ function Slider({
             className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
           />
         </SliderPrimitive.Track>
+        {/* Origin tick — the AI-default value. Sits above the track, below the thumb.
+            The thumb is edge-aligned (size-3 = 12px), so its centre is inset by half
+            its width; offset the tick to match so a reset lands the thumb on it. */}
+        {originPct != null && (
+          <span
+            aria-hidden
+            data-slot="slider-origin"
+            className="pointer-events-none absolute top-1/2 h-2 w-px -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground/30"
+            style={{ left: `calc(${originPct}% + ${(0.5 - originPct / 100) * 12}px)` }}
+          />
+        )}
         {Array.from({ length: _values.length }, (_, index) => (
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"

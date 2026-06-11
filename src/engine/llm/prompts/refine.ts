@@ -26,7 +26,7 @@ Apply the requested change and return the full updated plan via the \`plan_motio
 Rules:
 - Keep the SAME layers (same names) and reuse each layer's existing elementIds exactly. Do NOT regroup elements.
 - Change ONLY what the request implies — return every other track unchanged.
-- To satisfy the request you may retime, rescale, or reshape any track's keyframes (times, values, easing), add or remove keyframes, and add or rename a control label.
+- To satisfy the request you may retime, rescale, or reshape any track's keyframes (times, values, easing), add or remove keyframes, and add or rename a control's label/hint. If you add motion to a new track, give it a labelled control entry too.
 - Keep loops seamless (first and last keyframe equal) and entries settled at the end.
 - Keep motion tasteful; prefer the smallest change that fulfils the request.
 

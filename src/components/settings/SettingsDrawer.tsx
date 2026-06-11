@@ -10,27 +10,16 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Settings2, Check, X, Loader2, Sun, Moon, Monitor } from 'lucide-react'
 import { useSettingsStore, DEFAULT_MODEL } from '@/store/settingsStore'
-import { testApiKey } from '@/engine/llm/grouper'
-import { clearGrouperCache } from '@/engine/llm/cache'
+import { testApiKey } from '@/engine/llm/testApiKey'
 import { useTheme, type Theme } from '@/components/theme-provider'
 
 type TestResult = { ok: true } | { ok: false; error: string } | null
 
 export function SettingsDrawer() {
-  const {
-    apiKey,
-    model,
-    useLlmGrouping,
-    showRationale,
-    setApiKey,
-    setModel,
-    setUseLlmGrouping,
-    setShowRationale,
-  } = useSettingsStore()
+  const { apiKey, model, setApiKey, setModel } = useSettingsStore()
 
   const { theme, setTheme } = useTheme()
 
@@ -69,11 +58,6 @@ export function SettingsDrawer() {
     }
   }
 
-  const clearCache = () => {
-    clearGrouperCache()
-    setTestResult({ ok: true })
-  }
-
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger
@@ -86,7 +70,7 @@ export function SettingsDrawer() {
         <SheetHeader className="border-b border-border">
           <SheetTitle>Settings</SheetTitle>
           <SheetDescription>
-            API credentials and grouping behavior for this browser.
+            API credentials and appearance for this browser.
           </SheetDescription>
         </SheetHeader>
 
@@ -153,7 +137,7 @@ export function SettingsDrawer() {
                 Model
               </Label>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                The vision-capable model used for semantic grouping.
+                The vision-capable Claude model used to generate animations.
               </p>
             </div>
             <Input
@@ -163,25 +147,6 @@ export function SettingsDrawer() {
               placeholder={DEFAULT_MODEL}
               className="font-mono text-xs"
               spellCheck={false}
-            />
-          </section>
-
-          <Separator />
-
-          <section className="space-y-4">
-            <ToggleRow
-              id="use-llm"
-              label="Use LLM grouping"
-              description="Turn off to use the heuristic fallback only. Useful for offline work or cost control."
-              checked={useLlmGrouping}
-              onChange={setUseLlmGrouping}
-            />
-            <ToggleRow
-              id="show-rationale"
-              label="Show LLM rationale in UI"
-              description='Per-group "why this animation" notes in the Controls panel.'
-              checked={showRationale}
-              onChange={setShowRationale}
             />
           </section>
 
@@ -209,55 +174,8 @@ export function SettingsDrawer() {
               ))}
             </div>
           </section>
-
-          <Separator />
-
-          <section className="space-y-2">
-            <Label className="text-sm font-semibold">Cache</Label>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              LLM responses are cached per-SVG in localStorage so re-uploads
-              are instant and free.
-            </p>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="rounded-full"
-              onClick={clearCache}
-            >
-              Clear response cache
-            </Button>
-          </section>
         </div>
       </SheetContent>
     </Sheet>
-  )
-}
-
-function ToggleRow({
-  id,
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  id: string
-  label: string
-  description: string
-  checked: boolean
-  onChange: (v: boolean) => void
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <div className="space-y-1 flex-1">
-        <Label htmlFor={id} className="text-sm font-medium">
-          {label}
-        </Label>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          {description}
-        </p>
-      </div>
-      <Switch id={id} checked={checked} onCheckedChange={onChange} />
-    </div>
   )
 }

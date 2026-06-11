@@ -39,8 +39,15 @@ export type Keyframe = {
 }
 /** `preset` records which quick-add stamped this track, for UI provenance. It is
  *  cleared the moment a keyframe is hand-edited (the track becomes "Custom") and
- *  is ignored by assembly. */
-export type Track = { keys: Keyframe[]; preset?: string }
+ *  is ignored by assembly.
+ *
+ *  `shape` is the unit-normalized deviation of each keyframe (index-aligned to a
+ *  sorted `keys`), captured when an amplitude handle is dragged. It lets the
+ *  amplitude survive a collapse to 0 — once the keyframes flatten to baseline
+ *  their direction is gone, so we rebuild from this stored shape on the way back
+ *  up. Dropped on any manual keyframe edit (the track becomes "Custom"). Ignored
+ *  by assembly. */
+export type Track = { keys: Keyframe[]; preset?: string; shape?: (number | [number, number])[] }
 export type LayerTracks = Partial<Record<TrackKey, Track>>
 
 export type TrackMeta = {
@@ -80,10 +87,21 @@ export type ProjectLayer = {
   /** Scaled (comp-space) rest bounding box — drives the preview selection box. */
   bounds: { x: number; y: number; w: number; h: number }
   tracks: LayerTracks
-  /** Optional LLM-authored, illustration-specific labels for a track's handle,
-   *  overriding the auto-derived name (e.g. position → "Card launch"). */
-  handleLabels?: Partial<Record<TrackKey, string>>
+  /** Optional LLM-authored, illustration-specific metadata for a track's handle,
+   *  overriding the auto-derived name and hint (e.g. position → "Card launch" /
+   *  "How far the card flies up off the screen"). */
+  handleControls?: Partial<Record<TrackKey, HandleMeta>>
+  /** Each handle's value as first authored by the model (the "AI default"),
+   *  snapshotted when a fresh result enters the store and preserved through manual
+   *  edits. Powers reset-to-default and the origin tick, and orders the controls by
+   *  salience without reshuffling as the user drags. */
+  handleOrigins?: Partial<Record<TrackKey, number>>
 }
+
+/** LLM-authored designer-facing metadata for a track's handle. `label` is the
+ *  slider name; `hint` is a one-line, subject-specific description of its effect.
+ *  Both override the auto-derived defaults from {@link deriveHandle}. */
+export type HandleMeta = { label: string; hint?: string }
 
 export type GenerateProject = {
   fps: number
@@ -348,12 +366,36 @@ function posAxis(keys: Keyframe[]): 'x' | 'y' {
 
 // Stable amplitude ceilings — must NOT depend on the live value, or the thumb
 // would never move (dragging would grow the max in lockstep with the value).
+// scale/rotation/opacity are size-invariant (%, degrees) so a fixed cap is right;
+// position is absolute px and gets a bounds-relative ceiling instead (positionMax).
 const AMOUNT_MAX: Record<TrackKey, number> = { position: 200, scale: 120, rotation: 90, opacity: 100 }
+
+/** User-space (pre-DPI-scale) geometry for the layer being edited, used to size
+ *  the position handle's range so it scales with the artwork. Position keyframes
+ *  are authored in user space, so these must be too (divide comp-space values by
+ *  the project's `scale`). Optional — falls back to the static cap when absent. */
+export type HandleContext = { layerW: number; layerH: number; compW: number; compH: number }
+
+/** Bounds-relative ceiling for the position handle (px, user space). A static cap
+ *  is absurd on a tiny icon and cramped on a large scene, so it scales with the
+ *  artwork — but it must depend ONLY on geometry, never on the live amplitude, or
+ *  the max would grow as the user drags toward it and the thumb would snap back.
+ *  Oscillations (float / drift / shake) read as a fraction of the element; one-shot
+ *  slides can cross up to half the scene. Past these the layer just leaves frame. */
+function positionMax(ctx: HandleContext | undefined, osc: boolean): number {
+  if (!ctx) return AMOUNT_MAX.position
+  const layerDim = Math.max(ctx.layerW, ctx.layerH)
+  const compDim = Math.max(ctx.compW, ctx.compH)
+  if (!(layerDim > 0) || !(compDim > 0)) return AMOUNT_MAX.position
+  const raw = osc ? layerDim * 0.6 : compDim * 0.5
+  return Math.max(16, Math.round(raw))
+}
 
 /** Derive the single most-useful handle for a track, or null if it has no
  *  meaningful motion or no draggable range. Labels reflect the motion shape;
- *  the hint always names the underlying property in plain terms. */
-export function deriveHandle(key: TrackKey, track: Track | undefined, op: number): LayerHandle | null {
+ *  the hint always names the underlying property in plain terms. `ctx` (when
+ *  provided) sizes the position handle's range to the artwork. */
+export function deriveHandle(key: TrackKey, track: Track | undefined, op: number, ctx?: HandleContext): LayerHandle | null {
   const keys = sortedKeys(track)
   if (keys.length < 2) return null
   const first = keys[0].t
@@ -371,13 +413,11 @@ export function deriveHandle(key: TrackKey, track: Track | undefined, op: number
     if (net >= 180) {
       return make({ track: key, type: 'duration', label: 'Spin duration', hint: 'Rotation — frames per full turn (lower is faster)', value: span, min: 6, max: op - first, step: 1, unit: 'f' })
     }
-    if (dev < 0.5) return null
     return make({ track: key, type: 'amount', label: 'Tilt amount', hint: 'Rotation — how far it tilts', value: dev, min: 0, max: AMOUNT_MAX.rotation, step: 1, unit: '°' })
   }
 
   if (key === 'opacity') {
     if (osc) {
-      if (dev < 0.5) return null
       return make({ track: key, type: 'amount', label: 'Flicker amount', hint: 'Opacity — how deep it dims', value: dev, min: 0, max: AMOUNT_MAX.opacity, step: 1, unit: '%' })
     }
     const rising = num(keys[keys.length - 1].v) >= num(keys[0].v)
@@ -385,40 +425,107 @@ export function deriveHandle(key: TrackKey, track: Track | undefined, op: number
   }
 
   // position / scale → amplitude
-  if (dev < 0.5) return null
   if (key === 'scale') {
     return make({ track: key, type: 'amount', label: osc ? 'Pulse strength' : 'Scale amount', hint: 'Scale — how much it grows or shrinks', value: dev, min: 0, max: AMOUNT_MAX.scale, step: 1, unit: '%' })
   }
   const label = osc ? (posAxis(keys) === 'y' ? 'Float height' : 'Drift amount') : 'Slide distance'
-  return make({ track: key, type: 'amount', label, hint: 'Position — how far it travels', value: dev, min: 0, max: AMOUNT_MAX.position, step: 1, unit: 'px' })
+  return make({ track: key, type: 'amount', label, hint: 'Position — how far it travels', value: dev, min: 0, max: positionMax(ctx, osc), step: 1, unit: 'px' })
 }
 
-/** All derived handles for a layer (one per animated track). Optional `labels`
- *  (LLM-authored) override the auto-derived name per track. */
+/** All derived handles for a layer (one per animated track). Optional `controls`
+ *  (LLM-authored) override the auto-derived name and hint per track. */
 export function deriveLayerHandles(
   tracks: LayerTracks,
   op: number,
-  labels?: Partial<Record<TrackKey, string>>,
+  controls?: Partial<Record<TrackKey, HandleMeta>>,
+  ctx?: HandleContext,
 ): LayerHandle[] {
   const out: LayerHandle[] = []
   for (const key of TRACK_KEYS) {
-    const h = deriveHandle(key, tracks[key], op)
+    const h = deriveHandle(key, tracks[key], op, ctx)
     if (h) {
-      const label = labels?.[key]?.trim()
+      const meta = controls?.[key]
+      const label = meta?.label?.trim()
       if (label) h.label = label
+      const hint = meta?.hint?.trim()
+      if (hint) h.hint = hint
       out.push(h)
     }
   }
   return out
 }
 
-function scaleVal(v: Keyframe['v'], key: TrackKey, factor: number): Keyframe['v'] {
-  if (key === 'position') {
-    const [x, y] = Array.isArray(v) ? v : [v, 0]
-    return [Math.round(x * factor), Math.round(y * factor)]
+/** Position keyframes are authored in user space, while a layer's bounds and the
+ *  composition size are stored comp-space (×scale). Divide them back out so the
+ *  position handle's range is sized in matching (user-space) units. */
+export function layerHandleContext(project: GenerateProject, layer: ProjectLayer): HandleContext {
+  const s = project.scale || 1
+  return {
+    layerW: layer.bounds.w / s,
+    layerH: layer.bounds.h / s,
+    compW: project.w / s,
+    compH: project.h / s,
   }
-  const baseline = baselineOf(key)
-  return Math.round(baseline + (num(v) - baseline) * factor)
+}
+
+/** Snapshot each layer's current handle values as their "origin" (the AI default).
+ *  Call when a fresh LLM result enters the store; manual edits keep the snapshot
+ *  (they spread the layer), so reset-to-default and salience order stay anchored to
+ *  what the model proposed. */
+export function withHandleOrigins(project: GenerateProject): GenerateProject {
+  return {
+    ...project,
+    layers: project.layers.map((layer) => {
+      const ctx = layerHandleContext(project, layer)
+      const handleOrigins: Partial<Record<TrackKey, number>> = {}
+      for (const h of deriveLayerHandles(layer.tracks, project.op, undefined, ctx)) {
+        handleOrigins[h.track] = h.value
+      }
+      return { ...layer, handleOrigins }
+    }),
+  }
+}
+
+/** Perceptual prominence of a handle (0..1) for ordering the dominant motion
+ *  first. Uses the original authored value (`origin`) when available so the order
+ *  stays fixed while the user drags. References are per-type since the units differ
+ *  (px / % / degrees / frames) — judgment calls, tune to taste. */
+export function handleSalience(h: LayerHandle, origin?: number, ctx?: HandleContext): number {
+  if (h.type === 'duration') return 0.9 // a full spin is a headline motion
+  if (h.type === 'delay') return 0.7    // a fade in/out (appear/disappear) is prominent
+  const v = origin ?? h.value
+  const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
+  switch (h.track) {
+    case 'position': return clamp01(v / Math.max(1, ctx ? Math.max(ctx.layerW, ctx.layerH) : 100))
+    case 'scale':    return clamp01(v / 30)
+    case 'rotation': return clamp01(v / 30)
+    case 'opacity':  return clamp01(v / 50)
+    default:         return 0
+  }
+}
+
+/** Unit-normalized deviation of each keyframe (deviation ÷ peak deviation), so
+ *  the track's motion shape is captured independent of amplitude. Returns null
+ *  when the track is flat (no peak to normalize against). */
+function unitShape(keys: Keyframe[], key: TrackKey): (number | [number, number])[] | null {
+  const peak = maxDev(keys, key)
+  if (peak <= 0) return null
+  return keys.map((k) => {
+    if (key === 'position') {
+      const [x, y] = Array.isArray(k.v) ? k.v : [k.v, 0]
+      return [x / peak, y / peak] as [number, number]
+    }
+    return (num(k.v) - baselineOf(key)) / peak
+  })
+}
+
+/** Rebuild a keyframe value from its unit deviation at a target amplitude. */
+function fromUnit(u: number | [number, number], key: TrackKey, amp: number): Keyframe['v'] {
+  if (key === 'position') {
+    const [ux, uy] = Array.isArray(u) ? u : [u, 0]
+    return [Math.round(ux * amp), Math.round(uy * amp)]
+  }
+  return Math.round(baselineOf(key) + (Array.isArray(u) ? 0 : u) * amp)
 }
 
 /** Apply a new handle value to its track, transforming the keyframes. The track
@@ -426,21 +533,26 @@ function scaleVal(v: Keyframe['v'], key: TrackKey, factor: number): Keyframe['v'
 export function applyHandle(h: LayerHandle, track: Track, op: number, value: number): Track {
   const keys = sortedKeys(track)
   if (keys.length < 2) return track
-  let next: Keyframe[]
   if (h.type === 'delay') {
     const offset = value - keys[0].t
-    next = keys.map((k) => ({ ...k, t: clampInt(k.t + offset, 0, op, k.t) }))
-  } else if (h.type === 'duration') {
+    const next = keys.map((k) => ({ ...k, t: clampInt(k.t + offset, 0, op, k.t) }))
+    return { ...track, keys: next, preset: undefined }
+  }
+  if (h.type === 'duration') {
     const first = keys[0].t
     const curSpan = keys[keys.length - 1].t - first
     const f = curSpan > 0 ? value / curSpan : 1
-    next = keys.map((k) => ({ ...k, t: clampInt(Math.round(first + (k.t - first) * f), 0, op, k.t) }))
-  } else {
-    const cur = maxDev(keys, h.track)
-    const f = cur > 0 ? value / cur : 1
-    next = keys.map((k) => ({ ...k, v: scaleVal(k.v, h.track, f) }))
+    const next = keys.map((k) => ({ ...k, t: clampInt(Math.round(first + (k.t - first) * f), 0, op, k.t) }))
+    return { ...track, keys: next, preset: undefined }
   }
-  return { ...track, keys: next, preset: undefined }
+  // Amount: rebuild from a unit shape so amplitude survives a collapse to 0.
+  // Prefer the live shape; fall back to the stored one when keys are flat.
+  const live = unitShape(keys, h.track)
+  const stored = track.shape && track.shape.length === keys.length ? track.shape : null
+  const shape = live ?? stored
+  if (!shape) return track // flat with no remembered shape — nothing to rebuild
+  const next = keys.map((k, i) => ({ ...k, v: fromUnit(shape[i], h.track, value) }))
+  return { ...track, keys: next, preset: undefined, shape }
 }
 
 export type SampledTransform = { dx: number; dy: number; scale: number; rotation: number; opacity: number }

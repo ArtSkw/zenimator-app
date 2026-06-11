@@ -18,6 +18,7 @@ import {
   type ProjectLayer,
   type LayerTracks,
   type TrackKey,
+  type HandleMeta,
 } from '@/engine/lottie/project'
 
 // ── Motion plan shape (mirrors the plan_motion tool schema) ─────────────────
@@ -26,7 +27,7 @@ import {
 
 type ScalarKey = { t: number; v: number; easing?: string }
 type PosKey = { t: number; x: number; y: number; easing?: string }
-type ControlSpec = { track: string; label: string }
+type ControlSpec = { track: string; label: string; hint?: string }
 type PlanLayer = {
   name: string
   elementIds: string[]
@@ -93,12 +94,20 @@ const PLAN_TOOL = {
             },
             controls: {
               type: 'array' as const,
-              description: "Optional designer-facing labels for this layer's motion knobs — name 1–3 with plain, illustration-specific words (e.g. {track:'position', label:'Card launch'}).",
+              description:
+                "Designer-facing labels for this layer's motion knobs. Provide ONE entry for EVERY track you animate on this layer — each animated track becomes a slider, and an unlabelled slider reads as generic ('Scale amount'). Name what the motion MEANS in this picture, not the mechanism.",
               items: {
                 type: 'object' as const,
                 properties: {
                   track: { type: 'string' as const, enum: ['opacity', 'position', 'scale', 'rotation'] },
-                  label: { type: 'string' as const },
+                  label: {
+                    type: 'string' as const,
+                    description: "Short, illustration-specific slider name (≤30 chars), e.g. 'Card launch', 'Steam drift', 'Mascot bounce'.",
+                  },
+                  hint: {
+                    type: 'string' as const,
+                    description: "One short line describing what this slider does, in the picture's own terms, e.g. 'How far the card flies up off the screen'.",
+                  },
                 },
                 required: ['track', 'label'],
               },
@@ -256,13 +265,13 @@ async function prepareLayers(index: StructuralIndex, plan: MotionPlan): Promise<
 
   const defs: LayerDef[] = []
   const fx: LayerTracks[] = []
-  const labels: (Partial<Record<TrackKey, string>> | undefined)[] = []
+  const labels: (Partial<Record<TrackKey, HandleMeta>> | undefined)[] = []
   planLayers.forEach((l, li) => {
     const owned = leaves.filter((lf) => owner.get(lf.id) === li).map((lf) => lf.id)
     if (owned.length === 0) return
     defs.push({ name: l.name || 'layer', elementIds: owned })
     fx.push(planToTracks(l, op))
-    labels.push(controlsToLabels(l.controls))
+    labels.push(controlsToMeta(l.controls))
   })
   const uncovered = leaves.filter((lf) => !owner.has(lf.id)).map((lf) => lf.id)
   if (uncovered.length) {
@@ -283,7 +292,7 @@ async function prepareLayers(index: StructuralIndex, plan: MotionPlan): Promise<
           cx: b.cx * S, cy: b.cy * S,
           bounds: { x: b.x * S, y: b.y * S, w: b.w * S, h: b.h * S },
           tracks: fx[r.defIndex],
-          handleLabels: labels[r.defIndex],
+          handleControls: labels[r.defIndex],
         } satisfies ProjectLayer,
         docIndex: r.docIndex,
       }
@@ -327,13 +336,15 @@ function planToTracks(l: PlanLayer, op: number): LayerTracks {
   return t
 }
 
-/** Validate the model's control labels into a per-track label map. */
-function controlsToLabels(controls: ControlSpec[] | undefined): Partial<Record<TrackKey, string>> | undefined {
+/** Validate the model's control specs into a per-track {label, hint} map. */
+function controlsToMeta(controls: ControlSpec[] | undefined): Partial<Record<TrackKey, HandleMeta>> | undefined {
   if (!controls?.length) return undefined
-  const out: Partial<Record<TrackKey, string>> = {}
+  const out: Partial<Record<TrackKey, HandleMeta>> = {}
   for (const c of controls) {
     const label = typeof c?.label === 'string' ? c.label.trim().slice(0, 40) : ''
-    if (label && (TRACK_KEYS as readonly string[]).includes(c.track)) out[c.track as TrackKey] = label
+    if (!label || !(TRACK_KEYS as readonly string[]).includes(c.track)) continue
+    const hint = typeof c?.hint === 'string' ? c.hint.trim().slice(0, 120) : ''
+    out[c.track as TrackKey] = hint ? { label, hint } : { label }
   }
   return Object.keys(out).length ? out : undefined
 }
@@ -409,7 +420,7 @@ export async function askProjectChange(
 
   const layers = project.layers.map((l) => {
     const u = updated.get(l.name)
-    return u ? { ...l, tracks: u.tracks, handleLabels: u.labels ?? l.handleLabels } : l
+    return u ? { ...l, tracks: u.tracks, handleControls: u.labels ?? l.handleControls } : l
   })
   const next: GenerateProject = { ...project, layers }
   return { lottieJson: JSON.stringify(assembleProject(next)), project: next }
@@ -420,13 +431,13 @@ async function askChangesPlan(
   instruction: string,
   frames: string[],
   opts: GenerateOptions,
-): Promise<Map<string, { tracks: LayerTracks; labels?: Partial<Record<TrackKey, string>> }>> {
+): Promise<Map<string, { tracks: LayerTracks; labels?: Partial<Record<TrackKey, HandleMeta>> }>> {
   const client = new Anthropic({ apiKey: opts.apiKey, dangerouslyAllowBrowser: true })
 
   const planSummary = project.layers.map((l) => ({
     name: l.name,
     tracks: tracksToPlan(l.tracks),
-    ...(l.handleLabels ? { controls: l.handleLabels } : {}),
+    ...(l.handleControls ? { controls: l.handleControls } : {}),
   }))
   const content: Anthropic.ContentBlockParam[] = [
     {
@@ -454,9 +465,9 @@ async function askChangesPlan(
   const toolBlock = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
   if (!toolBlock) throw new Error('The change request returned no plan.')
   const plan = toolBlock.input as MotionPlan
-  const out = new Map<string, { tracks: LayerTracks; labels?: Partial<Record<TrackKey, string>> }>()
+  const out = new Map<string, { tracks: LayerTracks; labels?: Partial<Record<TrackKey, HandleMeta>> }>()
   for (const l of plan.layers ?? []) {
-    if (l?.name) out.set(l.name, { tracks: planToTracks(l, project.op), labels: controlsToLabels(l.controls) })
+    if (l?.name) out.set(l.name, { tracks: planToTracks(l, project.op), labels: controlsToMeta(l.controls) })
   }
   return out
 }

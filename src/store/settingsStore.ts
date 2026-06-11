@@ -6,13 +6,9 @@ export const DEFAULT_MODEL = 'claude-sonnet-4-6';
 type SettingsState = {
   apiKey: string;
   model: string;
-  useLlmGrouping: boolean;
-  showRationale: boolean;
 
   setApiKey: (key: string) => void;
   setModel: (model: string) => void;
-  setUseLlmGrouping: (v: boolean) => void;
-  setShowRationale: (v: boolean) => void;
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -20,13 +16,9 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       apiKey: '',
       model: DEFAULT_MODEL,
-      useLlmGrouping: true,
-      showRationale: true,
 
       setApiKey: (apiKey) => set({ apiKey }),
       setModel: (model) => set({ model }),
-      setUseLlmGrouping: (useLlmGrouping) => set({ useLlmGrouping }),
-      setShowRationale: (showRationale) => set({ showRationale }),
     }),
     {
       name: 'zenimator.settings',
@@ -35,8 +27,6 @@ export const useSettingsStore = create<SettingsState>()(
       partialize: (s) => ({
         apiKey: s.apiKey,
         model: s.model,
-        useLlmGrouping: s.useLlmGrouping,
-        showRationale: s.showRationale,
       }),
     },
   ),

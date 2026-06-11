@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { RotateCcw } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
 import {
   Tooltip,
@@ -15,6 +16,9 @@ type Props = {
   step?: number
   unit?: string
   format?: (n: number) => string
+  /** The AI-default value: shows a tick on the track and a reset affordance when
+   *  the current value has moved away from it. */
+  origin?: number
   /** Called continuously during drag. */
   onChange: (value: number) => void
   /** Called once on release — typically where playback restart is triggered. */
@@ -36,6 +40,7 @@ export function ParamSlider({
   step = 1,
   unit = '',
   format,
+  origin,
   onChange,
   onCommit,
 }: Props) {
@@ -57,6 +62,8 @@ export function ParamSlider({
   }, [editing])
 
   const display = format ? format(local) : `${local}${unit}`
+  const canReset = origin != null && Math.round(local) !== Math.round(origin)
+  const resetToOrigin = () => { if (origin != null) apply(origin) }
 
   function validate(s: string): { ok: true; n: number } | { ok: false; msg: string } {
     const trimmed = s.trim()
@@ -105,50 +112,74 @@ export function ParamSlider({
   }
 
   return (
-    <div className="space-y-1.5">
+    <TooltipProvider delay={400}>
+      <div className="group space-y-1.5">
       {/* ── Header: label left, value/input right ── */}
       <div className="flex items-center gap-2">
         <span className="flex-1 min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           {label}
         </span>
 
+        {canReset && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={resetToOrigin}
+                  aria-label="Reset to AI default"
+                  className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                >
+                  <RotateCcw size={11} />
+                </button>
+              }
+            />
+            <TooltipContent side="top">Reset to AI default</TooltipContent>
+          </Tooltip>
+        )}
+
         {editing ? (
-          <TooltipProvider>
-            <Tooltip open={!!error}>
-              {/* Base UI uses `render` (not `asChild`); the input is the tooltip anchor. */}
-              <TooltipTrigger
-                render={
-                  <span className="inline-flex shrink-0">
-                    <input
-                      ref={inputRef}
-                      value={draft}
-                      onChange={(e) => handleDraftChange(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      onBlur={handleBlur}
-                      aria-invalid={error ? true : undefined}
-                      className={[
-                        'h-5 w-[4.5rem] rounded border bg-transparent px-1.5',
-                        'text-right text-[11px] font-mono tabular-nums text-foreground',
-                        'outline-none transition-colors',
-                        'border-input focus:border-ring focus:ring-1 focus:ring-ring/50',
-                        'aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20',
-                      ].join(' ')}
-                    />
-                  </span>
-                }
-              />
-              <TooltipContent side="top">{error}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Tooltip open={!!error}>
+            {/* Base UI uses `render` (not `asChild`); the input is the tooltip anchor. */}
+            <TooltipTrigger
+              render={
+                <span className="inline-flex shrink-0">
+                  <input
+                    ref={inputRef}
+                    value={draft}
+                    onChange={(e) => handleDraftChange(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onBlur={handleBlur}
+                    aria-invalid={error ? true : undefined}
+                    className={[
+                      'h-5 w-[4.5rem] rounded border bg-transparent px-1.5',
+                      'text-right text-[11px] font-mono tabular-nums text-foreground',
+                      'outline-none transition-colors',
+                      'border-input focus:border-ring focus:ring-1 focus:ring-ring/50',
+                      'aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20',
+                    ].join(' ')}
+                  />
+                </span>
+              }
+            />
+            <TooltipContent side="top">{error}</TooltipContent>
+          </Tooltip>
         ) : (
-          <button
-            type="button"
-            onClick={startEdit}
-            title="Click to type a value"
-            className="shrink-0 max-w-[55%] truncate text-right text-[11px] font-mono tabular-nums text-muted-foreground transition-colors hover:text-foreground cursor-text"
-          >
-            {display}
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={startEdit}
+                  aria-label="Click to enter value manually"
+                  className="shrink-0 max-w-[55%] truncate text-right text-[11px] font-mono tabular-nums text-muted-foreground transition-colors hover:text-foreground cursor-text"
+                >
+                  {display}
+                </button>
+              }
+            />
+            <TooltipContent side="top">Enter manually</TooltipContent>
+          </Tooltip>
         )}
       </div>
 
@@ -158,6 +189,7 @@ export function ParamSlider({
         min={min}
         max={max}
         step={step}
+        origin={origin}
         onValueChange={(v) => {
           const n = Array.isArray(v) ? v[0] : v
           // Dragging the slider while the input is open: exit edit mode silently.
@@ -171,5 +203,6 @@ export function ParamSlider({
         }}
       />
     </div>
+    </TooltipProvider>
   )
 }

@@ -2,14 +2,15 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { SlidersHorizontal, Plus, X, Sliders } from 'lucide-react'
+import { SlidersHorizontal, Plus, X, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ParamSlider } from '@/components/controls/ParamSlider'
 import { useGenerateStore } from '@/store/generateStore'
 import {
   TRACKS, PRESETS_BY_TRACK, PRESET_BY_ID, EASINGS, stampPreset,
-  deriveLayerHandles, applyHandle,
-  type TrackMeta, type LayerTracks, type Track, type Keyframe,
+  deriveLayerHandles, applyHandle, layerHandleContext, handleSalience,
+  type TrackMeta, type LayerTracks, type Track, type Keyframe, type HandleMeta,
+  type HandleContext,
 } from '@/engine/lottie/project'
 import type { EasingKey } from '@/engine/lottie/core'
 
@@ -33,9 +34,11 @@ export function GenerateControlsPanel() {
           <LayerEditor
             key={selectedLayer}
             tracks={layer.tracks}
-            labels={layer.handleLabels}
+            controls={layer.handleControls}
+            origins={layer.handleOrigins}
             op={project!.op}
             fps={project!.fps}
+            ctx={layerHandleContext(project!, layer)}
             onChange={(t) => setLayerTracks(selectedLayer, t)}
           />
         ) : (
@@ -53,36 +56,55 @@ export function GenerateControlsPanel() {
 }
 
 function LayerEditor({
-  tracks, labels, op, fps, onChange,
+  tracks, controls, origins, op, fps, ctx, onChange,
 }: {
   tracks: LayerTracks
-  labels?: Partial<Record<TrackMeta['key'], string>>
+  controls?: Partial<Record<TrackMeta['key'], HandleMeta>>
+  origins?: Partial<Record<TrackMeta['key'], number>>
   op: number
   fps: number
+  ctx: HandleContext
   onChange: (t: LayerTracks) => void
 }) {
+  // Derive handles, then order the dominant motion first. Salience reads from the
+  // AI-default value (origins), so the order stays put as the user drags.
+  const handles = deriveLayerHandles(tracks, op, controls, ctx)
+    .sort((a, b) => handleSalience(b, origins?.[b.track], ctx) - handleSalience(a, origins?.[a.track], ctx))
+
   const setTrack = (key: TrackMeta['key'], track: Track | undefined) => {
     const next: LayerTracks = { ...tracks }
-    if (track && track.keys.length) next[key] = track
-    else delete next[key]
+    if (track && track.keys.length) {
+      next[key] = track
+    } else {
+      // If an LLM-authored handle labels this track, zero the amplitude rather
+      // than deleting the track — the Controls knob stays visible and the shape
+      // is preserved so the designer can bring it back by dragging. Restricted
+      // to 'amount' handles; delay/duration types have no clean "zero" state.
+      const existing = tracks[key]
+      const handle = existing
+        ? handles.find(h => h.track === key && h.type === 'amount')
+        : null
+      if (handle && existing) {
+        next[key] = applyHandle(handle, existing, op, 0)
+      } else {
+        delete next[key]
+      }
+    }
     onChange(next)
   }
 
-  // Designer-facing knobs derived from the current keyframes (one per animated
-  // track). Dragging one rewrites that track deterministically — no re-prompt.
-  const handles = deriveLayerHandles(tracks, op, labels)
+  // Keyframe details start collapsed when there are smart controls to lead with;
+  // if the layer has none, open them so the panel is never a dead end.
+  const [detailsOpen, setDetailsOpen] = useState(handles.length === 0)
 
   return (
     <div className="pb-4">
       {handles.length > 0 && (
         <div className="px-4 pt-4 pb-5 space-y-3 border-b border-border bg-muted/20">
-          <div className="flex items-center gap-1.5">
-            <Sliders size={11} className="text-muted-foreground" />
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Controls</p>
-          </div>
-          <div className="space-y-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Smart controls</p>
+          <div className="space-y-5">
             {handles.map((h) => (
-              <div key={`${h.track}-${h.type}`} className="space-y-1">
+              <div key={`${h.track}-${h.type}`} className="space-y-1.5">
                 <ParamSlider
                   label={h.label}
                   value={h.value}
@@ -90,31 +112,53 @@ function LayerEditor({
                   max={h.max}
                   step={h.step}
                   unit={h.unit}
+                  origin={origins?.[h.track]}
                   onChange={() => {}}
                   onCommit={(v) => onChange({ ...tracks, [h.track]: applyHandle(h, tracks[h.track]!, op, v) })}
                 />
-                <p className="text-[10px] leading-snug text-muted-foreground/70">{h.hint}</p>
+                <p className="text-xs leading-relaxed text-foreground/60">{h.hint}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <p className="text-[11px] text-muted-foreground leading-snug px-4 pt-4 pb-2">
-        Each property is a track of keyframes. Use a quick-add for a head start, then edit the
-        keyframes directly — sequence anything you like.
-      </p>
-      {TRACKS.map((meta, i) => (
-        <div key={meta.key} className={cn(i > 0 && 'border-t border-border')}>
-          <TrackEditor
-            meta={meta}
-            track={tracks[meta.key]}
-            op={op}
-            fps={fps}
-            onChange={(t) => setTrack(meta.key, t)}
-          />
+      {/* Advanced: per-property keyframe editor, tucked behind a disclosure so the
+          smart controls stay the default focus. */}
+      <button
+        type="button"
+        onClick={() => setDetailsOpen((o) => !o)}
+        aria-expanded={detailsOpen}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+      >
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Keyframe details
+        </span>
+        <ChevronDown
+          size={14}
+          className={cn('text-muted-foreground transition-transform duration-200', detailsOpen && 'rotate-180')}
+        />
+      </button>
+
+      {detailsOpen && (
+        <div className="border-t border-border">
+          <p className="text-xs text-foreground/60 leading-relaxed px-4 pt-4 pb-2">
+            Each property is a track of keyframes. Use a quick-add for a head start, then edit the
+            keyframes directly — sequence anything you like.
+          </p>
+          {TRACKS.map((meta, i) => (
+            <div key={meta.key} className={cn(i > 0 && 'border-t border-border')}>
+              <TrackEditor
+                meta={meta}
+                track={tracks[meta.key]}
+                op={op}
+                fps={fps}
+                onChange={(t) => setTrack(meta.key, t)}
+              />
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   )
 }
@@ -162,7 +206,7 @@ function TrackEditor({
 
       {/* Quick-add presets */}
       <div className="space-y-1.5">
-        <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/70">Quick add</p>
+        <p className="text-[9px] font-semibold uppercase tracking-wider text-foreground/50">Quick add</p>
         <div className="flex flex-wrap gap-1.5">
           {PRESETS_BY_TRACK[meta.key].map((p) => (
             <Pill key={p.id} active={activePreset === p.id} onClick={() => onChange(stampPreset(p, { op, fps }))}>
@@ -176,7 +220,7 @@ function TrackEditor({
       {active && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/70">Keyframes</p>
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-foreground/50">Keyframes</p>
             {provenance && (
               <span
                 className={cn(
@@ -196,7 +240,7 @@ function TrackEditor({
                   <span className="grid place-items-center size-4 rounded bg-foreground/10 text-[9px] font-mono font-medium text-foreground tabular-nums">
                     {i + 1}
                   </span>
-                  <span className="text-[10px] text-muted-foreground">Frame</span>
+                  <span className="text-[10px] text-foreground/60">Frame</span>
                   <NumField
                     value={k.t} min={0} max={op} className="w-14"
                     onCommit={(t) => updateKey(i, { t })}
@@ -215,7 +259,7 @@ function TrackEditor({
 
               {i < keys.length - 1 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground w-10 shrink-0">Ease</span>
+                  <span className="text-[10px] text-foreground/60 w-10 shrink-0">Ease</span>
                   <EaseSelect value={k.easing ?? 'easeInOut'} onChange={(e) => updateKey(i, { easing: e })} />
                 </div>
               )}
@@ -245,7 +289,7 @@ function ValueEditor({
     const [x, y] = Array.isArray(value) ? value : [value, 0]
     return (
       <div className="flex items-center gap-2">
-        <span className="text-[10px] text-muted-foreground w-10 shrink-0">Offset</span>
+        <span className="text-[10px] text-foreground/60 w-10 shrink-0">Offset</span>
         <Axis label="X" value={x} min={meta.min} max={meta.max} onCommit={(n) => onCommit([n, y])} />
         <Axis label="Y" value={y} min={meta.min} max={meta.max} onCommit={(n) => onCommit([x, n])} />
       </div>
@@ -254,9 +298,9 @@ function ValueEditor({
   const n = Array.isArray(value) ? value[0] : value
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[10px] text-muted-foreground w-10 shrink-0">{meta.unit === '°' ? 'Angle' : 'Value'}</span>
+      <span className="text-[10px] text-foreground/60 w-10 shrink-0">{meta.unit === '°' ? 'Angle' : 'Value'}</span>
       <NumField value={n} min={meta.min} max={meta.max} step={meta.step} className="w-20" onCommit={onCommit} />
-      <span className="text-[10px] text-muted-foreground">{meta.unit}</span>
+      <span className="text-[10px] text-foreground/60">{meta.unit}</span>
     </div>
   )
 }
@@ -272,7 +316,7 @@ function Axis({
 }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-[10px] text-muted-foreground">{label}</span>
+      <span className="text-[10px] text-foreground/60">{label}</span>
       <NumField value={value} min={min} max={max} className="w-14" onCommit={onCommit} />
     </div>
   )

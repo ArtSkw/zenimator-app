@@ -1,9 +1,12 @@
 import { SettingsDrawer } from '@/components/settings/SettingsDrawer'
-import { ExportDropdown } from '@/components/export/ExportDropdown'
+import { GenerateExportMenu } from '@/components/generate/GenerateExportMenu'
+import { useGenerateStore } from '@/store/generateStore'
 import logoLightUrl from '@/assets/zenimator-logo-light.svg'
 import logoDarkUrl from '@/assets/zenimator-logo-dark.svg'
 
 export function TopBar() {
+  const { lottieJson, resultKind } = useGenerateStore()
+
   return (
     <header className="h-14 border-b border-border bg-background flex items-center justify-between px-5 shrink-0">
       <div className="flex items-end gap-2">
@@ -16,7 +19,9 @@ export function TopBar() {
 
       <div className="flex items-center gap-2">
         <SettingsDrawer />
-        <ExportDropdown />
+        {lottieJson && (
+          <GenerateExportMenu lottieJson={lottieJson} loop={resultKind === 'loop'} />
+        )}
       </div>
     </header>
   )

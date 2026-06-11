@@ -1,7 +1,7 @@
 import { useState, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import {
-  Loader2, Wand2, RotateCcw, X, Paperclip, CornerDownLeft, ChevronDown, ChevronUp,
+  Loader2, Wand2, RotateCcw, X, Paperclip, CornerDownLeft, ChevronDown, ChevronUp, Info,
   Image as ImageIcon, Monitor, LogIn, Repeat, PenLine, Sparkles,
   type LucideIcon,
 } from 'lucide-react'
@@ -42,7 +42,7 @@ export function GenerateView() {
   useLayoutEffect(() => {
     const el = promptRef.current; if (!el) return
     el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`
-  }, [prompt])
+  }, [prompt, editingSetup, lottieJson])
   useLayoutEffect(() => {
     const el = changeRef.current; if (!el) return
     el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`
@@ -121,17 +121,6 @@ export function GenerateView() {
       setApplying(false)
       setStage('')
     }
-  }
-
-  const handleExport = () => {
-    if (!lottieJson) return
-    const blob = new Blob([lottieJson], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `zenimator-${Date.now()}.json`
-    a.click()
-    URL.revokeObjectURL(url)
   }
 
   return (
@@ -260,7 +249,7 @@ export function GenerateView() {
                 </p>
               )}
               {stale && !generating && (
-                <p className="text-xs text-amber-600 text-center">Properties changed — regenerate to apply.</p>
+                <p className="flex items-center justify-center gap-1.5 text-xs text-foreground text-center"><Info size={13} className="shrink-0" />Properties changed — regenerate to apply.</p>
               )}
               {error && <p className="text-xs text-destructive leading-snug text-center">{error}</p>}
             </div>
