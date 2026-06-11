@@ -1,6 +1,9 @@
 # ZENimator
 
-A browser-based SVG animation tool that uses Claude AI to semantically group illustration layers and generate polished animations, exportable as WebM, GIF, HTML, or JSON.
+A browser-based tool that turns a text description — optionally grounded by a
+reference SVG — into a polished, production-ready **Lottie** animation using
+Claude. Preview it live, refine it in plain language, tune a handful of smart
+controls, and export as Lottie JSON, standalone HTML, WebM, or GIF.
 
 **Live app → [artskw.github.io/zenimator-app](https://artskw.github.io/zenimator-app/)**
 
@@ -8,23 +11,58 @@ A browser-based SVG animation tool that uses Claude AI to semantically group ill
 
 ## What it does
 
-Upload an SVG illustration or screen design. ZENimator sends it to Claude, which analyses the visual structure and proposes semantic groups (e.g. "card body", "headline", "icon") each with a suggested animation. You can then tweak every parameter — template, duration, easing, start delay, direction — and export the result.
+Describe how something should move — "the card launches upward as the cloud
+appears beneath it" — and ZENimator generates a real Lottie document. Optionally
+attach an SVG to ground the result in your actual artwork; ZENimator rasterises
+it, sends both the structure and a preview image to Claude, and maps the motion
+onto your real layers. The result renders live via Skottie (CanvasKit), so what
+you preview is exactly what ships.
 
-**Animation templates:** fade-in, slide-up/down/left/right, scale-in, pop-in, draw-stroke, stagger-children
+From there you can:
 
-**Exports:** WebM video, GIF, standalone HTML, JSON (for developer handoff)
+- **Refine conversationally** — "make the card slower, add a gentle float" — and
+  the animation updates in place without starting over.
+- **Tune smart controls** — Claude surfaces a few semantic knobs per layer
+  (labelled and hinted for *your* illustration), each with a sensible default,
+  a reset affordance, and an origin tick on the track.
+- **Export** — Lottie JSON (web, iOS, Android players), standalone HTML, WebM
+  video, or animated GIF.
+
+---
+
+## The generation model
+
+Every generation is configured along three axes, shown as an icon segmented
+control in the composer:
+
+| Axis | Options | Meaning |
+|---|---|---|
+| **Subject** | Illustration · Screen | What's being animated |
+| **Animation** | Entry · Loop | Play-once arrival, or continuous motion |
+| **Method** | Describe · Auto-propose | Write a prompt, or let Claude design it from the SVG alone |
+
+- **Describe** needs at least a prompt; an SVG is optional grounding.
+- **Auto-propose** needs an SVG and writes the motion design itself — a
+  "free-hand" creative pass driven entirely by Claude.
 
 ---
 
 ## Features
 
-- **LLM-powered grouping** — Claude claude-sonnet-4-6 analyses the SVG structure and a rasterised preview to propose meaningful animation groups. Falls back to a heuristic grouper when no API key is provided.
-- **Draw-stroke animation** — animates `stroke-dashoffset` along path contours; falls back to a clip-path reveal for filled shapes. Forward / reverse direction toggle.
-- **Per-group controls** — template picker, duration slider, start-time offset, easing picker (with live curve preview), and template-specific params (distance, scale-from, stagger interval).
-- **Regenerate** — re-run Claude on a single selected group without rebuilding the whole scene.
-- **Keyboard shortcuts** — `Space` play/pause, `R` restart, `1–8` switch template on selected layer.
-- **Dark mode** — Light / System / Dark toggle, FOUC-free.
-- **SVG sanitisation** — strips `<script>` tags and `on*` event handlers before rendering.
+- **Text → Lottie** — prompt-driven generation that produces a real Lottie
+  document, not a preset. Works with or without a reference SVG.
+- **Grounded hybrid** — attach an SVG and the motion maps onto your actual
+  layers, preserving geometry (no re-raster on edits).
+- **Live Skottie preview** — the same renderer used by production Lottie players,
+  so preview fidelity matches export.
+- **Conversational refine** — iterate in natural language; changes apply in place.
+- **Smart controls** — LLM-authored semantic handles per layer (label + hint),
+  salience-ordered, with reset-to-default and an origin tick.
+- **Per-keyframe editor** — behind a disclosure for when you want full control
+  over tracks, frames, values, and easing.
+- **Export suite** — Lottie JSON, standalone HTML, WebM, GIF.
+- **Dark mode** — Light / System / Dark, FOUC-free.
+- **SVG sanitisation** — strips `<script>` tags and `on*` handlers before render.
 
 ---
 
@@ -33,11 +71,11 @@ Upload an SVG illustration or screen design. ZENimator sends it to Claude, which
 | Layer | Library |
 |---|---|
 | UI framework | React 19 + TypeScript |
-| Build | Vite 8 |
-| Styling | Tailwind CSS v4 + shadcn/ui (base-nova) |
-| Animation | Web Animations API (WAAPI) |
+| Build | Vite |
+| Styling | Tailwind CSS v4 + Base UI primitives |
+| Rendering | Skottie via CanvasKit (`canvaskit-wasm`) |
 | State | Zustand |
-| AI | Anthropic SDK (`claude-sonnet-4-6`) |
+| AI | Anthropic SDK (Claude) |
 | GIF encoding | gifenc |
 | Video export | MediaRecorder API |
 
@@ -48,7 +86,8 @@ Upload an SVG illustration or screen design. ZENimator sends it to Claude, which
 ### Prerequisites
 
 - Node.js 20+
-- A [Claude API key](https://platform.claude.com/settings/workspaces/default/keys) (your own key, stored in the browser's `localStorage`)
+- A [Claude API key](https://platform.claude.com/settings/workspaces/default/keys)
+  (your own key, stored only in the browser's `localStorage`)
 
 ### Local development
 
@@ -59,7 +98,8 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. Enter your Claude API key when prompted — it is stored only in your browser and never sent anywhere except Anthropic's API.
+Open `http://localhost:5173`. Enter your Claude API key when prompted — it is
+stored only in your browser and never sent anywhere except Anthropic's API.
 
 ### Build
 
@@ -75,23 +115,18 @@ npm run preview # serve the build locally
 ```
 src/
   engine/
-    detector/       # SVG parsing, ID normalisation, sanitisation
-    llm/            # Claude grouper, regenerator, prompt templates, cache
-    restructurer/   # Wrap/per-element group injection
-    proposer/       # Animation proposal + validation
-    animations/     # Template definitions and easing curves
-    scene/          # Types, bounds, timing utilities
-    export/         # WebM, GIF, HTML, JSON exporters + canvas renderer
+    lottie/         # Lottie data model (project), assembly, render helpers
+    llm/            # Claude generation + refine, prompt templates, errors
+      prompts/      # motionPlan, lottie, refine
+    detector/       # SVG rasterise + sanitise (grounding input)
+  export/           # Lottie → JSON / HTML / WebM / GIF + frame capture
   components/
-    shell/          # TopBar, TransportBar, AppShell
-    panels/         # LayersPanel, ControlsPanel, PreviewCanvas
-    player/         # SvgPlayer, ScenePlayer, StaticSceneView
-    controls/       # ParamSlider, EasingPicker, EasingCurve, TemplatePicker
-    upload/         # UploadZone, CategorySelector
+    generate/       # GenerateView, controls, layers, export menu, selection
+    player/         # SkottiePlayer (CanvasKit)
+    controls/       # ParamSlider and friends
     settings/       # SettingsDrawer
-    onboarding/     # ApiKeyDialog
-  store/            # Zustand stores (scene, playback, settings, category)
-  hooks/            # useKeyboardShortcuts
+    ui/             # Base UI primitives (Tooltip, Slider, Select, …)
+  store/            # Zustand: generateStore, generatePlaybackStore, settingsStore
 ```
 
 ---
@@ -100,5 +135,12 @@ src/
 
 | Version | Scope |
 |---|---|
-| **v1.0** ✅ | Entrance animations, SVG-only, LLM grouping, full export suite |
-| **v1.1** ✅ | Ambient loop animations (breathe, float, drift, shimmer, rotate, blink) |
+| **v1.0** ✅ | SVG-grouping entrance animations, WAAPI, full export suite *(superseded)* |
+| **v1.1** ✅ | Ambient loop animations *(superseded)* |
+| **v2.0** ✅ | Lottie generate lane — text→Lottie, grounded hybrid, Skottie preview, conversational refine, smart controls, Lottie export suite |
+| **v2.1** ◻ | Full SVG animation generation engine — richer structural understanding and motion mapping from arbitrary SVGs |
+| **v2.2** ◻ | High-quality free-hand text→Lottie — refined, fully creative generation with no SVG attached |
+
+> v1.0/v1.1 described an SVG-grouping + Web Animations API approach that has
+> since been replaced wholesale by the Lottie generate lane. The roadmap rows are
+> kept for history.
