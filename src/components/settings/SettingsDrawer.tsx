@@ -13,7 +13,6 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Settings2, Check, X, Loader2, Sun, Moon, Monitor } from 'lucide-react'
 import { useSettingsStore, DEFAULT_MODEL } from '@/store/settingsStore'
-import { testApiKey } from '@/engine/llm/testApiKey'
 import { useTheme, type Theme } from '@/components/theme-provider'
 
 type TestResult = { ok: true } | { ok: false; error: string } | null
@@ -46,6 +45,7 @@ export function SettingsDrawer() {
     setTesting(true)
     setTestResult(null)
     try {
+      const { testApiKey } = await import('@/engine/llm/testApiKey')
       await testApiKey(draftKey.trim(), model)
       setTestResult({ ok: true })
     } catch (err) {

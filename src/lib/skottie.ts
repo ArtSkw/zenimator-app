@@ -136,7 +136,8 @@ export class SkottiePlayer {
   }
 
   toggle(): void {
-    this.playing ? this.pause() : this.play()
+    if (this.playing) this.pause()
+    else this.play()
   }
 
   /** Seeks to an absolute frame and renders it. */

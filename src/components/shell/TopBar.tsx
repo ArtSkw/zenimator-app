@@ -14,7 +14,7 @@ export function TopBar() {
         <img src={logoLightUrl} alt="Zenimator" className="h-5 w-auto select-none dark:hidden" draggable={false} />
         {/* Dark logo — hidden in light mode, visible in dark */}
         <img src={logoDarkUrl} alt="Zenimator" className="h-5 w-auto select-none hidden dark:block" draggable={false} />
-        <span className="text-[10px] text-muted-foreground/60 font-mono select-none">v1.0</span>
+        <span className="text-[10px] text-muted-foreground/60 font-mono select-none">v1.5</span>
       </div>
 
       <div className="flex items-center gap-2">

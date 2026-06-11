@@ -11,8 +11,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { exportLottieGif } from '@/export/exportLottieGif'
-import { exportLottieWebm } from '@/export/exportLottieWebm'
 import { downloadLottieHtml } from '@/export/exportLottieHtml'
 
 function triggerDownload(blob: Blob, filename: string) {
@@ -45,6 +43,7 @@ export function GenerateExportMenu({ lottieJson, loop }: { lottieJson: string; l
     setBusy('gif')
     const id = toast.loading('Encoding GIF…')
     try {
+      const { exportLottieGif } = await import('@/export/exportLottieGif')
       const { blob, oversized, sizeKb } = await exportLottieGif(lottieJson, { loop }, (p) =>
         toast.loading(`Encoding GIF… ${Math.round(p * 100)}%`, { id }),
       )
@@ -67,6 +66,7 @@ export function GenerateExportMenu({ lottieJson, loop }: { lottieJson: string; l
     setBusy('webm')
     const id = toast.loading('Rendering video…')
     try {
+      const { exportLottieWebm } = await import('@/export/exportLottieWebm')
       const blob = await exportLottieWebm(lottieJson, { loop }, (p) =>
         toast.loading(`Rendering video… ${Math.round(p * 100)}%`, { id }),
       )

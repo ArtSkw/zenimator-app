@@ -68,7 +68,7 @@ of After Effects setup, that tradeoff is unambiguous.
 
 ---
 
-## Current scope & capabilities (v2.0 — shipped)
+## Current scope & capabilities (v1.5 — shipped)
 
 The app is a single **generate lane**. There is no separate upload/grouping
 surface — generation is the whole product.
@@ -227,16 +227,16 @@ layer's smart controls and keyframe details.
 
 | Version | Scope | Status |
 |---|---|---|
-| **v1.0** | SVG-grouping entrance animations (WAAPI), full export suite | ✅ superseded |
-| **v1.1** | Ambient loop animations | ✅ superseded |
-| **v2.0** | Lottie generate lane — text→Lottie, grounded hybrid, Skottie preview, conversational refine, smart controls, Lottie export suite | ✅ shipped |
-| **v2.1** | **Full SVG animation generation engine** | ◻ next |
-| **v2.2** | **High-quality free-hand text→Lottie** | ◻ planned |
+| **v1.0 / v1.1** | SVG-grouping entrance + ambient animations (WAAPI) | ✅ superseded |
+| **v1.5** | Lottie generate lane — text→Lottie, grounded hybrid, Skottie preview, conversational refine, smart controls, Lottie export suite | ✅ shipped |
+| **v2.0** | **Full SVG animation generation engine** | ◻ next |
+| **v2.5** | **High-quality free-hand text→Lottie** | ◻ planned |
 
 > v1.0/v1.1 were an SVG-grouping + Web Animations API approach, replaced wholesale
-> by the Lottie generate lane. Kept here only for history.
+> by the Lottie generate lane (v1.5). The full SVG animation engine is the true
+> v2.0 milestone. Older rows kept for history.
 
-### v2.1 — Full SVG animation generation engine (next)
+### v2.0 — Full SVG animation generation engine (next)
 
 Deepen the grounded path so *any* real-world SVG animates well, not just
 cleanly-structured ones. Likely workstreams:
@@ -248,7 +248,7 @@ cleanly-structured ones. Likely workstreams:
 - Stronger grounding signal to the model (structure + preview + derived hints)
   so proposals respect the artwork's real anatomy.
 
-### v2.2 — High-quality free-hand text→Lottie (planned)
+### v2.5 — High-quality free-hand text→Lottie (planned)
 
 Bring the **no-SVG** path to the same fidelity bar as the grounded one: a fully
 creative, LLM-driven generation where the model composes shapes *and* motion from
@@ -261,7 +261,7 @@ production-ready Lottie with nothing attached.
 
 ## Next task
 
-Begin **v2.1 — the full SVG animation generation engine.** Start by stress-testing
+Begin **v2.0 — the full SVG animation generation engine.** Start by stress-testing
 the current grounded path against a spread of real ZEN SVGs (flat-path,
 deeply-nested, color-grouped) to characterise where motion mapping breaks down,
 then plan the structural-understanding and motion-mapping improvements from there.

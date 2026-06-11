@@ -13,9 +13,8 @@ import { SelectionOverlay } from '@/components/generate/SelectionOverlay'
 import { useGenerateStore, type Subject, type Kind, type Method } from '@/store/generateStore'
 import { useGeneratePlayback } from '@/store/generatePlaybackStore'
 import { useSettingsStore } from '@/store/settingsStore'
-import { generateLottie } from '@/engine/llm/generateLottie'
-import { askProjectChange } from '@/engine/llm/generateGroundedLottie'
 import { rasterizeSvg } from '@/engine/detector/rasterize'
+import { sanitizeSvg } from '@/engine/detector/sanitizeSvg'
 import { humanizeLlmError } from '@/engine/llm/errors'
 
 const CHECKER_BG = {
@@ -65,6 +64,8 @@ export function GenerateView() {
     if (!canGenerate) return
     startGenerating()
     try {
+      // The Anthropic SDK is heavy and only needed on generate — load it on demand.
+      const { generateLottie } = await import('@/engine/llm/generateLottie')
       const { lottieJson: json, project } = await generateLottie(
         {
           prompt: method === 'manual' ? prompt.trim() : '',
@@ -96,7 +97,8 @@ export function GenerateView() {
       return
     }
     try {
-      const svgText = await file.text()
+      // Sanitize before we rasterize, store, or send to the LLM — never hold raw markup.
+      const svgText = sanitizeSvg(await file.text())
       const pngDataUrl = await rasterizeSvg(svgText)
       setGrounding({ name: file.name, svgText, pngDataUrl })
     } catch {
@@ -109,6 +111,7 @@ export function GenerateView() {
     if (!project || !instruction || applying) return
     setApplying(true)
     try {
+      const { askProjectChange } = await import('@/engine/llm/generateGroundedLottie')
       const { lottieJson: json, project: next } = await askProjectChange(project, instruction, {
         apiKey, model, onStage: setStage,
       })
