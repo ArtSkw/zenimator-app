@@ -112,7 +112,7 @@ export function ParamSlider({
   }
 
   return (
-    <TooltipProvider delay={400}>
+    <TooltipProvider>
       <div className="group space-y-1.5">
       {/* ── Header: label left, value/input right ── */}
       <div className="flex items-center gap-2">

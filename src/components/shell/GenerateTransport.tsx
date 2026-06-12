@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Play, Pause, RotateCcw, Repeat } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useGeneratePlayback } from '@/store/generatePlaybackStore'
@@ -57,27 +58,49 @@ export function GenerateTransport() {
 
   return (
     <footer className="h-16 border-t border-border bg-background flex items-center gap-3 px-5 shrink-0">
-      <Button
-        variant="ghost" size="icon" className="size-8 rounded-full"
-        disabled={disabled} onClick={() => controls?.toggle()} title={isPlaying ? 'Pause' : 'Play'}
-      >
-        {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-      </Button>
+      <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost" size="icon" className="size-8 rounded-full"
+              disabled={disabled} onClick={() => controls?.toggle()}
+            >
+              {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+            </Button>
+          }
+        />
+        <TooltipContent side="top">{isPlaying ? 'Pause' : 'Play'}</TooltipContent>
+      </Tooltip>
 
-      <Button
-        variant="ghost" size="icon" className="size-8 rounded-full"
-        disabled={disabled} onClick={() => controls?.replay()} title="Play again from the start"
-      >
-        <RotateCcw size={14} />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost" size="icon" className="size-8 rounded-full"
+              disabled={disabled} onClick={() => controls?.replay()}
+            >
+              <RotateCcw size={14} />
+            </Button>
+          }
+        />
+        <TooltipContent side="top">Restart</TooltipContent>
+      </Tooltip>
 
-      <Button
-        variant={loop ? 'default' : 'ghost'} size="icon" className="size-8 rounded-full"
-        disabled={disabled} onClick={toggleLoop} aria-pressed={loop}
-        title={loop ? 'Looping — click to play once' : 'Play once — click to loop'}
-      >
-        <Repeat size={14} />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant={loop ? 'default' : 'ghost'} size="icon" className="size-8 rounded-full"
+              disabled={disabled} onClick={toggleLoop} aria-pressed={loop}
+            >
+              <Repeat size={14} />
+            </Button>
+          }
+        />
+        <TooltipContent side="top">{loop ? 'Loop on' : 'Loop off'}</TooltipContent>
+      </Tooltip>
+      </TooltipProvider>
 
       <Timeline
         op={op}

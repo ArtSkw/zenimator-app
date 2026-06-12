@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Settings2, Check, X, Loader2, Sun, Moon, Monitor } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSettingsStore, DEFAULT_MODEL } from '@/store/settingsStore'
 import { useTheme, type Theme } from '@/components/theme-provider'
 
@@ -60,12 +61,21 @@ export function SettingsDrawer() {
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetTrigger
-        className="inline-flex items-center justify-center size-8 rounded-full hover:bg-accent hover:text-accent-foreground transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        aria-label="Settings"
-      >
-        <Settings2 size={15} />
-      </SheetTrigger>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <SheetTrigger
+                className="inline-flex items-center justify-center size-8 rounded-full hover:bg-accent hover:text-accent-foreground transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                aria-label="Settings"
+              >
+                <Settings2 size={15} />
+              </SheetTrigger>
+            }
+          />
+          <TooltipContent side="bottom">Settings</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <SheetContent className="flex flex-col gap-0 sm:max-w-[440px]">
         <SheetHeader className="border-b border-border">
           <SheetTitle>Settings</SheetTitle>

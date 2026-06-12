@@ -6,7 +6,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 export default function App() {
   return (
     <ThemeProvider>
-      <TooltipProvider>
+      <TooltipProvider delay={400}>
         <AppShell />
         <Toaster position="bottom-right" />
       </TooltipProvider>
