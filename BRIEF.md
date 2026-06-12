@@ -239,14 +239,45 @@ layer's smart controls and keyframe details.
 ### v2.0 — Full SVG animation generation engine (next)
 
 Deepen the grounded path so *any* real-world SVG animates well, not just
-cleanly-structured ones. Likely workstreams:
+cleanly-structured ones. Today the engine animates **transform tracks** only
+(position, scale, rotation, opacity). That covers "card launches up, cloud fades
+in" but not draw-on strokes, deforming geometry, or layered ambient loops — the
+motion vocabulary real ZEN illustrations demand. v2.0 closes that gap.
 
-- Richer structural understanding of arbitrary SVGs (flat-path illustrations,
-  nested wrappers, color-group "objects" with no semantic tag).
-- More expressive motion mapping — per-element transform origins, layered
-  composition, sequencing across many elements.
-- Stronger grounding signal to the model (structure + preview + derived hints)
-  so proposals respect the artwork's real anatomy.
+**Inputs are full SVG, always.** No embedded raster (base64 PNG inside `<svg>`).
+A draw-on effect needs real vector stroke endpoints to animate; a bitmap has
+none. Assets with embedded raster are rejected at attach time.
+
+**Acceptance suite (five production-real ZEN targets):**
+
+| # | Target | Kind | Exercises |
+|---|---|---|---|
+| 1 | Zenek juggling — coins fan/unfold, eyes blink | Loop | per-element pivots · sequencing · secondary motion |
+| 2 | Zenek skipping rope — clouds drift behind | Loop | path deformation (rope) · layered ambient drift |
+| 3 | Green checkbox drawn L→R · clouds float in | Entry | **trim paths** · ambient entrance |
+| 4 | Coin spinning on its axis | Loop | simulated 3D (scaleX through zero) |
+| 5 | "Live better" motto written L→R | Entry | **trim paths on vector strokes** |
+
+These five collectively force exactly the capabilities below, and serve as the
+v2.0 done bar: when all five render well from their full-SVG source, v2.0 ships.
+
+**Three workstreams, sequenced by leverage and risk:**
+
+1. **Trim paths (`tm`) — the highest-leverage gap.** Animate a stroke's
+   start/end 0→100% so it draws on like a pen. Unlocks #3 and #5 immediately,
+   plus every signature / underline / progress-ring / checkmark motion — a large
+   fraction of fintech UI animation. New animation primitive in the project
+   model + prompt; low risk. **Build first.**
+2. **Structural understanding + per-element pivots & sequencing.** Real ZEN SVGs
+   are deeply-nested `<g>` soup (`Group 48096319`) with color-group "objects" and
+   no semantic tags. The model must assign correct transform origins to
+   sub-objects and compose *layered* loops (primary motion + ambient blink +
+   cloud drift) that don't fight. Unlocks the layered-loop parts of #1, #2, #4.
+3. **Path / shape keyframes — geometry that deforms, not just moves.** The rope
+   bending (#2) and coins fanning like a deck (#1) change the *path itself*, not
+   just a layer transform. Keyframe vertex data. Highest risk — the model must
+   author tasteful path interpolation — so it lands last, after the cheaper wins
+   de-risk the surrounding pipeline. **Build last.**
 
 ### v2.5 — High-quality free-hand text→Lottie (planned)
 
@@ -261,7 +292,10 @@ production-ready Lottie with nothing attached.
 
 ## Next task
 
-Begin **v2.0 — the full SVG animation generation engine.** Start by stress-testing
-the current grounded path against a spread of real ZEN SVGs (flat-path,
-deeply-nested, color-grouped) to characterise where motion mapping breaks down,
-then plan the structural-understanding and motion-mapping improvements from there.
+Begin **v2.0 — the full SVG animation generation engine**, working the three
+workstreams above in order: **(1) trim paths**, then (2) structural understanding
++ per-element pivots/sequencing, then (3) path/shape keyframes. The five-target
+acceptance suite is the done bar.
+
+The detailed engineering guide — data-model changes, prompt changes, render-path
+work, and per-target validation steps — lives in `docs/v2-plan.md`.

@@ -137,7 +137,7 @@ src/
 |---|---|
 | **v1.0 / v1.1** | SVG-grouping entrance + ambient animations (WAAPI) *(superseded)* |
 | **v1.5** ✅ current | Lottie generate lane — text→Lottie, grounded hybrid, Skottie preview, conversational refine, smart controls, Lottie export suite |
-| **v2.0** ◻ next | Full SVG animation generation engine — rich structural understanding and motion mapping from arbitrary real-world SVGs |
+| **v2.0** ◻ next | Full SVG animation generation engine — **trim-path draw-on**, structural understanding + per-element pivots/sequencing, and **path/shape deformation** for arbitrary real-world SVGs |
 | **v2.5** ◻ planned | High-quality free-hand text→Lottie — refined, fully creative generation with no SVG attached |
 
 > v1.0/v1.1 were an SVG-grouping + Web Animations API approach, replaced wholesale
