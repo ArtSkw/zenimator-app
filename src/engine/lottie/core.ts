@@ -16,9 +16,31 @@ export type ImageLayer = {
   ddd: 0; ind: number; ty: 2; nm: string; refId: string
   sr: 1; ks: Transform; ao: 0; ip: number; op: number; st: 0; bm: 0
 }
+// ── Shape-layer types (ty:4) ─────────────────────────────────────────────────
+// Used by the vector path (WS1+). Every shape primitive must live inside a
+// GrGroup whose `it` array ends with a TrGroup.
+
+/** Static or keyframed bezier path. The `k` value follows Lottie's sh format:
+ *  v = anchor points, i = in-tangents (relative), o = out-tangents (relative). */
+export type ShapePath =
+  | { a: 0; k: { i: number[][]; o: number[][]; v: number[][]; c: boolean } }
+  | { a: 1; k: Array<{ t: number; s: [{ i: number[][]; o: number[][]; v: number[][]; c: boolean }] }> }
+
+export type ShPath   = { ty: 'sh'; ks: ShapePath; nm?: string }
+export type StStroke = { ty: 'st'; c: Prop; o: Prop; w: Prop; lc: 1|2|3; lj: 1|2|3; nm?: string }
+export type TmTrim   = { ty: 'tm'; s: Prop; e: Prop; o: Prop; m: 1; nm?: string }
+export type TrGroup  = { ty: 'tr'; o: Prop; r: Prop; p: Prop; a: Prop; s: Prop; nm?: string }
+export type GrGroup  = { ty: 'gr'; nm?: string; it: Array<ShPath | StStroke | TmTrim | TrGroup | GrGroup> }
+
+export type ShapeLayer = {
+  ddd: 0; ind: number; ty: 4; nm: string
+  sr: 1; ks: Transform; ao: 0; ip: number; op: number; st: 0; bm: 0
+  shapes: GrGroup[]
+}
+
 export type LottieDoc = {
   v: string; fr: number; ip: 0; op: number; w: number; h: number
-  assets: ImageAsset[]; layers: ImageLayer[]
+  assets: ImageAsset[]; layers: (ImageLayer | ShapeLayer)[]
 }
 
 // ── Easing: named keys → cubic-bezier control points ─────────────────────────

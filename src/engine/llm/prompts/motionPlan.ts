@@ -15,12 +15,13 @@ Group the elements into a small number of LAYERS (typically 2–6), where each l
 Cover EVERY visible element in some layer. A layer that should stay still simply gets no keyframes.
 
 ## Property tracks — author keyframes directly
-Each layer has four independent tracks. Put keyframes on any of them; they compose. A keyframe is { t (frame), a value, and easing INTO the next keyframe }.
+Each layer has five independent tracks. Put keyframes on any of them; they compose. A keyframe is { t (frame), a value, and easing INTO the next keyframe }.
 
 - **opacity**: percent 0–100. Rest is 100 (fully visible). Fade in = [{t:0,v:0},{t:18,v:100}]. You can sequence freely — fade in early, hold, fade out late — just add more keyframes.
 - **position**: an OFFSET in px from the layer's natural place — {t, x, y}. Rest is (0,0). Slide-in-from-below = start at {x:0,y:40} and arrive at {x:0,y:0}. A float = 0 → -8 → 0.
 - **scale**: percent, uniform. Rest is 100. Grow-in = 60 → 100. A pulse = 100 → 106 → 100.
 - **rotation**: degrees. Rest is 0. A full spin = 0 → 360 (use easing "linear"). A wobble = -6 → 6 → -6.
+- **trim**: trim-path end%, **ONLY for stroke-only vector layers** (lines, outlines, handwriting — elements that have a stroke colour and no fill). Rest is 100 (fully visible). To draw-on from left to right: [{t:0,v:0,easing:"easeOut"},{t:36,v:100}]. Use this for signatures, underlines, checkmarks, and handwritten text. Never set trim on filled shapes.
 
 This is the whole point: you are NOT limited to presets. Anything expressible as keyframes is fair game — an element can fade in, drift, pause, then fade out, all on its own timeline.
 
@@ -29,8 +30,8 @@ This is the whole point: you are NOT limited to presets. Anything expressible as
 
 ## Designer controls — REQUIRED for every animated track
 Each track you animate becomes a draggable slider for the user, so it MUST be named. For every layer, add one \`controls\` entry per animated track, each with:
-- **label**: a short, illustration-specific name (≤30 chars) for what the motion MEANS in this picture, not the mechanism. Good: "Card launch", "Steam drift", "Mascot bounce", "Logo settle". Bad: "Position", "Scale amount", "Opacity".
-- **hint**: one short line describing what dragging the slider does, in the picture's own terms. e.g. {track:'position', label:'Card launch', hint:'How far the card flies up off the screen'} · {track:'scale', label:'Cloud puff', hint:'How much the cloud swells as it drifts'}.
+- **label**: a short, illustration-specific name (≤30 chars) for what the motion MEANS in this picture, not the mechanism. Good: "Card launch", "Steam drift", "Mascot bounce", "Logo settle", "Stroke draw-on". Bad: "Position", "Scale amount", "Opacity", "Trim".
+- **hint**: one short line describing what dragging the slider does, in the picture's own terms. e.g. {track:'position', label:'Card launch', hint:'How far the card flies up off the screen'} · {track:'trim', label:'Stroke draw-on', hint:'How far the line draws itself on from left to right'}.
 
 Skipping a label leaves the user with a generic, mechanical slider name — so do not omit any animated track. Use the subject from the illustration (the actual character, object, or element), never the property word.
 

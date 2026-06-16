@@ -10,7 +10,14 @@ import {
   type LottieDoc,
   type ImageAsset,
   type ImageLayer,
+  type ShapeLayer,
+  type GrGroup,
+  type ShPath,
+  type StStroke,
+  type TmTrim,
+  type TrGroup,
 } from './core'
+import type { SubPath, StrokeStyle } from './vector'
 
 // ── Tracks: the storage model ────────────────────────────────────────────────
 //
@@ -20,7 +27,7 @@ import {
 // move → fade out — is just more keyframes. "Presets" survive only as shortcuts
 // that STAMP keyframes onto a track; they no longer define the limits.
 
-export const TRACK_KEYS = ['opacity', 'position', 'scale', 'rotation'] as const
+export const TRACK_KEYS = ['opacity', 'position', 'scale', 'rotation', 'trim'] as const
 export type TrackKey = (typeof TRACK_KEYS)[number]
 
 /**
@@ -66,10 +73,11 @@ export type TrackMeta = {
 }
 
 export const TRACKS: TrackMeta[] = [
-  { key: 'opacity', label: 'Opacity', rest: 100, kind: 'percent', min: 0, max: 100, step: 1, unit: '%', add: 100 },
-  { key: 'position', label: 'Position', rest: [0, 0], kind: 'offset', min: -400, max: 400, step: 1, unit: 'px', add: [0, 0] },
-  { key: 'scale', label: 'Scale', rest: 100, kind: 'percent', min: 0, max: 300, step: 1, unit: '%', add: 100 },
-  { key: 'rotation', label: 'Rotation', rest: 0, kind: 'degrees', min: -1440, max: 1440, step: 1, unit: '°', add: 0 },
+  { key: 'opacity',  label: 'Opacity',   rest: 100,    kind: 'percent', min: 0,     max: 100,  step: 1, unit: '%',  add: 100 },
+  { key: 'position', label: 'Position',  rest: [0, 0], kind: 'offset',  min: -400,  max: 400,  step: 1, unit: 'px', add: [0, 0] },
+  { key: 'scale',    label: 'Scale',     rest: 100,    kind: 'percent', min: 0,     max: 300,  step: 1, unit: '%',  add: 100 },
+  { key: 'rotation', label: 'Rotation',  rest: 0,      kind: 'degrees', min: -1440, max: 1440, step: 1, unit: '°',  add: 0 },
+  { key: 'trim',     label: 'Draw-on',   rest: 100,    kind: 'percent', min: 0,     max: 100,  step: 1, unit: '%',  add: 100 },
 ]
 export const TRACK_META = Object.fromEntries(TRACKS.map((t) => [t.key, t])) as Record<TrackKey, TrackMeta>
 
@@ -77,10 +85,21 @@ export const EASINGS: EasingKey[] = [
   'linear', 'easeIn', 'easeOut', 'easeInOut', 'spring-gentle', 'spring-bouncy', 'spring-stiff',
 ]
 
+/** Geometry carried by a vector (ty:4) layer — paths in COMP space (user space × scale). */
+export type VectorGeometry = {
+  paths:  SubPath[]
+  stroke: StrokeStyle
+}
+
 export type ProjectLayer = {
   name: string
   elementIds: string[]
-  dataUrl: string
+  /** 'image' = raster PNG layer (default, back-compat). 'vector' = shape layer. */
+  kind?: 'image' | 'vector'
+  /** Present when kind === 'vector'; absent for image layers. */
+  vector?: VectorGeometry
+  /** Present when kind === 'image' or kind is absent. */
+  dataUrl?: string
   /** Scaled (comp-space) centre — pivot for scale/rotate, base for translate. */
   cx: number
   cy: number
@@ -174,16 +193,69 @@ export function stampPreset(preset: Preset, ctx: PresetCtx): Track {
 
 export function assembleProject(p: GenerateProject): LottieDoc {
   const assets: ImageAsset[] = []
-  const layers: ImageLayer[] = []
+  const layers: (ImageLayer | ShapeLayer)[] = []
+
   p.layers.forEach((l, i) => {
-    const id = `img_${i}`
-    assets.push({ id, w: p.w, h: p.h, u: '', p: l.dataUrl, e: 1 })
-    layers.push({
-      ddd: 0, ind: i + 1, ty: 2, nm: l.name, refId: id,
-      sr: 1, ks: tracksToTransform(l.tracks, l.cx, l.cy, p.scale), ao: 0, ip: 0, op: p.op, st: 0, bm: 0,
-    })
+    const ks = tracksToTransform(l.tracks, l.cx, l.cy, p.scale)
+    const common = { ddd: 0 as const, ind: i + 1, sr: 1 as const, ks, ao: 0 as const, ip: 0, op: p.op, st: 0 as const, bm: 0 as const }
+
+    if (l.kind === 'vector' && l.vector) {
+      layers.push({ ...common, ty: 4, nm: l.name, shapes: buildShapes(l.vector, l.tracks) })
+    } else {
+      const id = `img_${i}`
+      assets.push({ id, w: p.w, h: p.h, u: '', p: l.dataUrl ?? '', e: 1 })
+      layers.push({ ...common, ty: 2, nm: l.name, refId: id })
+    }
   })
+
   return { v: '5.7.0', fr: p.fps, ip: 0, op: p.op, w: p.w, h: p.h, assets, layers }
+}
+
+/** Build the shapes array for a vector layer, including an optional trim modifier. */
+function buildShapes(geom: VectorGeometry, tracks: LayerTracks): GrGroup[] {
+  const { paths, stroke } = geom
+
+  // One GrGroup per sub-path, each wrapping: sh + st + (tm?) + tr
+  return paths.map((sp, pi): GrGroup => {
+    const shPath: ShPath = {
+      ty: 'sh',
+      nm: `path_${pi}`,
+      ks: { a: 0, k: { v: sp.v, i: sp.i, o: sp.o, c: sp.c } },
+    }
+
+    const stStroke: StStroke = {
+      ty: 'st', nm: 'stroke',
+      c: staticVec([...stroke.color, stroke.opacity]),
+      o: staticNum(100),
+      w: staticNum(stroke.width),
+      lc: stroke.cap,
+      lj: stroke.join,
+    }
+
+    const tr: TrGroup = {
+      ty: 'tr', nm: 'tr',
+      o: staticNum(100), r: staticNum(0),
+      p: staticVec([0, 0, 0]), a: staticVec([0, 0, 0]),
+      s: staticVec([100, 100, 100]),
+    }
+
+    const it: GrGroup['it'] = [shPath, stStroke]
+
+    // Append trim modifier when a trim track is present
+    if (tracks.trim && tracks.trim.keys.length > 0) {
+      const tm: TmTrim = {
+        ty: 'tm', nm: 'trim',
+        s: staticNum(0),
+        e: scalarTrack(tracks.trim, 100, 0, 100),
+        o: staticNum(0),
+        m: 1,
+      }
+      it.push(tm)
+    }
+
+    it.push(tr)
+    return { ty: 'gr', nm: `path_${pi}`, it }
+  })
 }
 
 /** Compose a layer's tracks into one Lottie transform. Absent tracks resolve to

@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { StructuralIndex } from '@/engine/scene/types'
 import type { GenConfig } from './generateLottie'
 import { detectSvg } from '@/engine/detector/detectSvg'
-import { sanitizeSvg } from '@/engine/detector/sanitizeSvg'
+import { sanitizeSvg, assertFullSvg } from '@/engine/detector/sanitizeSvg'
 import { rasterizeSvg } from '@/engine/detector/rasterize'
 import { MOTION_PLAN_PROMPT } from './prompts/motionPlan'
 import { REFINE_MOTION_PROMPT, ASK_CHANGES_MOTION_PROMPT } from './prompts/refine'
@@ -17,9 +17,11 @@ import {
   type GenerateProject,
   type ProjectLayer,
   type LayerTracks,
+  type VectorGeometry,
   type TrackKey,
   type HandleMeta,
 } from '@/engine/lottie/project'
+import { elementToPath, strokeStyle, scalePath, type SubPath, type StrokeStyle } from '@/engine/lottie/vector'
 
 // ── Motion plan shape (mirrors the plan_motion tool schema) ─────────────────
 // Each layer authors KEYFRAMES directly, one list per animatable property.
@@ -35,6 +37,9 @@ type PlanLayer = {
   position?: PosKey[]
   scale?: ScalarKey[]
   rotation?: ScalarKey[]
+  /** Trim-path end% keyframes (0=hidden → 100=fully drawn). Only valid on
+   *  stroke-only vector layers. The model sets this for draw-on entry effects. */
+  trim?: ScalarKey[]
   controls?: ControlSpec[]
 }
 type MotionPlan = { fps?: number; totalFrames?: number; layers: PlanLayer[] }
@@ -92,6 +97,7 @@ const PLAN_TOOL = {
                 required: ['t', 'x', 'y'],
               },
             },
+            trim: SCALAR_KEYS('Trim-path end% keyframes (0=hidden, 100=fully drawn). ONLY for stroke-only vector layers with draw-on intent. Entry: keyframe from 0→100 eased; loop: omit.'),
             controls: {
               type: 'array' as const,
               description:
@@ -99,7 +105,7 @@ const PLAN_TOOL = {
               items: {
                 type: 'object' as const,
                 properties: {
-                  track: { type: 'string' as const, enum: ['opacity', 'position', 'scale', 'rotation'] },
+                  track: { type: 'string' as const, enum: ['opacity', 'position', 'scale', 'rotation', 'trim'] },
                   label: {
                     type: 'string' as const,
                     description: "Short, illustration-specific slider name (≤30 chars), e.g. 'Card launch', 'Steam drift', 'Mascot bounce'.",
@@ -141,6 +147,7 @@ export async function generateGroundedLottie(
   config: GenConfig,
   opts: GenerateOptions,
 ): Promise<GroundedResult> {
+  assertFullSvg(svgText) // throws with a designer-facing message if embedded raster found
   const index = detectSvg(sanitizeSvg(svgText))
   opts.onStage?.('Analyzing artwork…')
   const previewPng = await rasterizeSvg(index.enrichedSvg)
@@ -222,7 +229,43 @@ async function planMotion(
 // ── Step 2: render faithful layers (once) → editable project ─────────────────
 
 const hasMotion = (l: PlanLayer): boolean =>
-  !!(l.opacity?.length || l.position?.length || l.scale?.length || l.rotation?.length)
+  !!(l.opacity?.length || l.position?.length || l.scale?.length || l.rotation?.length || l.trim?.length)
+
+/** True when EVERY element in the layer is stroke-only (has a stroke, no fill). */
+function isStrokeOnly(elementIds: string[], svgDoc: Document): boolean {
+  if (elementIds.length === 0) return false
+  return elementIds.every((id) => {
+    const el = svgDoc.getElementById(id)
+    if (!el) return false
+    const tag = el.tagName.toLowerCase().replace(/^svg:/, '')
+    if (!['path', 'line', 'polyline', 'circle', 'ellipse', 'rect', 'polygon'].includes(tag)) return false
+    const fill = el.getAttribute('fill') ?? styleAttrVal(el, 'fill') ?? ''
+    const stroke = el.getAttribute('stroke') ?? styleAttrVal(el, 'stroke') ?? ''
+    // Has an explicit stroke and either no fill or fill=none
+    return stroke !== '' && stroke !== 'none' && (fill === '' || fill === 'none')
+  })
+}
+
+function styleAttrVal(el: Element, prop: string): string {
+  const style = el.getAttribute('style') ?? ''
+  const m = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`).exec(style)
+  return m ? m[1].trim() : ''
+}
+
+/** Build vector geometry for a set of stroke-only element ids, scaled to comp space. */
+function buildVectorGeom(elementIds: string[], svgDoc: Document, S: number): VectorGeometry | null {
+  const paths: SubPath[] = []
+  let style: StrokeStyle | null = null
+  for (const id of elementIds) {
+    const el = svgDoc.getElementById(id)
+    if (!el) continue
+    const subPaths = elementToPath(el)
+    for (const sp of subPaths) paths.push(scalePath(sp, S))
+    if (!style) style = strokeStyle(el)
+  }
+  if (paths.length === 0 || !style) return null
+  return { paths, stroke: style }
+}
 
 async function prepareLayers(index: StructuralIndex, plan: MotionPlan): Promise<GenerateProject> {
   const { width: W, height: H } = index.viewport
@@ -263,40 +306,77 @@ async function prepareLayers(index: StructuralIndex, plan: MotionPlan): Promise<
   assign(hasMotion)
   assign((l) => !hasMotion(l))
 
+  // Parse the enriched SVG into a DOM once — used for stroke classification
+  // and for extracting vector geometry.
+  const svgDoc = new DOMParser().parseFromString(index.enrichedSvg, 'image/svg+xml')
+
   const defs: LayerDef[] = []
   const fx: LayerTracks[] = []
   const labels: (Partial<Record<TrackKey, HandleMeta>> | undefined)[] = []
+  // 'vector' entries carry pre-built geometry; null = raster (build after)
+  const vectorGeoms: (VectorGeometry | null)[] = []
+
   planLayers.forEach((l, li) => {
     const owned = leaves.filter((lf) => owner.get(lf.id) === li).map((lf) => lf.id)
     if (owned.length === 0) return
     defs.push({ name: l.name || 'layer', elementIds: owned })
     fx.push(planToTracks(l, op))
     labels.push(controlsToMeta(l.controls))
+
+    // Classify: stroke-only layers become vector layers (skip rasterize)
+    if (isStrokeOnly(owned, svgDoc)) {
+      const geom = buildVectorGeom(owned, svgDoc, S)
+      vectorGeoms.push(geom)
+    } else {
+      vectorGeoms.push(null)
+    }
   })
   const uncovered = leaves.filter((lf) => !owner.has(lf.id)).map((lf) => lf.id)
   if (uncovered.length) {
     defs.push({ name: '(static)', elementIds: uncovered })
     fx.push({})
     labels.push(undefined)
+    vectorGeoms.push(null)
   }
 
-  const rasters = await rasterizeLayers(index.enrichedSvg, index.viewport, defs, S)
+  // Only rasterize the defs that don't have vector geometry
+  const rasterDefs = defs.filter((_, i) => vectorGeoms[i] === null)
+  const rasters = await rasterizeLayers(index.enrichedSvg, index.viewport, rasterDefs, S)
+  // Build a map from def name back to raster result (names are unique within a plan)
+  const rasterByName = new Map(rasters.map((r) => [r.name, r]))
 
-  const layers: ProjectLayer[] = rasters
-    .map((r) => {
-      const elementIds = defs[r.defIndex].elementIds
-      const b = unionBox(elementIds, boundsById, W, H)
+  // Assign a stable document order for vector layers using the first element's order
+  const order = new Map<string, number>()
+  let counter = 0
+  const walkOrder = (el: Element) => { if (el.id) order.set(el.id, counter++); for (const ch of Array.from(el.children)) walkOrder(ch) }
+  const svgRoot = svgDoc.documentElement
+  walkOrder(svgRoot)
+
+  const layers: ProjectLayer[] = defs
+    .map((def, di): { layer: ProjectLayer; docIndex: number } | null => {
+      const b = unionBox(def.elementIds, boundsById, W, H)
+      const base = {
+        name: def.name, elementIds: def.elementIds,
+        cx: b.cx * S, cy: b.cy * S,
+        bounds: { x: b.x * S, y: b.y * S, w: b.w * S, h: b.h * S },
+        tracks: fx[di],
+        handleControls: labels[di],
+      }
+      const firstId = def.elementIds[0] ?? ''
+      const docIndex = order.get(firstId) ?? counter++
+
+      const vg = vectorGeoms[di]
+      if (vg) {
+        return { layer: { ...base, kind: 'vector', vector: vg } satisfies ProjectLayer, docIndex }
+      }
+      const r = rasterByName.get(def.name)
+      if (!r) return null
       return {
-        layer: {
-          name: r.name, elementIds, dataUrl: r.dataUrl,
-          cx: b.cx * S, cy: b.cy * S,
-          bounds: { x: b.x * S, y: b.y * S, w: b.w * S, h: b.h * S },
-          tracks: fx[r.defIndex],
-          handleControls: labels[r.defIndex],
-        } satisfies ProjectLayer,
+        layer: { ...base, kind: 'image', dataUrl: r.dataUrl } satisfies ProjectLayer,
         docIndex: r.docIndex,
       }
     })
+    .filter((e): e is { layer: ProjectLayer; docIndex: number } => e !== null)
     .sort((a, b) => b.docIndex - a.docIndex)
     .map((e) => e.layer)
 
@@ -324,6 +404,8 @@ function planToTracks(l: PlanLayer, op: number): LayerTracks {
   if (s) t.scale = s
   const r = scalar(l.rotation, -3600, 3600, 0)
   if (r) t.rotation = r
+  const tr = scalar(l.trim, 0, 100, 100)
+  if (tr) t.trim = tr
   if (l.position?.length) {
     t.position = {
       keys: l.position.map((k) => ({
