@@ -157,11 +157,28 @@ const PLAN_TOOL = {
                   track: { type: 'string' as const, enum: ['opacity', 'position', 'scale', 'scaleX', 'rotation', 'trim'] },
                   label: {
                     type: 'string' as const,
-                    description: "Short, illustration-specific slider name (≤30 chars), e.g. 'Card launch', 'Steam drift', 'Mascot bounce'.",
+                    description: "Short, illustration-specific control name (≤30 chars), e.g. 'Card launch', 'Steam drift', 'Mascot bounce'.",
                   },
                   hint: {
                     type: 'string' as const,
-                    description: "One short line describing what this slider does, in the picture's own terms, e.g. 'How far the card flies up off the screen'.",
+                    description: "One short line describing what this control does, in the picture's own terms.",
+                  },
+                  control: {
+                    type: 'string' as const,
+                    enum: ['slider', 'select', 'switch', 'dialog'],
+                    description: "UI component for this handle. Default 'slider'. Use 'switch' for on/off motion (e.g. enable secondary blink). Use 'select' when a discrete choice is better than a number (pair with options). Use 'dialog' for complex config that would clutter the panel.",
+                  },
+                  options: {
+                    type: 'array' as const,
+                    description: "For 'select' controls: the choices. Each option has a machine value (e.g. an easing key) and a human label.",
+                    items: {
+                      type: 'object' as const,
+                      properties: {
+                        value: { type: 'string' as const },
+                        label: { type: 'string' as const },
+                      },
+                      required: ['value', 'label'],
+                    },
                   },
                 },
                 required: ['track', 'label'],
@@ -500,7 +517,10 @@ function planToTracks(l: PlanLayer, op: number): LayerTracks {
   return t
 }
 
-/** Validate the model's control specs into a per-track {label, hint} map. */
+const VALID_CONTROLS = ['slider', 'select', 'switch', 'dialog'] as const
+type ControlKind = (typeof VALID_CONTROLS)[number]
+
+/** Validate the model's control specs into a per-track HandleMeta map. */
 function controlsToMeta(controls: ControlSpec[] | undefined): Partial<Record<TrackKey, HandleMeta>> | undefined {
   if (!controls?.length) return undefined
   const out: Partial<Record<TrackKey, HandleMeta>> = {}
@@ -508,7 +528,22 @@ function controlsToMeta(controls: ControlSpec[] | undefined): Partial<Record<Tra
     const label = typeof c?.label === 'string' ? c.label.trim().slice(0, 40) : ''
     if (!label || !(TRACK_KEYS as readonly string[]).includes(c.track)) continue
     const hint = typeof c?.hint === 'string' ? c.hint.trim().slice(0, 120) : ''
-    out[c.track as TrackKey] = hint ? { label, hint } : { label }
+    const meta: HandleMeta = hint ? { label, hint } : { label }
+    // Validate control kind
+    const ck = (c as Record<string, unknown>).control
+    if (typeof ck === 'string' && (VALID_CONTROLS as readonly string[]).includes(ck)) {
+      meta.control = ck as ControlKind
+    }
+    // Validate options (for select controls)
+    const rawOpts = (c as Record<string, unknown>).options
+    if (Array.isArray(rawOpts)) {
+      const opts = rawOpts
+        .filter((o): o is { value: string; label: string } =>
+          o && typeof o.value === 'string' && typeof o.label === 'string')
+        .slice(0, 12)
+      if (opts.length) meta.options = opts
+    }
+    out[c.track as TrackKey] = meta
   }
   return Object.keys(out).length ? out : undefined
 }

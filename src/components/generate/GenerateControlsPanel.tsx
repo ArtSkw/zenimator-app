@@ -5,12 +5,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SlidersHorizontal, Plus, X, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ParamSlider } from '@/components/controls/ParamSlider'
+import { ParamSelect } from '@/components/controls/ParamSelect'
+import { ParamSwitch } from '@/components/controls/ParamSwitch'
+import { ParamDialog } from '@/components/controls/ParamDialog'
 import { useGenerateStore } from '@/store/generateStore'
 import {
   TRACKS, PRESETS_BY_TRACK, PRESET_BY_ID, EASINGS, stampPreset,
   deriveLayerHandles, applyHandle, layerHandleContext, handleSalience,
   type TrackMeta, type LayerTracks, type Track, type Keyframe, type HandleMeta,
-  type HandleContext,
+  type LayerHandle, type HandleContext,
 } from '@/engine/lottie/project'
 import type { EasingKey } from '@/engine/lottie/core'
 
@@ -105,18 +108,17 @@ function LayerEditor({
           <div className="space-y-5">
             {handles.map((h) => (
               <div key={`${h.track}-${h.type}`} className="space-y-1.5">
-                <ParamSlider
-                  label={h.label}
-                  value={h.value}
-                  min={h.min}
-                  max={h.max}
-                  step={h.step}
-                  unit={h.unit}
+                <HandleControl
+                  h={h}
+                  track={tracks[h.track]!}
                   origin={origins?.[h.track]}
-                  onChange={() => {}}
+                  op={op}
                   onCommit={(v) => onChange({ ...tracks, [h.track]: applyHandle(h, tracks[h.track]!, op, v) })}
+                  onTrackChange={(t) => onChange({ ...tracks, [h.track]: t })}
                 />
-                <p className="text-xs leading-relaxed text-foreground/60">{h.hint}</p>
+                {h.control !== 'dialog' && (
+                  <p className="text-xs leading-relaxed text-foreground/60">{h.hint}</p>
+                )}
               </div>
             ))}
           </div>
@@ -160,6 +162,73 @@ function LayerEditor({
         </div>
       )}
     </div>
+  )
+}
+
+/** Render the appropriate control for a handle based on its `control` kind. */
+function HandleControl({
+  h, track, origin, op, onCommit, onTrackChange,
+}: {
+  h: LayerHandle
+  track: Track
+  origin?: number
+  op: number
+  onCommit: (v: number) => void
+  onTrackChange: (t: Track) => void
+}) {
+  if (h.control === 'switch') {
+    const checked = h.value > 0
+    const originChecked = origin != null ? origin > 0 : undefined
+    return (
+      <ParamSwitch
+        label={h.label}
+        checked={checked}
+        origin={originChecked}
+        onChange={(c) => onCommit(c ? (origin && origin > 0 ? origin : h.max) : 0)}
+      />
+    )
+  }
+
+  if (h.control === 'select' && h.options?.length) {
+    const currentValue = h.options[Math.max(0, Math.min(h.options.length - 1, h.value))]?.value ?? h.options[0].value
+    const originValue = origin != null ? h.options[Math.max(0, Math.min(h.options.length - 1, Math.round(origin)))]?.value : undefined
+    return (
+      <ParamSelect
+        label={h.label}
+        value={currentValue}
+        options={h.options}
+        originValue={originValue}
+        onChange={(v) => {
+          const idx = h.options!.findIndex((o) => o.value === v)
+          onCommit(Math.max(0, idx))
+        }}
+      />
+    )
+  }
+
+  if (h.control === 'dialog') {
+    return (
+      <ParamDialog
+        label={h.label}
+        hint={h.hint}
+        track={track}
+        onChange={onTrackChange}
+      />
+    )
+  }
+
+  return (
+    <ParamSlider
+      label={h.label}
+      value={h.value}
+      min={h.min}
+      max={h.max}
+      step={h.step}
+      unit={h.unit}
+      origin={origin}
+      onChange={() => {}}
+      onCommit={onCommit}
+    />
   )
 }
 

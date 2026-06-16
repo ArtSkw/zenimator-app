@@ -133,9 +133,18 @@ export type ProjectLayer = {
 }
 
 /** LLM-authored designer-facing metadata for a track's handle. `label` is the
- *  slider name; `hint` is a one-line, subject-specific description of its effect.
- *  Both override the auto-derived defaults from {@link deriveHandle}. */
-export type HandleMeta = { label: string; hint?: string }
+ *  control name; `hint` describes the effect. `control` overrides the default
+ *  'slider' with a richer UI component; `options` supplies its choices. */
+export type HandleMeta = {
+  label: string
+  hint?: string
+  /** Which UI component to render for this handle. Default: 'slider'. */
+  control?: 'slider' | 'select' | 'switch' | 'dialog'
+  /** For 'select' controls: the options shown in the dropdown.
+   *  `value` is the semantic value (e.g. an EasingKey); `label` is what the
+   *  user sees. */
+  options?: { value: string; label: string }[]
+}
 
 export type GenerateProject = {
   fps: number
@@ -492,6 +501,10 @@ export type LayerHandle = {
   max: number
   step: number
   unit: string
+  /** UI component to render. Defaults to 'slider'. */
+  control: 'slider' | 'select' | 'switch' | 'dialog'
+  /** For 'select' controls: the list of choices. */
+  options?: { value: string; label: string }[]
 }
 
 const baselineOf = (key: TrackKey): number =>
@@ -568,9 +581,9 @@ export function deriveHandle(key: TrackKey, track: Track | undefined, op: number
   const osc = close(keys[0].v, keys[keys.length - 1].v, key)
   const dev = maxDev(keys, key)
 
-  const make = (h: Omit<LayerHandle, 'value'> & { value: number }): LayerHandle | null => {
+  const make = (h: Omit<LayerHandle, 'value' | 'control'> & { value: number }): LayerHandle | null => {
     if (h.max - h.min < 1) return null // no draggable range
-    return { ...h, value: Math.min(h.max, Math.max(h.min, Math.round(h.value))) }
+    return { ...h, control: 'slider', value: Math.min(h.max, Math.max(h.min, Math.round(h.value))) }
   }
 
   if (key === 'rotation') {
@@ -622,6 +635,24 @@ export function deriveLayerHandles(
       if (label) h.label = label
       const hint = meta?.hint?.trim()
       if (hint) h.hint = hint
+
+      // Apply control-kind overrides from the LLM-authored meta.
+      if (meta?.control === 'switch') {
+        h.control = 'switch'
+        h.value = h.value > 0 ? 1 : 0
+        h.min = 0; h.max = 1; h.step = 1; h.unit = ''
+      } else if (meta?.control === 'select' && meta.options?.length) {
+        h.control = 'select'
+        h.options = meta.options
+        // Value = index of the track's current first-keyframe easing in options[].
+        const currentEasing = sortedKeys(tracks[key])[0]?.easing ?? 'easeInOut'
+        const idx = meta.options.findIndex((o) => o.value === currentEasing)
+        h.value = Math.max(0, idx)
+        h.min = 0; h.max = meta.options.length - 1; h.step = 1; h.unit = ''
+      } else if (meta?.control === 'dialog') {
+        h.control = 'dialog'
+      }
+
       out.push(h)
     }
   }
@@ -664,6 +695,9 @@ export function withHandleOrigins(project: GenerateProject): GenerateProject {
  *  stays fixed while the user drags. References are per-type since the units differ
  *  (px / % / degrees / frames) — judgment calls, tune to taste. */
 export function handleSalience(h: LayerHandle, origin?: number, ctx?: HandleContext): number {
+  if (h.control === 'switch') return h.value > 0 ? 0.5 : 0.2  // on = mid; off = low
+  if (h.control === 'select') return 0.4                        // easing choice, secondary
+  if (h.control === 'dialog') return 0.3                        // advanced config, least urgent
   if (h.type === 'duration') return 0.9 // a full spin is a headline motion
   if (h.type === 'delay') return 0.7    // a fade in/out (appear/disappear) is prominent
   const v = origin ?? h.value
@@ -706,6 +740,16 @@ function fromUnit(u: number | [number, number], key: TrackKey, amp: number): Key
 export function applyHandle(h: LayerHandle, track: Track, op: number, value: number): Track {
   const keys = sortedKeys(track)
   if (keys.length < 2) return track
+
+  // Select: value = option index → apply option.value as easing to all non-last keys.
+  if (h.control === 'select' && h.options?.length) {
+    const idx = Math.round(Math.max(0, Math.min(h.options.length - 1, value)))
+    const option = h.options[idx]
+    if (!option) return track
+    const next = keys.map((k, i) => i < keys.length - 1 ? { ...k, easing: option.value as EasingKey } : k)
+    return { ...track, keys: next, preset: undefined }
+  }
+
   if (h.type === 'delay') {
     const offset = value - keys[0].t
     const next = keys.map((k) => ({ ...k, t: clampInt(k.t + offset, 0, op, k.t) }))
