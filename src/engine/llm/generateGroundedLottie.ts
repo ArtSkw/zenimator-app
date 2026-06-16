@@ -10,6 +10,7 @@ import { renderLottieFrames, pickFrames } from '@/engine/lottie/render'
 import { rasterizeLayers, type LayerDef, type EasingKey } from '@/engine/lottie/core'
 import {
   assembleProject,
+  loopSeamWarnings,
   clampInt,
   clampNum,
   EASINGS,
@@ -18,6 +19,7 @@ import {
   type ProjectLayer,
   type LayerTracks,
   type VectorGeometry,
+  type MorphKey,
   type TrackKey,
   type HandleMeta,
 } from '@/engine/lottie/project'
@@ -30,16 +32,28 @@ import { elementToPath, strokeStyle, scalePath, type SubPath, type StrokeStyle }
 type ScalarKey = { t: number; v: number; easing?: string }
 type PosKey = { t: number; x: number; y: number; easing?: string }
 type ControlSpec = { track: string; label: string; hint?: string }
+/** One control point for a morph keyframe, in SVG user-space px. */
+type PlanMorphControl = { u: number; dx: number; dy: number }
+/** One morph keyframe: displace the path at frame `t` using the given controls. */
+type PlanMorphKey = { t: number; controls: PlanMorphControl[]; easing?: string }
 type PlanLayer = {
   name: string
   elementIds: string[]
   opacity?: ScalarKey[]
   position?: PosKey[]
   scale?: ScalarKey[]
+  /** Independent X-scale keyframes (percent, rest 100). Use for coin-flip / axis-spin effects. */
+  scaleX?: ScalarKey[]
   rotation?: ScalarKey[]
   /** Trim-path end% keyframes (0=hidden → 100=fully drawn). Only valid on
    *  stroke-only vector layers. The model sets this for draw-on entry effects. */
   trim?: ScalarKey[]
+  /** Explicit pivot point override in SVG user-space px. When absent the centroid is used. */
+  pivot?: { x: number; y: number }
+  /** Path deformation keyframes. Only valid on stroke-only vector layers. Each
+   *  key displaces the path's vertices at frame `t` using a small set of control
+   *  points (u=0..1 along the path, dx/dy offset in SVG user-space px). */
+  morphKeys?: PlanMorphKey[]
   controls?: ControlSpec[]
 }
 type MotionPlan = { fps?: number; totalFrames?: number; layers: PlanLayer[] }
@@ -97,7 +111,42 @@ const PLAN_TOOL = {
                 required: ['t', 'x', 'y'],
               },
             },
+            scaleX: SCALAR_KEYS("Independent X-scale keyframes (percent, rest 100). Use for coin-flip axis-spin: scale X through 0 (e.g. 100→0→100 or 100→-100→100). Compose with scale (Y); scale drives uniform; scaleX drives width only."),
             trim: SCALAR_KEYS('Trim-path end% keyframes (0=hidden, 100=fully drawn). ONLY for stroke-only vector layers with draw-on intent. Entry: keyframe from 0→100 eased; loop: omit.'),
+            pivot: {
+              type: 'object' as const,
+              description: "Override the rotation/scale pivot for this layer in SVG user-space px. Omit to use the layer's bounding-box centroid. Use when the natural rotation centre is off-centre (e.g. a door hinge, clock hand, pendulum root).",
+              properties: {
+                x: { type: 'number' as const },
+                y: { type: 'number' as const },
+              },
+              required: ['x', 'y'],
+            },
+            morphKeys: {
+              type: 'array' as const,
+              description: "Path deformation keyframes. ONLY for stroke-only vector layers. Each key displaces the path's vertices at frame t using a small set of control points (u ∈ 0–1 along the path, dx/dy in SVG user-space px). Use for ropes, wires, cables, bouncing lines — shapes that need to bend or flex rather than rigidly transform. Loop: first and last key should have all offsets zero. Max 5 control points per key; max 8 keys.",
+              items: {
+                type: 'object' as const,
+                properties: {
+                  t: { type: 'number' as const, description: 'Frame (0..totalFrames).' },
+                  controls: {
+                    type: 'array' as const,
+                    description: 'Control-point offsets. u=0 is path start, u=1 is path end.',
+                    items: {
+                      type: 'object' as const,
+                      properties: {
+                        u: { type: 'number' as const, description: 'Normalised position along path (0..1).' },
+                        dx: { type: 'number' as const, description: 'X offset in SVG user-space px.' },
+                        dy: { type: 'number' as const, description: 'Y offset in SVG user-space px.' },
+                      },
+                      required: ['u', 'dx', 'dy'],
+                    },
+                  },
+                  easing: { type: 'string' as const, enum: EASE_ENUM, description: 'Curve INTO the next keyframe.' },
+                },
+                required: ['t', 'controls'],
+              },
+            },
             controls: {
               type: 'array' as const,
               description:
@@ -105,7 +154,7 @@ const PLAN_TOOL = {
               items: {
                 type: 'object' as const,
                 properties: {
-                  track: { type: 'string' as const, enum: ['opacity', 'position', 'scale', 'rotation', 'trim'] },
+                  track: { type: 'string' as const, enum: ['opacity', 'position', 'scale', 'scaleX', 'rotation', 'trim'] },
                   label: {
                     type: 'string' as const,
                     description: "Short, illustration-specific slider name (≤30 chars), e.g. 'Card launch', 'Steam drift', 'Mascot bounce'.",
@@ -157,6 +206,10 @@ export async function generateGroundedLottie(
 
   opts.onStage?.('Rendering layers…')
   const project = await prepareLayers(index, plan)
+  if (config.kind === 'loop') {
+    const seams = loopSeamWarnings(project)
+    if (seams.length) console.warn('[Zenimator] Loop seam warnings:\n' + seams.join('\n'))
+  }
   const v1 = assembleProject(project)
 
   try {
@@ -229,7 +282,7 @@ async function planMotion(
 // ── Step 2: render faithful layers (once) → editable project ─────────────────
 
 const hasMotion = (l: PlanLayer): boolean =>
-  !!(l.opacity?.length || l.position?.length || l.scale?.length || l.rotation?.length || l.trim?.length)
+  !!(l.opacity?.length || l.position?.length || l.scale?.length || l.rotation?.length || l.trim?.length || l.morphKeys?.length)
 
 /** True when EVERY element in the layer is stroke-only (has a stroke, no fill). */
 function isStrokeOnly(elementIds: string[], svgDoc: Document): boolean {
@@ -316,6 +369,29 @@ async function prepareLayers(index: StructuralIndex, plan: MotionPlan): Promise<
   // 'vector' entries carry pre-built geometry; null = raster (build after)
   const vectorGeoms: (VectorGeometry | null)[] = []
 
+  // Collect pivot overrides per plan-layer index (in SVG user-space px)
+  const pivotOverrides = new Map<number, { x: number; y: number }>()
+  planLayers.forEach((l, li) => { if (l.pivot) pivotOverrides.set(li, l.pivot) })
+
+  // Collect morph key overrides per plan-layer index. Offsets are given by the
+  // model in SVG user-space px; scale to comp space here so project.ts sees
+  // consistent units with the SubPath vertices (which are already scaled by S).
+  const morphKeyOverrides = new Map<number, MorphKey[]>()
+  planLayers.forEach((l, li) => {
+    if (!l.morphKeys?.length) return
+    const ease = (e?: string) => e && (EASINGS as string[]).includes(e) ? e as MorphKey['easing'] : undefined
+    const keys: MorphKey[] = l.morphKeys.map((mk) => ({
+      t: clampInt(mk.t, 0, op, 0),
+      controls: (mk.controls ?? []).slice(0, 5).map((c) => ({
+        u: Math.max(0, Math.min(1, c.u)),
+        dx: c.dx * S,
+        dy: c.dy * S,
+      })),
+      easing: ease(mk.easing),
+    }))
+    morphKeyOverrides.set(li, keys)
+  })
+
   planLayers.forEach((l, li) => {
     const owned = leaves.filter((lf) => owner.get(lf.id) === li).map((lf) => lf.id)
     if (owned.length === 0) return
@@ -355,12 +431,16 @@ async function prepareLayers(index: StructuralIndex, plan: MotionPlan): Promise<
   const layers: ProjectLayer[] = defs
     .map((def, di): { layer: ProjectLayer; docIndex: number } | null => {
       const b = unionBox(def.elementIds, boundsById, W, H)
+      const piv = pivotOverrides.get(di)
+      const mKeys = morphKeyOverrides.get(di)
       const base = {
         name: def.name, elementIds: def.elementIds,
-        cx: b.cx * S, cy: b.cy * S,
+        cx: (piv ? piv.x : b.cx) * S,
+        cy: (piv ? piv.y : b.cy) * S,
         bounds: { x: b.x * S, y: b.y * S, w: b.w * S, h: b.h * S },
         tracks: fx[di],
         handleControls: labels[di],
+        ...(mKeys ? { morphKeys: mKeys } : {}),
       }
       const firstId = def.elementIds[0] ?? ''
       const docIndex = order.get(firstId) ?? counter++
@@ -402,6 +482,8 @@ function planToTracks(l: PlanLayer, op: number): LayerTracks {
   if (o) t.opacity = o
   const s = scalar(l.scale, 0, 400, 100)
   if (s) t.scale = s
+  const sx = scalar(l.scaleX, -200, 200, 100)
+  if (sx) t.scaleX = sx
   const r = scalar(l.rotation, -3600, 3600, 0)
   if (r) t.rotation = r
   const tr = scalar(l.trim, 0, 100, 100)
@@ -610,18 +692,24 @@ function guidanceFor(config: GenConfig): string {
 function slimIndex(index: StructuralIndex) {
   return {
     viewport: index.viewport,
-    elements: index.elements.map((e) => ({
-      id: e.id,
-      tag: e.tag,
-      bounds: {
-        x: Math.round(e.bounds.x),
-        y: Math.round(e.bounds.y),
-        width: Math.round(e.bounds.width),
-        height: Math.round(e.bounds.height),
-      },
-      ...(e.fill ? { fill: e.fill } : {}),
-      parentId: e.parentId,
-    })),
+    elements: index.elements.map((e) => {
+      const bx = Math.round(e.bounds.x)
+      const by = Math.round(e.bounds.y)
+      const bw = Math.round(e.bounds.width)
+      const bh = Math.round(e.bounds.height)
+      const strokeOnly = !!(e.stroke && e.stroke !== 'none' && (!e.fill || e.fill === 'none'))
+      return {
+        id: e.id,
+        tag: e.tag,
+        depth: e.depth,
+        bounds: { x: bx, y: by, width: bw, height: bh },
+        centroid: { x: Math.round(bx + bw / 2), y: Math.round(by + bh / 2) },
+        ...(e.fill ? { fill: e.fill } : {}),
+        ...(e.stroke && e.stroke !== 'none' ? { stroke: e.stroke } : {}),
+        ...(strokeOnly ? { strokeOnly: true } : {}),
+        parentId: e.parentId,
+      }
+    }),
   }
 }
 

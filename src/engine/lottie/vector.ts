@@ -117,6 +117,63 @@ export function scalePath(sp: SubPath, s: number): SubPath {
   return { v: sc(sp.v), i: sc(sp.i), o: sc(sp.o), c: sp.c }
 }
 
+/** A morph control point: normalized position along the path (u ∈ 0–1) plus
+ *  x/y offsets in the same coordinate space as the SubPath vertices. */
+export type MorphControl = {
+  u: number
+  dx: number
+  dy: number
+}
+
+/**
+ * Displace a SubPath's vertices using a set of control-point offsets. Each
+ * vertex is offset by the value linearly interpolated from the nearest controls.
+ * Tangent handles (i/o) are relative to their vertex and therefore unchanged —
+ * only the anchor points shift, preserving curvature.
+ */
+export function morphPath(base: SubPath, controls: MorphControl[]): SubPath {
+  const n = base.v.length
+  if (n === 0 || controls.length === 0) return base
+
+  const sorted = [...controls].sort((a, b) => a.u - b.u)
+
+  const offsetAt = (u: number): [number, number] => {
+    if (sorted.length === 1) return [sorted[0].dx, sorted[0].dy]
+    if (u <= sorted[0].u) return [sorted[0].dx, sorted[0].dy]
+    const last = sorted[sorted.length - 1]
+    if (u >= last.u) return [last.dx, last.dy]
+    let lo = 0
+    while (lo < sorted.length - 2 && sorted[lo + 1].u <= u) lo++
+    const a = sorted[lo], b = sorted[lo + 1]
+    const t = b.u === a.u ? 0 : (u - a.u) / (b.u - a.u)
+    return [a.dx + (b.dx - a.dx) * t, a.dy + (b.dy - a.dy) * t]
+  }
+
+  const span = base.c ? n : Math.max(1, n - 1)
+  return {
+    v: base.v.map(([vx, vy], j) => { const [dx, dy] = offsetAt(j / span); return [vx + dx, vy + dy] }),
+    i: base.i,
+    o: base.o,
+    c: base.c,
+  }
+}
+
+/**
+ * Validate that all SubPaths share the same vertex count — required for Lottie
+ * shape morphing (topology must be identical across all keyframes).
+ * Returns null when valid, or a human-readable error when not.
+ */
+export function validateTopology(paths: SubPath[]): string | null {
+  if (paths.length < 2) return null
+  const ref = paths[0].v.length
+  for (let j = 1; j < paths.length; j++) {
+    if (paths[j].v.length !== ref) {
+      return `Vertex count mismatch: path 0 has ${ref} vertices, path ${j} has ${paths[j].v.length}`
+    }
+  }
+  return null
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function n(el: Element, attr: string): number {

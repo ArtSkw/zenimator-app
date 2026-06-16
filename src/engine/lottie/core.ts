@@ -20,11 +20,15 @@ export type ImageLayer = {
 // Used by the vector path (WS1+). Every shape primitive must live inside a
 // GrGroup whose `it` array ends with a TrGroup.
 
+/** One vertex set inside a keyframed shape. */
+export type ShapeVerts = { i: number[][]; o: number[][]; v: number[][]; c: boolean }
+
 /** Static or keyframed bezier path. The `k` value follows Lottie's sh format:
- *  v = anchor points, i = in-tangents (relative), o = out-tangents (relative). */
+ *  v = anchor points, i = in-tangents (relative), o = out-tangents (relative).
+ *  Keyframed variant includes optional temporal ease handles `o`/`i` (out/in). */
 export type ShapePath =
-  | { a: 0; k: { i: number[][]; o: number[][]; v: number[][]; c: boolean } }
-  | { a: 1; k: Array<{ t: number; s: [{ i: number[][]; o: number[][]; v: number[][]; c: boolean }] }> }
+  | { a: 0; k: ShapeVerts }
+  | { a: 1; k: Array<{ t: number; s: [ShapeVerts]; o?: EaseHandle; i?: EaseHandle }> }
 
 export type ShPath   = { ty: 'sh'; ks: ShapePath; nm?: string }
 export type StStroke = { ty: 'st'; c: Prop; o: Prop; w: Prop; lc: 1|2|3; lj: 1|2|3; nm?: string }

@@ -17,7 +17,7 @@ import {
   type TmTrim,
   type TrGroup,
 } from './core'
-import type { SubPath, StrokeStyle } from './vector'
+import { morphPath, validateTopology, type SubPath, type StrokeStyle, type MorphControl } from './vector'
 
 // ── Tracks: the storage model ────────────────────────────────────────────────
 //
@@ -27,7 +27,7 @@ import type { SubPath, StrokeStyle } from './vector'
 // move → fade out — is just more keyframes. "Presets" survive only as shortcuts
 // that STAMP keyframes onto a track; they no longer define the limits.
 
-export const TRACK_KEYS = ['opacity', 'position', 'scale', 'rotation', 'trim'] as const
+export const TRACK_KEYS = ['opacity', 'position', 'scale', 'rotation', 'trim', 'scaleX'] as const
 export type TrackKey = (typeof TRACK_KEYS)[number]
 
 /**
@@ -78,6 +78,7 @@ export const TRACKS: TrackMeta[] = [
   { key: 'scale',    label: 'Scale',     rest: 100,    kind: 'percent', min: 0,     max: 300,  step: 1, unit: '%',  add: 100 },
   { key: 'rotation', label: 'Rotation',  rest: 0,      kind: 'degrees', min: -1440, max: 1440, step: 1, unit: '°',  add: 0 },
   { key: 'trim',     label: 'Draw-on',   rest: 100,    kind: 'percent', min: 0,     max: 100,  step: 1, unit: '%',  add: 100 },
+  { key: 'scaleX',   label: 'Scale X',   rest: 100,    kind: 'percent', min: -200,  max: 200,  step: 1, unit: '%',  add: 100 },
 ]
 export const TRACK_META = Object.fromEntries(TRACKS.map((t) => [t.key, t])) as Record<TrackKey, TrackMeta>
 
@@ -91,6 +92,17 @@ export type VectorGeometry = {
   stroke: StrokeStyle
 }
 
+/** One morph keyframe: displace the layer's path at frame `t` by interpolating
+ *  the given control-point offsets. Offsets are in comp-space px (same units as
+ *  the SubPath vertices). The base pose (all offsets zero) should be the first
+ *  and last key for a seamless loop. */
+export type MorphKey = {
+  t: number
+  /** Small set of control points: u ∈ 0–1 along the path, dx/dy offset in comp px. */
+  controls: MorphControl[]
+  easing?: EasingKey
+}
+
 export type ProjectLayer = {
   name: string
   elementIds: string[]
@@ -98,6 +110,9 @@ export type ProjectLayer = {
   kind?: 'image' | 'vector'
   /** Present when kind === 'vector'; absent for image layers. */
   vector?: VectorGeometry
+  /** Optional shape morph keyframes for a vector layer. When present the path
+   *  animates between displaced poses instead of staying static. */
+  morphKeys?: MorphKey[]
   /** Present when kind === 'image' or kind is absent. */
   dataUrl?: string
   /** Scaled (comp-space) centre — pivot for scale/rotate, base for translate. */
@@ -200,7 +215,7 @@ export function assembleProject(p: GenerateProject): LottieDoc {
     const common = { ddd: 0 as const, ind: i + 1, sr: 1 as const, ks, ao: 0 as const, ip: 0, op: p.op, st: 0 as const, bm: 0 as const }
 
     if (l.kind === 'vector' && l.vector) {
-      layers.push({ ...common, ty: 4, nm: l.name, shapes: buildShapes(l.vector, l.tracks) })
+      layers.push({ ...common, ty: 4, nm: l.name, shapes: buildShapes(l.vector, l.tracks, l.morphKeys) })
     } else {
       const id = `img_${i}`
       assets.push({ id, w: p.w, h: p.h, u: '', p: l.dataUrl ?? '', e: 1 })
@@ -211,16 +226,42 @@ export function assembleProject(p: GenerateProject): LottieDoc {
   return { v: '5.7.0', fr: p.fps, ip: 0, op: p.op, w: p.w, h: p.h, assets, layers }
 }
 
-/** Build the shapes array for a vector layer, including an optional trim modifier. */
-function buildShapes(geom: VectorGeometry, tracks: LayerTracks): GrGroup[] {
+/** Build the shapes array for a vector layer, including optional trim and morph. */
+function buildShapes(geom: VectorGeometry, tracks: LayerTracks, morphKeys?: MorphKey[]): GrGroup[] {
   const { paths, stroke } = geom
+  const sortedMorphKeys = morphKeys?.length
+    ? [...morphKeys].sort((a, b) => a.t - b.t)
+    : undefined
 
   // One GrGroup per sub-path, each wrapping: sh + st + (tm?) + tr
   return paths.map((sp, pi): GrGroup => {
-    const shPath: ShPath = {
-      ty: 'sh',
-      nm: `path_${pi}`,
-      ks: { a: 0, k: { v: sp.v, i: sp.i, o: sp.o, c: sp.c } },
+    let shPath: ShPath
+    if (sortedMorphKeys) {
+      // Validate topology: all displaced paths must have same vertex count
+      const displaced = sortedMorphKeys.map((mk) => morphPath(sp, mk.controls))
+      const topoErr = validateTopology([sp, ...displaced])
+      if (topoErr) console.warn(`[Zenimator] morphKeys topology error on path_${pi}: ${topoErr}`)
+      shPath = {
+        ty: 'sh',
+        nm: `path_${pi}`,
+        ks: {
+          a: 1,
+          k: sortedMorphKeys.map((mk, mi) => {
+            const d = displaced[mi]
+            const isLast = mi === sortedMorphKeys.length - 1
+            const bez = !isLast && mk.easing ? EASING_BEZIER[mk.easing] : undefined
+            return bez
+              ? { t: mk.t, s: [{ v: d.v, i: d.i, o: d.o, c: d.c }], o: { x: [bez[0]], y: [bez[1]] }, i: { x: [bez[2]], y: [bez[3]] } }
+              : { t: mk.t, s: [{ v: d.v, i: d.i, o: d.o, c: d.c }] }
+          }),
+        },
+      }
+    } else {
+      shPath = {
+        ty: 'sh',
+        nm: `path_${pi}`,
+        ks: { a: 0, k: { v: sp.v, i: sp.i, o: sp.o, c: sp.c } },
+      }
     }
 
     const stStroke: StStroke = {
@@ -264,7 +305,7 @@ export function tracksToTransform(tracks: LayerTracks, cx: number, cy: number, s
   return {
     o: scalarTrack(tracks.opacity, 100, 0, 100),
     r: scalarTrack(tracks.rotation, 0),
-    s: scaleTrack(tracks.scale),
+    s: scaleTrackXY(tracks.scale, tracks.scaleX),
     p: positionTrack(tracks.position, cx, cy, scale),
     a: staticVec([cx, cy, 0]),
   }
@@ -286,12 +327,44 @@ function scalarTrack(track: Track | undefined, rest: number, min?: number, max?:
   return animedKeys(keys.map((k, i) => ({ t: k.t, s: [cl(num(k.v))], bez: bezOf(k, i === keys.length - 1) })))
 }
 
-function scaleTrack(track: Track | undefined): Prop {
-  const keys = sortedKeys(track)
-  const toS = (v: Keyframe['v']) => { const s = Math.max(0, num(v)); return [s, s, 100] }
-  if (keys.length === 0) return staticVec([100, 100, 100])
-  if (keys.length === 1) return staticVec(toS(keys[0].v))
-  return animedKeys(keys.map((k, i) => ({ t: k.t, s: toS(k.v), bez: bezOf(k, i === keys.length - 1) })))
+/** Uniform scale track. When a scaleX track is also present it overrides the X
+ *  component so the Y axis can move independently (e.g. coin flip on its axis). */
+function scaleTrackXY(scale: Track | undefined, scaleX: Track | undefined): Prop {
+  const sKeys  = sortedKeys(scale)
+  const sxKeys = sortedKeys(scaleX)
+
+  // Both absent → static 100%
+  if (sKeys.length === 0 && sxKeys.length === 0) return staticVec([100, 100, 100])
+
+  // Only uniform scale (common case) — keep existing behaviour
+  if (sxKeys.length === 0) {
+    const toS = (v: Keyframe['v']) => { const s = Math.max(-200, num(v)); return [s, s, 100] }
+    if (sKeys.length === 1) return staticVec(toS(sKeys[0].v))
+    return animedKeys(sKeys.map((k, i) => ({ t: k.t, s: toS(k.v), bez: bezOf(k, i === sKeys.length - 1) })))
+  }
+
+  // scaleX present — animate X independently. We build a unified frame list by
+  // merging both tracks and evaluating each at every distinct keyframe time.
+  const allTs = [...new Set([...sKeys.map(k => k.t), ...sxKeys.map(k => k.t)])].sort((a, b) => a - b)
+  const sy = (t: number) => {
+    const v = valueAt(sKeys, t)
+    return v == null ? 100 : (Array.isArray(v) ? v[0] : v)
+  }
+  const sx = (t: number) => {
+    const v = valueAt(sxKeys, t)
+    return v == null ? 100 : (Array.isArray(v) ? v[0] : v)
+  }
+  if (allTs.length === 1) return staticVec([sx(allTs[0]), sy(allTs[0]), 100])
+  // Use easing from scaleX track (it's the driver); fall back to scaleY easing
+  const easeAt = (t: number): Bezier | undefined => {
+    const k = sxKeys.find(k => k.t === t) ?? sKeys.find(k => k.t === t)
+    return k ? bezOf(k, false) : undefined
+  }
+  return animedKeys(allTs.map((t, i) => ({
+    t,
+    s: [sx(t), sy(t), 100],
+    bez: i < allTs.length - 1 ? easeAt(t) : undefined,
+  })))
 }
 
 function positionTrack(track: Track | undefined, cx: number, cy: number, scale: number): Prop {
@@ -304,6 +377,25 @@ function positionTrack(track: Track | undefined, cx: number, cy: number, scale: 
   if (keys.length === 0) return staticVec(base)
   if (keys.length === 1) return staticVec(toS(keys[0].v))
   return animedKeys(keys.map((k, i) => ({ t: k.t, s: toS(k.v), bez: bezOf(k, i === keys.length - 1) })))
+}
+
+// ── Loop-seam validator ───────────────────────────────────────────────────────
+
+/** Return warning strings for any looping track whose first and last keyframe
+ *  values differ by more than the tolerance — a visible seam in the loop. */
+export function loopSeamWarnings(project: GenerateProject): string[] {
+  const warnings: string[] = []
+  for (const layer of project.layers) {
+    for (const key of TRACK_KEYS) {
+      const keys = sortedKeys(layer.tracks[key])
+      if (keys.length < 2) continue
+      const first = keys[0], last = keys[keys.length - 1]
+      if (!close(first.v, last.v, key)) {
+        warnings.push(`"${layer.name}" / ${key}: first (${JSON.stringify(first.v)}) ≠ last (${JSON.stringify(last.v)}) — loop will seam`)
+      }
+    }
+  }
+  return warnings
 }
 
 // ── Track summary (layers panel badge) ───────────────────────────────────────
@@ -402,7 +494,8 @@ export type LayerHandle = {
   unit: string
 }
 
-const baselineOf = (key: TrackKey): number => (key === 'opacity' || key === 'scale' ? 100 : 0)
+const baselineOf = (key: TrackKey): number =>
+  (key === 'opacity' || key === 'scale' || key === 'trim' || key === 'scaleX' ? 100 : 0)
 
 /** A keyframe value's distance from the track's resting value. */
 function devOf(v: Keyframe['v'], key: TrackKey): number {
@@ -440,7 +533,7 @@ function posAxis(keys: Keyframe[]): 'x' | 'y' {
 // would never move (dragging would grow the max in lockstep with the value).
 // scale/rotation/opacity are size-invariant (%, degrees) so a fixed cap is right;
 // position is absolute px and gets a bounds-relative ceiling instead (positionMax).
-const AMOUNT_MAX: Record<TrackKey, number> = { position: 200, scale: 120, rotation: 90, opacity: 100 }
+const AMOUNT_MAX: Record<TrackKey, number> = { position: 200, scale: 120, rotation: 90, opacity: 100, trim: 100, scaleX: 120 }
 
 /** User-space (pre-DPI-scale) geometry for the layer being edited, used to size
  *  the position handle's range so it scales with the artwork. Position keyframes
@@ -496,10 +589,18 @@ export function deriveHandle(key: TrackKey, track: Track | undefined, op: number
     return make({ track: key, type: 'delay', label: rising ? 'Fade-in start' : 'Fade-out start', hint: 'Opacity — the frame the fade begins', value: first, min: 0, max: op - span, step: 1, unit: 'f' })
   }
 
-  // position / scale → amplitude
+  // scale tracks
   if (key === 'scale') {
     return make({ track: key, type: 'amount', label: osc ? 'Pulse strength' : 'Scale amount', hint: 'Scale — how much it grows or shrinks', value: dev, min: 0, max: AMOUNT_MAX.scale, step: 1, unit: '%' })
   }
+  if (key === 'scaleX') {
+    return make({ track: key, type: 'amount', label: osc ? 'Flip speed' : 'Scale X amount', hint: 'Horizontal scale — use to simulate a spin or face-flip on its axis', value: dev, min: 0, max: AMOUNT_MAX.scaleX, step: 1, unit: '%' })
+  }
+  // trim (draw-on progress)
+  if (key === 'trim') {
+    return make({ track: key, type: 'amount', label: 'Draw-on amount', hint: 'Trim path — how much of the stroke is drawn on (0 = hidden, 100 = fully visible)', value: dev, min: 0, max: AMOUNT_MAX.trim, step: 1, unit: '%' })
+  }
+  // position
   const label = osc ? (posAxis(keys) === 'y' ? 'Float height' : 'Drift amount') : 'Slide distance'
   return make({ track: key, type: 'amount', label, hint: 'Position — how far it travels', value: dev, min: 0, max: positionMax(ctx, osc), step: 1, unit: 'px' })
 }
