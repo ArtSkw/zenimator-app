@@ -59,6 +59,13 @@ It forces the vector pipeline into existence on the easiest input.
   elsewhere (restraint).
 - Direction matters: "L→R" depends on path vertex order. Decide whether the model
   specifies trim direction or the converter normalizes start point to leftmost.
+- **Spec-grounding for new primitives** (idea borrowed from diffusionstudio/lottie
+  v1.0.0, whose generation reliability win was "reference integration to the
+  Lottie format specification"). Feed the model a *tight, curated* schema excerpt
+  for exactly the shape types we're newly emitting — `sh` (path), `st` (stroke),
+  `gs` (gradient stroke), `tm` (trim) — not the whole spec. The model has never
+  reliably authored these; an authoritative reference for just the new shapes is
+  a cheap, high-value validity win. Applies again in WS3 for animated `sh`.
 
 ### Validation
 - #3: checkbox stroke draws 0→100 L→R; clouds fade/drift in underneath; clean
@@ -139,6 +146,77 @@ Depends on the WS1 vector pipeline already existing and being trusted.
 - #1 (full): coins unfold/roll like a fan or deck, smooth and continuous.
 
 ---
+
+---
+
+## Parallel workstream A — Motion-principles rubric (prompt craft)
+
+Not sequenced with WS1–3 — it improves **every** generation (including v1.5
+output) the moment it lands, so it can run in parallel and ship early.
+
+**What:** encode the **12 principles of animation** (Disney / Thomas & Johnston,
+*The Illusion of Life*) into the motion-design stage as craft knowledge the model
+draws on when authoring keyframes.
+
+**Where:** `prompts/motionPlan.ts` — the "designer intent" stage where the model
+decides *what moves and how*, before assembly. The principles shape the plan; the
+*why* (an arc reads more alive than a straight line; a trailing element should
+lag) is what raises proposal quality.
+
+**Aesthetic steering — decided:** the rubric is the **full vocabulary**, not a
+ZEN-restrained subset. The engine holds every principle; the **designer's prompt**
+and the **Subject/Animation axes** set the mood and intensity. A calm default
+applies only when the prompt is silent ("don't over-animate"), which is a default,
+not a capability cap. Squash/stretch and exaggeration are available like any
+other when the request calls for them.
+
+**Translate, don't paste.** Each principle must be rendered into *our* domain —
+what it means for keyframes, easing, tracks, and timing — so it's actionable, not
+prose. Mapping:
+
+| Principle | Lottie/Zenimator translation |
+|---|---|
+| Squash & stretch | non-uniform scale (X↑→Y↓) preserving volume; on impact/speed |
+| Anticipation | a small counter-move keyframe before the main action |
+| Staging | one dominant motion; don't animate competing elements (restraint) |
+| Straight-ahead / pose-to-pose | we are pose-to-pose: author extremes, ease between |
+| Follow-through / overlap | stagger child/appendage tracks to lag the parent |
+| Slow in / slow out | easing — our `EASING_BEZIER` set is exactly this lever |
+| Arcs | position paths should curve, not go straight — spatial bezier tangents (`ti`/`to`) on position keys |
+| Secondary action | low-amplitude ambient tracks under primary (blink, drift) — ties to WS2 |
+| Timing | frame counts set weight/personality; tie to fps + entry/loop length |
+| Exaggeration | amplitude dialed by prompt intent, not capped |
+| Solid drawing | respect the artwork's real anatomy/pivots — ties to WS2 |
+| Appeal | overall: clear, pleasing motion; emergent from the above |
+
+**Validation:** A/B real generations with vs. without the rubric on the five
+acceptance targets + a few v1.5 prompts; judge whether motion reads more
+intentional. This is taste work — budget evaluation time, not just authoring.
+
+## Parallel workstream B — Richer smart controls
+
+Today the only control is `ParamSlider` (numeric). Many properties are better
+expressed as a **choice, a toggle, or a dialog** than a slider — and a layer
+should surface *all* the controls that matter for it, not an arbitrary 2–3.
+
+**Engine / model work**
+- Extend `HandleMeta` (`project.ts`) with a **control kind**:
+  `'slider' | 'select' | 'switch' | 'dialog'` + per-kind config (e.g. `options`
+  for a select). The model authors the *right control* per property, not just a
+  range.
+- Drop the soft "2–4 handles" guidance: surface **the essential controls for the
+  layer**, however many that is, salience-ordered. Quality of selection over count.
+
+**UI work** (`components/controls/`, Base UI primitives already in `ui/`)
+- `ParamSelect` (dropdown) — easing curve · trim direction (L→R / R→L) · loop
+  style (loop / ping-pong / once).
+- `ParamSwitch` (toggle) — enable secondary motion (blink) · draw-on · reverse.
+- `ParamDialog` — heavier config (stroke color, multi-stop gradient) without
+  cluttering the panel; the per-keyframe editor stays the deepest escape hatch.
+- All re-skinned to the ZEN aesthetic; `render`-prop pattern, not `asChild`.
+
+**Validation:** each control kind round-trips (edit → re-assemble → preview
+updates live, geometry reused) and survives all four exporters.
 
 ## Cross-cutting
 

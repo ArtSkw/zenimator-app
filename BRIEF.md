@@ -279,6 +279,20 @@ v2.0 done bar: when all five render well from their full-SVG source, v2.0 ships.
    author tasteful path interpolation — so it lands last, after the cheaper wins
    de-risk the surrounding pipeline. **Build last.**
 
+**Two parallel tracks (same batch, not sequenced with 1–3):**
+
+- **Motion-principles rubric.** Encode the 12 principles of animation into the
+  motion-plan prompt as craft knowledge — the full vocabulary, with the
+  designer's prompt and the Subject/Animation axes (not hardcoded restraint)
+  setting the mood. Improves *every* generation, so it can ship early.
+- **Richer smart controls.** Beyond numeric sliders: typed handles
+  (slider · select · switch · dialog) so each property gets the *right* control,
+  and a layer surfaces all the essential ones — not a fixed 2–4.
+
+A reliability technique also folds into WS1: **spec-grounding** — feeding the
+model a tight Lottie-schema excerpt for the new shape primitives (`sh`/`st`/`tm`),
+an idea borrowed from diffusionstudio/lottie v1.0.0.
+
 ### v2.5 — High-quality free-hand text→Lottie (planned)
 
 Bring the **no-SVG** path to the same fidelity bar as the grounded one: a fully
