@@ -1,5 +1,14 @@
 # Zenimator — Project Brief
 
+> **This is the product brief — the PRD.** It owns *what* we're building, *why*,
+> for *whom*, and *in what order*. It is the strategic source of truth; it does
+> not carry file-level engineering detail. The buildable execution spec for the
+> next milestone lives in [`docs/v2-plan.md`](docs/v2-plan.md).
+>
+> **Where we are:** v1.5 is shipped (the Lottie generate lane). **What's next:**
+> v2.0 — the full SVG animation engine (trim paths → structure/pivots → path
+> deformation). See the roadmap below.
+
 ## What we're building
 
 An internal web tool that **generates Lottie animations from a text
@@ -263,35 +272,31 @@ v2.0 done bar: when all five render well from their full-SVG source, v2.0 ships.
 
 **Three workstreams, sequenced by leverage and risk:**
 
-1. **Trim paths (`tm`) — the highest-leverage gap.** Animate a stroke's
-   start/end 0→100% so it draws on like a pen. Unlocks #3 and #5 immediately,
-   plus every signature / underline / progress-ring / checkmark motion — a large
-   fraction of fintech UI animation. New animation primitive in the project
-   model + prompt; low risk. **Build first.**
-2. **Structural understanding + per-element pivots & sequencing.** Real ZEN SVGs
-   are deeply-nested `<g>` soup (`Group 48096319`) with color-group "objects" and
-   no semantic tags. The model must assign correct transform origins to
-   sub-objects and compose *layered* loops (primary motion + ambient blink +
-   cloud drift) that don't fight. Unlocks the layered-loop parts of #1, #2, #4.
-3. **Path / shape keyframes — geometry that deforms, not just moves.** The rope
-   bending (#2) and coins fanning like a deck (#1) change the *path itself*, not
-   just a layer transform. Keyframe vertex data. Highest risk — the model must
-   author tasteful path interpolation — so it lands last, after the cheaper wins
-   de-risk the surrounding pipeline. **Build last.**
+1. **Trim-path draw-on — the highest-leverage gap.** Make a stroke draw on like
+   a pen. Unlocks #3 and #5, plus every signature / underline / progress-ring /
+   checkmark motion — a large fraction of fintech UI animation. It also carries
+   the cost of standing up a vector layer path, so it goes **first**.
+2. **Structural understanding + per-element pivots & sequencing.** Read messy,
+   deeply-nested real-world SVGs, assign correct transform origins to
+   sub-objects, and compose *layered* loops (primary motion + ambient blink +
+   drift) that don't fight. Unlocks the layered-loop parts of #1, #2, #4.
+3. **Path / shape deformation — geometry that bends, not just moves.** The rope
+   (#2) and the fanning coins (#1) change the path itself. Highest risk (tasteful
+   path interpolation is hard), so it lands **last**, once the cheaper wins have
+   de-risked the surrounding pipeline.
 
 **Two parallel tracks (same batch, not sequenced with 1–3):**
 
-- **Motion-principles rubric.** Encode the 12 principles of animation into the
-  motion-plan prompt as craft knowledge — the full vocabulary, with the
-  designer's prompt and the Subject/Animation axes (not hardcoded restraint)
-  setting the mood. Improves *every* generation, so it can ship early.
-- **Richer smart controls.** Beyond numeric sliders: typed handles
-  (slider · select · switch · dialog) so each property gets the *right* control,
-  and a layer surfaces all the essential ones — not a fixed 2–4.
+- **Motion-principles rubric.** Give the model the full motion vocabulary (the 12
+  principles of animation) as craft knowledge — designer prompt and the
+  Subject/Animation axes set the mood, not hardcoded restraint. Improves *every*
+  generation, so it can ship early.
+- **Richer smart controls.** Beyond numeric sliders — the right *kind* of control
+  per property (slider · select · switch · dialog), and as many essential ones as
+  the layer needs, not a fixed 2–4.
 
-A reliability technique also folds into WS1: **spec-grounding** — feeding the
-model a tight Lottie-schema excerpt for the new shape primitives (`sh`/`st`/`tm`),
-an idea borrowed from diffusionstudio/lottie v1.0.0.
+The *how* — exact types, signatures, branch points, phase exit criteria, and
+per-target validation — is in [`docs/v2-plan.md`](docs/v2-plan.md).
 
 ### v2.5 — High-quality free-hand text→Lottie (planned)
 
