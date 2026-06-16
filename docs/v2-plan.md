@@ -361,9 +361,11 @@ surface *all* the controls that matter, not an arbitrary 2–4.
   the essential controls, salience-ordered. Quality over count.
 
 ### B.2 — UI (`components/controls/`)
-Base UI primitives present in `ui/`: **`select`, `dialog`, `dropdown-menu`,
-`slider`** ✅. **No `switch` primitive exists** — add `ui/switch.tsx` (Base UI
-`Switch`, ZEN-skinned) before `ParamSwitch`.
+Primitives present in `ui/`: **`select`, `dialog`, `dropdown-menu`, `slider`** ✅.
+`switch` isn't pulled in yet — add it from the shadcn registry
+(`npx shadcn add switch`, the project is shadcn `base-nova` on Base UI per
+`components.json`), don't hand-build it. **All UI pieces come from shadcn**; the
+ZEN skin then applies via the Tailwind theme as with the existing primitives.
 
 - `ParamSelect` — easing curve · **trim direction (L→R / R→L)** (ties to D1) ·
   loop style (loop / ping-pong / once).
@@ -376,7 +378,7 @@ Base UI primitives present in `ui/`: **`select`, `dialog`, `dropdown-menu`,
   on `h.control`.
 
 ### Exit criteria — Workstream B
-- [ ] `ui/switch.tsx` added and ZEN-skinned.
+- [ ] `switch` pulled from the shadcn registry (not hand-built).
 - [ ] Each control kind round-trips: edit → re-assemble → preview updates live,
       geometry reused.
 - [ ] Each control kind survives all four exporters.
