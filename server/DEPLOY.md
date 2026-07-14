@@ -54,7 +54,8 @@ token once; both persist in their browser.
   liveness `{ok:true}` unauthenticated; details only with the token.
 - **Origin allowlist** — browsers from any other origin get 403.
 - **Confined blast radius** — the agent runs `bypassPermissions` bash inside the
-  container only; nothing touches a host home directory.
+  container only; nothing touches a host home directory. The container runs as a
+  **non-root** user (`node`) — Claude Code refuses bypassed permissions under root.
 - Body/queue/SVG caps and generic error messages (no path/username leakage) are
   on by default.
 

@@ -31,11 +31,20 @@ RUN cd workbench && npm ci
 RUN mkdir -p workbench/.claude/skills \
  && cp -r workbench/skills/text-to-lottie workbench/.claude/skills/
 
+# Run as the image's built-in non-root `node` user. Claude Code REFUSES
+# --permission-mode bypassPermissions under root/sudo for security, so the engine
+# must not be root. Give `node` ownership so it can write scenes, sessions, and
+# any runtime installs the agent does.
+RUN chown -R node:node /engine
+USER node
+
 # Bind all interfaces so the platform can route to the container. This is
 # off-loopback, so agent.mjs REQUIRES STUDIO_AGENT_TOKEN at runtime (fail-closed).
+# HOME is set so Claude Code writes its config under the node user's home.
 ENV STUDIO_AGENT_HOST=0.0.0.0 \
     STUDIO_AGENT_PORT=4545 \
     STUDIO_WORKBENCH=/engine/workbench \
+    HOME=/home/node \
     NODE_ENV=production
 EXPOSE 4545
 
