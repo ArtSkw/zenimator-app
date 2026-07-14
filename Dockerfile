@@ -1,0 +1,46 @@
+# ZENimator engine — headless Claude Code driving the text-to-lottie workbench,
+# behind the zero-dep bridge (server/agent.mjs). This is the SAME engine the app
+# drives locally; the container just makes it reachable behind a bearer token,
+# and confines the model-authored bash to the container (not a host machine).
+#
+# Build:  docker build -t zenimator-engine .
+# Run:    see server/DEPLOY.md (requires STUDIO_AGENT_TOKEN + CLAUDE_CODE_OAUTH_TOKEN)
+FROM node:22-slim
+
+# The engine itself (Claude Code CLI) + git/certs for its operations.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && npm install -g @anthropic-ai/claude-code
+
+WORKDIR /engine
+
+# Root launcher (npm run agent) + the zero-dep bridge.
+COPY package.json ./
+COPY server ./server
+
+# The workbench: skill, CLAUDE.md contract, verification scripts, and its own
+# deps (CanvasKit — the server resolves it from workbench/node_modules; the
+# postinstall copies canvaskit.wasm into workbench/public where the server reads it).
+COPY workbench ./workbench
+RUN cd workbench && npm ci
+
+# Claude Code auto-loads skills from .claude/skills. The repo gitignores that
+# copy, so recreate it from the canonical skills/ — this is what carries the
+# distilled animation knowledge into every engine run.
+RUN mkdir -p workbench/.claude/skills \
+ && cp -r workbench/skills/text-to-lottie workbench/.claude/skills/
+
+# Bind all interfaces so the platform can route to the container. This is
+# off-loopback, so agent.mjs REQUIRES STUDIO_AGENT_TOKEN at runtime (fail-closed).
+ENV STUDIO_AGENT_HOST=0.0.0.0 \
+    STUDIO_AGENT_PORT=4545 \
+    STUDIO_WORKBENCH=/engine/workbench \
+    NODE_ENV=production
+EXPOSE 4545
+
+# Required at runtime (docker run -e / compose / platform secrets):
+#   STUDIO_AGENT_TOKEN        — bearer token every request must present
+#   CLAUDE_CODE_OAUTH_TOKEN   — from `claude setup-token` (subscription auth, no API key)
+#   STUDIO_ALLOWED_ORIGINS    — the app origin, e.g. https://artskw.github.io
+CMD ["node", "server/agent.mjs"]

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Animate with ZEN | ZENimator</title>
+    <!-- Warm the renderer while the user is still on the home screen: CanvasKit's
+         wasm is ~7.6 MB, and without this the FIRST canvas (opening a saved
+         project) stalls on the download. Low-priority prefetch — never competes
+         with the critical path. -->
+    <link rel="prefetch" href="/canvaskit.wasm" as="fetch" crossorigin="anonymous" />
+    <style>
+      body { margin: 0; background: #fff; }
+      html.dark body { background: #0D0D0F; }
+
+      #app-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: #fff;
+        color: #0A0A0A;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 0.6s ease;
+      }
+      html.dark #app-loader {
+        /* Must match --background / --foreground in index.css .dark block */
+        background: #0D0D0F;
+        color: #F0F0F2;
+      }
+
+      /* Sized to the composition's 810×366 aspect ratio; src/boot/splash.ts
+         fills it with a <video> (baked logo-splash-{light,dark}.webm) that fills
+         the box. The video's baked background matches #app-loader, so no box. */
+      #loader-logo {
+        width: min(320px, 70vw);
+        aspect-ratio: 810 / 366;
+      }
+
+      #root {
+        opacity: 0;
+        transition: opacity 0.6s ease;
+      }
+
+      #root.ready {
+        opacity: 1;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #app-loader  { transition: none; }
+        #root        { opacity: 1; transition: none; }
+      }
+    </style>
+    <!-- Prevent flash of unstyled content: apply theme class before first paint. -->
+    <script>
+      (function () {
+        var t = localStorage.getItem('zenimator-theme') || 'system';
+        if (t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+
+    <div id="app-loader">
+      <!-- Filled by src/boot/splash.ts with a <video> of the engine-authored
+           logo reveal (baked logo-splash-light/dark.webm), themed to match
+           #app-loader's color above. -->
+      <div id="loader-logo"></div>
+    </div>
+
+    <div id="root"></div>
+
+    <script type="module" src="/src/boot/splash.ts"></script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

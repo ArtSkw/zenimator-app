@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "text-to-lottie": {
+      "source": "diffusionstudio/lottie",
+      "sourceType": "github",
+      "skillPath": "skills/text-to-lottie/SKILL.md",
+      "computedHash": "f2c430d23a0a018bfb75c76c8330f5a649d2028ae39a45db76166c1400254faa"
+    }
+  }
+}
