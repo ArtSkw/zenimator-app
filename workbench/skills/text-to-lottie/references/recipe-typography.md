@@ -80,6 +80,38 @@ handwritten/path reveals, text morphs, counters, and short message-led scenes.
 - `text-path-follow`: text follows a curve or camera-framed path while readable.
 - `numeric-pop`: numbers scale or count in, supporting labels settle softly.
 
+## Handwritten Write-On Over Gradient Artwork (proven recipe)
+
+For hand-lettered source artwork (filled script paths, often gradient-painted),
+the accepted studio technique — field-proven on the "Live better" motto — is a
+**matte-wipe reveal over untouched artwork**:
+
+1. **Never repaint the artwork.** Each letter keeps its source paths and its
+   exact source fill — gradient included (see lottie-spec-map: preservation is
+   a requirement; gradients, static or animated, render fine on both current
+   renderers).
+2. **One matte pair per letter** (or per pen-stroke segment for letters written
+   in multiple strokes). The matte layer (`td:1`, named `<letter>__matte`) sits
+   directly before the letter layer (`tt:1`) — adjacency pairs them.
+3. **The matte is a full-canvas rect with an animated soft-edge gradient wipe**:
+   a linear `gf` whose stops go opaque→transparent over a short band (~10% of
+   the letter's width), with `s`/`e` keyframed to sweep along the letter's
+   writing direction (its ductus) — left-to-right for most Latin script,
+   angled to match the stroke. The soft leading edge is what makes it read as
+   ink flowing rather than a hard shutter.
+4. **Alternative for single-stroke or curvy glyphs**: matte with a wide
+   round-cap stroke tracing the letter's spine, revealed with an animated trim
+   (`tm`) — follows curvature exactly. Pick per letter; both matte styles can
+   coexist in one scene.
+5. **Choreography**: letters draw in writing order, each starting well before
+   the previous finishes (heavy overlap — a continuous hand never pauses
+   between letters). Ease each letter's sweep out so the ink "lands"; hold the
+   completed phrase.
+6. **Name layers for the controls system**: the `__matte` suffix and the
+   matte→letter adjacency let the app attribute Draw-on/Delay knobs to the
+   letter itself and derive scene-wide Feel and Stagger — free parametric
+   controls when the convention is followed.
+
 ## Timing And Easing
 
 - Short title/card: 60-120 frames.

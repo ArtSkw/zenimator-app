@@ -98,24 +98,28 @@ Upstream specs:
 Failure modes reproduced and isolated in this Skottie/CanvasKit build — known
 traps, each with the fix that avoids it.
 
-- **Animated gradients render nothing — but STATIC gradients render fine.** A
-  gradient fill or stroke (`gf`/`gs`) whose stops — or `s`/`e` start/end points —
-  are keyframed silently draws *nothing at all*, with no error. Only *animation
-  of the gradient itself* fails; a static gradient renders correctly. So keep the
-  gradient static and animate a trim (`tm`) or a mask/matte *over* it.
+- **Gradients are fully supported — static AND animated (re-verified 2026-07-14
+  on both current renderers: the headless previewer's CanvasKit 0.41 and the
+  app player's 0.39).** `gf`/`gs` with keyframed `s`/`e` sweep points, keyframed
+  stops (`g.k` with `a:1`), gradient strokes under an animated trim — all render
+  correctly. An earlier note here claimed animated gradients draw nothing; that
+  was a stale-build artifact and must not be used as a reason to avoid or
+  simplify gradients. House preference for *reveals* is still a static gradient
+  on the artwork with the motion in a trim (`tm`) or matte *over* it — not
+  because animation fails, but because the app's parametric controls (Draw-on,
+  Delay, Feel, Stagger) understand trim and matte-sweep mechanics and can retime
+  them; a hand-animated gradient on the artwork itself is opaque to those knobs.
   - **Preserve the source's gradient paint — this is a REQUIREMENT, not a
     judgment call.** If the artwork ships per-path gradient fills (tapers, sheens,
     highlights), the output MUST keep them: source-paint fidelity is part of the
     deliverable. When the animation is a *reveal* or *transform* (draw-on, wipe,
     move, scale, rotate — none of which touch the fill), carry each path's
     gradient through **unchanged** and reveal/transform *over* it. **Do NOT
-    flatten to a solid color.** "The gradient is subtle / just a highlight" and
-    "there are N gradients, that's more work" are **NOT** acceptable reasons to
-    flatten — port every one; the work is the job. The *only* time flattening is
-    allowed is when the brief requires animating the gradient's own stops (which
-    doesn't render — rare); otherwise a flattened result that shipped with
-    gradients in the source is a defect. Verify against the source: if the source
-    has a gradient and your render is flat, you have regressed the artwork.
+    flatten to a solid color.** "The gradient is subtle / just a highlight",
+    "there are N gradients, that's more work", and "animated gradients are
+    risky" are **NOT** acceptable reasons to flatten — port every one; the work
+    is the job. Verify against the source: if the source has a gradient and your
+    render is flat, you have regressed the artwork.
 - **Descending or out-of-order keyframe `t` silently freezes the property.** No
   error is raised; the property (and any sibling built the same way) simply
   stops animating. Assert `t` is strictly monotonic before trusting a track. In
