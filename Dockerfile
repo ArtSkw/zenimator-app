@@ -50,6 +50,8 @@ EXPOSE 4545
 
 # Required at runtime (docker run -e / compose / platform secrets):
 #   STUDIO_AGENT_TOKEN        — bearer token every request must present
-#   CLAUDE_CODE_OAUTH_TOKEN   — from `claude setup-token` (subscription auth, no API key)
+#   Claude auth — set ONE (if both are set the API key wins):
+#     ANTHROPIC_API_KEY       — workspace API key (metered; team default)
+#     CLAUDE_CODE_OAUTH_TOKEN — from `claude setup-token` (subscription auth)
 #   STUDIO_ALLOWED_ORIGINS    — the app origin, e.g. https://artskw.github.io
 CMD ["node", "server/agent.mjs"]

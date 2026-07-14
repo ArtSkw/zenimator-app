@@ -2,7 +2,8 @@
 #
 #   1. Put your secrets in a .env next to this file (see server/DEPLOY.md):
 #        STUDIO_AGENT_TOKEN=<a long random string>
-#        CLAUDE_CODE_OAUTH_TOKEN=<output of: claude setup-token>
+#        ANTHROPIC_API_KEY=<workspace API key>          # team default (metered)
+#        # or CLAUDE_CODE_OAUTH_TOKEN=<claude setup-token>  # subscription auth
 #   2. docker compose up --build
 #
 # The app (GitHub Pages) then points Settings → Studio engine at this host's
@@ -13,10 +14,12 @@ services:
     ports:
       - "4545:4545"
     environment:
-      # Required — the service fails closed without the token (it binds 0.0.0.0),
-      # and the CLI can't authenticate without the OAuth token.
+      # Required — the service fails closed without the bearer token (binds 0.0.0.0).
       STUDIO_AGENT_TOKEN: ${STUDIO_AGENT_TOKEN:?set STUDIO_AGENT_TOKEN}
-      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set CLAUDE_CODE_OAUTH_TOKEN}
+      # Claude auth — set ONE (the engine prefers the API key when both exist;
+      # an unset var passes through empty and is ignored).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       # The browser origin(s) allowed to drive the engine (comma-separated).
       STUDIO_ALLOWED_ORIGINS: ${STUDIO_ALLOWED_ORIGINS:-https://artskw.github.io}
     restart: unless-stopped
