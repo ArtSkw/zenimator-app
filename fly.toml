@@ -1,7 +1,7 @@
 # Fly.io deploy for the ZENimator engine (Dockerfile-based). Full runbook in
-# server/DEPLOY.md. The app name must be globally UNIQUE on Fly — if
-# "zenimator-engine" is taken, change it here; your URL is https://<name>.fly.dev.
-app = "zenimator-engine"
+# server/DEPLOY.md. App name matches what Fly's GitHub integration created; your
+# engine URL is https://<app>.fly.dev.
+app = "zenimator-app"
 primary_region = "iad"   # pick one near your team — `fly platform regions` lists them
 
 [build]
@@ -24,5 +24,7 @@ primary_region = "iad"   # pick one near your team — `fly platform regions` li
 
 [[vm]]
   cpu_kind = "shared"
-  cpus = 2
-  memory = "2gb"             # node + CanvasKit raster + the agent's build scripts
+  cpus = 1
+  memory_mb = 2048          # explicit MiB (the "2gb" string tripped the deploy path);
+                            # 1 vCPU / 2 GB — plenty for a test engine, bump later with:
+                            #   fly scale vm shared-cpu-2x --memory 2048 -a zenimator-app
