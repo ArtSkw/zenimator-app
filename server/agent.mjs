@@ -450,6 +450,7 @@ function runClaude({ job, prompt, resumeId, model, effort, send, end }) {
   let sessionId = resumeId ?? null
   let sceneReady = null
   let resultText = ''
+  let stderrTail = '' // kept for the terminal error so a failed run says WHY
 
   child.stdout.on('data', (chunk) => {
     buffer = capBuffer(buffer + chunk.toString())
@@ -489,7 +490,10 @@ function runClaude({ job, prompt, resumeId, model, effort, send, end }) {
 
   child.stderr.on('data', (chunk) => {
     const text = chunk.toString().trim()
-    if (text) send({ type: 'status', text: text.slice(0, 300) })
+    if (text) {
+      stderrTail = (stderrTail + '\n' + text).slice(-800) // last ~800 chars for the error
+      send({ type: 'status', text: text.slice(0, 300) })
+    }
   })
 
   child.on('close', async (code) => {
@@ -532,7 +536,7 @@ function runClaude({ job, prompt, resumeId, model, effort, send, end }) {
         text:
           code === 0
             ? `The engine finished but no scene landed at projects/${scene}. Last output: ${resultText.slice(0, 400)}`
-            : `The engine exited with code ${code}. ${resultText.slice(0, 400)}`,
+            : `The engine exited with code ${code}. ${(resultText || stderrTail || 'No output — often a Claude auth problem in the container (CLAUDE_CODE_OAUTH_TOKEN).').slice(0, 600)}`,
       })
     }
     end()
