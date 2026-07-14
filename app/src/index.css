@@ -128,6 +128,14 @@
   background-image: repeating-conic-gradient(#1C1C20 0% 25%, #222226 0% 50%);
 }
 
+/* Toast description — sonner hardcodes a dark gray (#3f3f3f) for its light
+   theme, unreadable on our popover background. Follow the popover foreground
+   instead (extra attribute selectors outrank sonner's own rule). */
+.cn-toast[data-sonner-toast][data-styled='true'] [data-description] {
+  color: var(--popover-foreground);
+  opacity: 0.85;
+}
+
 /* Utility: tabular monospace numbers for precision values */
 .tabular-nums {
   font-variant-numeric: tabular-nums;

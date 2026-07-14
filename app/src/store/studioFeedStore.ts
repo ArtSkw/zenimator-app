@@ -46,7 +46,9 @@ export const useStudioFeed = create<StudioFeedState>((set, get) => ({
   expanded: false,
   queuedPosition: null,
 
-  begin: () => set({ entries: [], live: true, expanded: true, queuedPosition: null }),
+  // Starts collapsed — the header's live pulse says work is happening; the
+  // detail stream stays one click away so the initial screen keeps its calm.
+  begin: () => set({ entries: [], live: true, expanded: false, queuedPosition: null }),
 
   push: (e) => {
     const { entries } = get()
