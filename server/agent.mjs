@@ -384,6 +384,30 @@ const cleanEffort = (e) => (typeof e === 'string' && EFFORT_LEVELS.has(e) ? e : 
  *  overhead the workbench never uses (its tools are bash + the skill). */
 const SPAWN_FLAGS = ['--verbose', '--permission-mode', 'bypassPermissions', '--strict-mcp-config']
 
+/** Environment for every engine spawn, carrying exactly ONE Claude auth method.
+ *  When a workspace API key is set (the team default — its own rate limits and
+ *  spend controls, so parallel runs don't contend on one subscription), we drop
+ *  CLAUDE_CODE_OAUTH_TOKEN from the child so a lingering subscription secret
+ *  can't create an ambiguous both-set pairing (Claude Code warns on the
+ *  conflict and the precedence is easy to get wrong). With no API key present,
+ *  the subscription token is passed through unchanged — either secret works,
+ *  the API key just wins when both exist. */
+function claudeSpawnEnv() {
+  const env = { ...process.env }
+  if (env.ANTHROPIC_API_KEY) {
+    // Workspace key present → it's the sole auth; drop the subscription token.
+    delete env.CLAUDE_CODE_OAUTH_TOKEN
+  } else {
+    // No usable key. Delete it outright rather than leave an EMPTY value — an
+    // empty ANTHROPIC_API_KEY still occupies the top precedence slot and would
+    // make Claude Code try to authenticate with an empty key (compose/platform
+    // secrets commonly inject unset vars as ""). Removing it lets the
+    // subscription token authenticate cleanly.
+    delete env.ANTHROPIC_API_KEY
+  }
+  return env
+}
+
 /** Cap the pending (no-newline-yet) stdout buffer. A prompt-steered engine
  *  could emit one enormous single-line event; client-facing slices don't help
  *  until the line completes. Past the cap, drop the head — the mangled line
@@ -398,7 +422,7 @@ function runProposeClaude({ job, prompt, model, effort, send, end }) {
   const child = spawn('claude', [
     '-p', prompt, '--output-format', 'stream-json',
     '--model', cleanModel(model), '--effort', cleanEffort(effort), ...SPAWN_FLAGS,
-  ], { cwd: WORKBENCH, env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'] })
+  ], { cwd: WORKBENCH, env: claudeSpawnEnv(), stdio: ['ignore', 'pipe', 'pipe'] })
   job.child = child
 
   let buffer = ''
@@ -458,7 +482,7 @@ function runClaude({ job, prompt, resumeId, model, effort, send, end }) {
 
   const child = spawn('claude', args, {
     cwd: WORKBENCH,
-    env: { ...process.env },
+    env: claudeSpawnEnv(),
     stdio: ['ignore', 'pipe', 'pipe'], // no stdin — silences the piping warning
   })
   job.child = child
@@ -554,7 +578,7 @@ function runClaude({ job, prompt, resumeId, model, effort, send, end }) {
         text:
           code === 0
             ? `The engine finished but no scene landed at projects/${scene}. Last output: ${resultText.slice(0, 400)}`
-            : `The engine exited with code ${code}. ${(resultText || stderrTail || 'No output — often a Claude auth problem in the container (CLAUDE_CODE_OAUTH_TOKEN).').slice(0, 600)}`,
+            : `The engine exited with code ${code}. ${(resultText || stderrTail || 'No output — often a Claude auth problem in the container (set ANTHROPIC_API_KEY, or CLAUDE_CODE_OAUTH_TOKEN for subscription auth).').slice(0, 600)}`,
       })
     }
     end()
@@ -574,7 +598,7 @@ function generateTitle(prompt, model) {
     let child
     try {
       child = spawn('claude', ['-p', p, '--model', cleanModel(model), '--effort', 'low', '--strict-mcp-config'], {
-        cwd: tmpdir(), env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: tmpdir(), env: claudeSpawnEnv(), stdio: ['ignore', 'pipe', 'pipe'],
       })
     } catch { resolve(''); return }
     let out = ''
