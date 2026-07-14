@@ -13,22 +13,25 @@ and fields.
 | GET | `/scene/<slug>` | — | the scene's `lottie.json` (404 `{}` if absent) |
 | GET | `/history/<slug>` | — | `{versions:[{v, at, note}]}` — edit snapshots, oldest first (v1.1) |
 | GET | `/dossier/<slug>` | — | `{doc, script, versions}` — learnings doc + build script + history (v1.1) |
-| POST | `/generate` | `{slug, svg, brief, kind, model?}` | NDJSON event stream |
-| POST | `/propose` | `{slug, svg, model?}` | NDJSON stream ending in a `proposal` event (v1.1) |
-| POST | `/edit` | `{slug, instruction, frame?, layer?, model?}` | NDJSON event stream |
+| POST | `/generate` | `{slug, svg, brief, kind, model?, effort?}` | NDJSON event stream |
+| POST | `/propose` | `{slug, svg, model?, effort?}` | NDJSON stream ending in a `proposal` event (v1.1) |
+| POST | `/edit` | `{slug, instruction, frame?, layer?, model?, effort?}` | NDJSON event stream |
 | POST | `/revert` | `{slug, version}` | `{ok, lottieJson, versions}` or `{ok:false, error}` (v1.1) |
 | POST | `/cancel` | `{slug}` | `{ok}` — `true` if a queued/running job was cancelled |
 
 `kind` is `'loop' \| 'entry'`. Slugs are normalized server-side (lowercase,
 `[a-z0-9-]`, ≤48 chars).
 
-**Model (additive):** the three job endpoints accept an optional `model`
-(a Claude model id, e.g. `claude-sonnet-5`) passed to the engine as `--model`.
-Absent or malformed values fall back to the service default
-(`claude-sonnet-5`) — never to the machine's global CLI default, which tracks
-the owner's interactive model switches. Engine spawns also run with
-`--strict-mcp-config` so user/global MCP servers are never inherited (their
-startup + tool definitions would tax every request for nothing).
+**Model & effort (additive):** the three job endpoints accept optional `model`
+(a Claude model id, e.g. `claude-sonnet-5`, passed as `--model`) and `effort`
+(one of `low`/`medium`/`high`/`xhigh`/`max`, passed as `--effort`). Absent or
+malformed values fall back to the service defaults (`claude-sonnet-5`,
+`high`) — never to the machine's ambient CLI state, which tracks the owner's
+interactive switches. `high` is deliberate: the quality/speed sweet spot,
+faster than the CLI's `xhigh` default while still running the full
+write→run→look→fix loop. Engine spawns also run with `--strict-mcp-config` so
+user/global MCP servers are never inherited (their startup + tool definitions
+would tax every request for nothing).
 
 **Edit anchoring (v1.1, optional):** `/edit` accepts `frame` (integer — the
 agent renders that frame with `--zoom 3` and looks before editing) and `layer`

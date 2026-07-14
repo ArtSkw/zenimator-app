@@ -87,9 +87,13 @@ async function streamRequest(
   const res = await fetch(`${baseUrl()}${path}`, {
     method: 'POST',
     headers: authHeaders(true),
-    // Every engine job carries the Settings model — without it the service
-    // falls back to ITS default rather than the machine's global CLI default.
-    body: JSON.stringify({ model: useSettingsStore.getState().model, ...(body as object) }),
+    // Every engine job carries the Settings model + effort — without them the
+    // service falls back to ITS defaults rather than the machine's ambient CLI state.
+    body: JSON.stringify({
+      model: useSettingsStore.getState().model,
+      effort: useSettingsStore.getState().effort,
+      ...(body as object),
+    }),
     signal,
   })
   if (!res.ok || !res.body) {
@@ -205,7 +209,11 @@ export async function studioPropose(
   const res = await fetch(`${baseUrl()}/propose`, {
     method: 'POST',
     headers: authHeaders(true),
-    body: JSON.stringify({ model: useSettingsStore.getState().model, ...params }),
+    body: JSON.stringify({
+      model: useSettingsStore.getState().model,
+      effort: useSettingsStore.getState().effort,
+      ...params,
+    }),
     signal,
   })
   if (!res.ok || !res.body) throw new Error(`Studio engine unreachable (${res.status}). Start it with: npm run agent`)
