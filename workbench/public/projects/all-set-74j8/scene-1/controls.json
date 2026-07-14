@@ -1,0 +1,31 @@
+{
+  "controls": [
+    {
+      "sid": "accentColor",
+      "label": "Accent color"
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "body-root",
+      "kind": "amount",
+      "property": "position",
+      "label": "Jump height",
+      "description": "How high Zenek springs at each beat."
+    },
+    {
+      "target": "body-root",
+      "kind": "amount",
+      "property": "rotation",
+      "label": "Sway lean",
+      "description": "How far he tilts left/right at the top of each jump."
+    },
+    {
+      "target": "shadow",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Shadow pulse",
+      "description": "How much the ground shadow tightens and spreads with the jump."
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="240" viewBox="0 0 375 240" fill="none">
+<g id="Variant=4" clip-path="url(#clip0_11506_25160)">
+<g id="Group 13272">
+<path id="Vector" d="M23.3254 139.47H35.1928C34.6504 138.06 34.3531 136.529 34.3531 134.928C34.3531 127.942 40.0156 122.28 47.0016 122.28C49.4656 122.28 51.7567 122.995 53.7012 124.213C53.7698 111.312 64.2469 100.874 77.1642 100.874C88.1315 100.874 97.3391 108.398 99.9119 118.565C102.518 116.844 105.636 115.836 108.991 115.836C118.103 115.836 125.489 123.222 125.489 132.333C125.489 135.019 124.847 137.554 123.709 139.795H138.462" stroke="#222222" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_2" d="M17.8128 139.793H9.37988" stroke="#222222" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_3" d="M153.382 139.793H144.949" stroke="#222222" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="Group 48096320">
+<path id="Vector_4" d="M260.956 71.9865H270.176C269.755 70.8908 269.524 69.7013 269.524 68.4577C269.524 63.0302 273.923 58.6309 279.351 58.6309C281.265 58.6309 283.045 59.1866 284.556 60.1331C284.609 50.1097 292.749 42 302.785 42C311.306 42 318.459 47.8459 320.458 55.7451C322.483 54.4077 324.905 53.6244 327.512 53.6244C334.591 53.6244 340.329 59.3628 340.329 66.4418C340.329 68.5281 339.831 70.4978 338.946 72.2388H350.408" stroke="#222222" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_5" d="M362 72.2371H355.449" stroke="#222222" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_6" d="M239.286 72.2371H232.734" stroke="#222222" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="Group 1000007566">
+<path id="Ellipse 2240" d="M274.998 121.717C274.707 138.381 269.681 154.618 260.506 168.531C251.332 182.445 238.388 193.461 223.186 200.293C207.985 207.125 191.153 209.491 174.657 207.114C158.161 204.736 142.682 197.715 130.028 186.869C117.374 176.023 108.067 161.8 103.194 145.862C98.3214 129.924 98.0841 112.929 102.51 96.8607C106.936 80.7929 115.842 66.3159 128.189 55.1209C140.535 43.9258 155.812 36.4748 172.235 33.6381" stroke="url(#paint0_linear_11506_25160)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_7" fill-rule="evenodd" clip-rule="evenodd" d="M171.598 40.9007L172.927 40.6102C173.942 40.3903 174.641 39.919 175.165 39.1741C175.687 38.4851 176.032 37.5674 176.278 36.584C176.506 35.6583 176.922 34.8006 177.543 34.1641C178.928 32.8237 181.411 32.8238 182.483 32.0237C183.145 31.4978 183.613 30.7433 183.734 29.7851C183.855 28.827 183.625 27.581 182.985 26.8694C182.349 26.1481 181.189 25.6893 180.091 25.6626C176.206 25.7631 173.143 26.1508 168.497 27.1636C161.491 28.6907 163.188 42.2312 171.598 40.9007Z" fill="#22E243"/>
+<path id="Vector_8" d="M191 31.0453C192.538 30.7675 193.56 29.2951 193.282 27.7566C193.004 26.2181 191.532 25.1961 189.994 25.4739C188.456 25.7517 187.434 27.2241 187.712 28.7626C187.99 30.3011 189.462 31.3231 191 31.0453Z" fill="#22E243"/>
+<circle id="Ellipse 2242" cx="272.5" cy="119.5" r="9.5" fill="#22E243"/>
+</g>
+<path id="Stroke 13" d="M265.438 38.4088C265.438 38.4088 199.082 176.091 164.551 158.477C142.332 147.143 152.707 109.99 152.707 109.99" stroke="url(#paint1_linear_11506_25160)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_11506_25160" x1="199" y1="114" x2="11.4997" y2="240" gradientUnits="userSpaceOnUse">
+<stop stop-color="#22E243"/>
+<stop offset="0.15694" stop-color="#22E243"/>
+<stop offset="0.73997" stop-color="#0A9F24"/>
+<stop offset="1" stop-color="#22E243" stop-opacity="0.2"/>
+</linearGradient>
+<linearGradient id="paint1_linear_11506_25160" x1="187.872" y1="138.901" x2="146.491" y2="118.035" gradientUnits="userSpaceOnUse">
+<stop stop-color="#22E243"/>
+<stop offset="1" stop-color="#22E243"/>
+</linearGradient>
+<clipPath id="clip0_11506_25160">
+<rect width="375" height="240" fill="white"/>
+</clipPath>
+</defs>
+</svg>

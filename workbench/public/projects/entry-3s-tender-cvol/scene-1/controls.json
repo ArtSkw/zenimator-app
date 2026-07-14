@@ -1,0 +1,24 @@
+{
+  "controls": [
+    {
+      "sid": "accentColor",
+      "label": "Ribbon & accent color"
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "phone",
+      "kind": "amount",
+      "property": "rotation",
+      "label": "Breathing sway",
+      "description": "How far the phone gently sways and rises as it breathes."
+    },
+    {
+      "target": "leaf-dot-accent",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Accent pop",
+      "description": "How much the leaf and dot bounce in once the ribbon finishes."
+    }
+  ]
+}
