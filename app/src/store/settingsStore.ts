@@ -17,7 +17,6 @@ export type Effort = (typeof EFFORT_LEVELS)[number];
 const SUPERSEDED_DEFAULTS = new Set(['claude-sonnet-4-6']);
 
 type SettingsState = {
-  apiKey: string;
   model: string;
   /** Per-turn reasoning depth passed to the engine (see DEFAULT_EFFORT). */
   effort: Effort;
@@ -28,7 +27,6 @@ type SettingsState = {
    *  baked into the build — entered here at runtime, since the app ships public. */
   agentToken: string;
 
-  setApiKey: (key: string) => void;
   setModel: (model: string) => void;
   setEffort: (effort: Effort) => void;
   setAgentUrl: (url: string) => void;
@@ -38,13 +36,11 @@ type SettingsState = {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      apiKey: '',
       model: DEFAULT_MODEL,
       effort: DEFAULT_EFFORT,
       agentUrl: '',
       agentToken: '',
 
-      setApiKey: (apiKey) => set({ apiKey }),
       setModel: (model) => set({ model }),
       setEffort: (effort) => set({ effort }),
       setAgentUrl: (agentUrl) => set({ agentUrl: agentUrl.trim().replace(/\/+$/, '') }),
@@ -53,13 +49,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'zenimator.settings',
       version: 1,
-      // The API key is OPTIONAL — it powers only background project-title
-      // naming (generation/edit run on the local `claude` login, never this
-      // key). It persists in this localStorage slot, readable by same-origin
-      // scripts; acceptable for a local single-user tool. Clearing it in
-      // Settings wipes it. Hosted phases (v3.0) move key handling server-side.
       partialize: (s) => ({
-        apiKey: s.apiKey,
         model: s.model,
         effort: s.effort,
         agentUrl: s.agentUrl,
