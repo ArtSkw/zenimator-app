@@ -32,11 +32,13 @@ agent that built it, and exports as Lottie JSON, HTML, WebM, or GIF.
 - **Refine by talking.** "Wider bag sway, blink twice per loop" resumes the
   same session that built the scene — it edits its build script, re-runs, and
   re-checks its frames before answering.
-- **Smart controls.** Duration for the whole scene, plus per-layer knobs
-  (movement, rotation, scale, speed) derived from the motion that's actually
-  there — never a dead slider.
+- **Smart, contextual controls.** Duration and entrance *Feel*, per-layer knobs
+  (movement, rotation, scale, speed, draw-on) derived from the motion that's
+  actually there, plus bespoke controls the agent authors for the specific
+  scene — never a dead slider.
 - **Export anywhere.** Lottie JSON for web/iOS/Android players, plus
-  standalone HTML, WebM, or GIF. Projects are saved locally.
+  standalone HTML, WebM, or GIF — cancel mid-render if you change your mind.
+  Projects are saved locally.
 
 ---
 
@@ -66,7 +68,19 @@ activity feed shows you exactly what the agent is doing.
 
 ## Release notes
 
-### v1.0 — current
+### v1.1 — current
+
+Richer, scene-aware controls and truer source fidelity.
+
+- **Contextual controls.** Beyond Duration: an entrance *Feel*, a *Stagger* for
+  write-on sequences, and bespoke per-scene knobs the agent authors itself —
+  each grounded in the motion it actually made.
+- **Handwritten write-ons that keep your gradients.** Lettering draws on stroke
+  by stroke over the original artwork, source gradients preserved, not flattened.
+- **Cancellable exports.** Stop a WebM or GIF render mid-progress from the toast.
+- **UI polish.** Clearer activity feed, tidier sidebar, and consistent controls.
+
+### v1.0
 
 The daily tool: everything runs through the agent engine, and you can see it
 work.
