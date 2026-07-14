@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Loader2, PlugZap, Check, X } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -38,7 +39,10 @@ export function EngineConnectDialog() {
     const s = await studioPreflight()
     setChecking(false)
     setResult(s)
-    if (s === 'ok') hide()
+    if (s === 'ok') {
+      toast.success('Studio engine connected', { description: 'Attach an SVG and describe the motion to generate.' })
+      hide()
+    }
   }
 
   const unreachable = reason === 'unreachable'
