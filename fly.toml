@@ -1,0 +1,28 @@
+# Fly.io deploy for the ZENimator engine (Dockerfile-based). Full runbook in
+# server/DEPLOY.md. The app name must be globally UNIQUE on Fly — if
+# "zenimator-engine" is taken, change it here; your URL is https://<name>.fly.dev.
+app = "zenimator-engine"
+primary_region = "iad"   # pick one near your team — `fly platform regions` lists them
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 4545       # the engine binds 0.0.0.0:4545 (set in the Dockerfile)
+  force_https = true         # the app is HTTPS, so the engine must be too
+  auto_stop_machines = "off" # generations run for minutes — never sleep mid-run
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # Liveness probe: /health answers {ok:true} without a token (details need auth).
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 2
+  memory = "2gb"             # node + CanvasKit raster + the agent's build scripts
