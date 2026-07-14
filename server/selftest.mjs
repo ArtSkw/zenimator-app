@@ -70,6 +70,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
   // checks that restoring v1 brings back the ORIGINAL bytes, not a later edit.
   const marker = Math.random().toString(36).slice(2)
   writeFileSync(join(dir, 'lottie.json'), JSON.stringify({ v: '5.7.0', fr: 60, ip: 0, op: 10, w: 100, h: 100, nm: slug, marker, assets: [], layers: [] }))
+  // Agent-authored controls spec — the service must attach it to done (v1.2).
+  writeFileSync(join(dir, 'controls.json'), JSON.stringify({ layerControls: [{ target: 'hero', kind: 'amount', property: 'rotation', label: 'Sway for ' + slug }] }))
   // Durable artifacts the dossier surfaces.
   try {
     mkdirSync(join(process.cwd(), 'scripts'), { recursive: true }); writeFileSync(join(process.cwd(), 'scripts', 'build-' + slug + '.mjs'), '// stub build script for ' + slug)
@@ -157,6 +159,7 @@ try {
     check('generate: preview frame event streamed', Boolean(preview?.dataUrl?.startsWith('data:image/png;base64,')))
     const done = events.at(-1)
     check('generate: done carries parseable scene', done?.scene === 'selftest-a/scene-1' && Boolean(JSON.parse(done.lottieJson ?? '{}').layers))
+    check('generate: done carries the controls spec (v1.2)', JSON.parse(done?.controlsJson ?? '{}').layerControls?.[0]?.label === 'Sway for selftest-a')
     check('generate: every event carries jobId', events.every((e) => typeof e.jobId === 'string' && e.jobId.length > 0))
     // Spawn flags: the request's model must reach the engine, and global MCP
     // servers must never be inherited (latency/token tax on every request).

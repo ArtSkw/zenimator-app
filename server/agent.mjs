@@ -169,6 +169,24 @@ function readHistory(slug) {
   try { return JSON.parse(readFileSync(p, 'utf8')) } catch { return [] }
 }
 
+/** The agent-authored controls spec (controls.json beside the scene) as an
+ *  optional `{ controlsJson }` payload fragment for `done` events and revert
+ *  responses — additive: `{}` when absent, oversized, or unparseable. The app
+ *  validates and grounds the spec against real keyframes before using it. */
+const CONTROLS_JSON_CAP = 64_000
+function controlsPayload(scene) {
+  const p = join(WORKBENCH, 'public/projects', scene, 'controls.json')
+  if (!existsSync(p)) return {}
+  try {
+    const raw = readFileSync(p, 'utf8')
+    if (raw.length > CONTROLS_JSON_CAP) return {}
+    JSON.parse(raw)
+    return { controlsJson: raw }
+  } catch {
+    return {}
+  }
+}
+
 /** The scene's "how it was made" dossier: the learnings doc the agent wrote,
  *  the build script that produced it, and the version history. Any part may be
  *  null when absent. */
@@ -526,7 +544,7 @@ function runClaude({ job, prompt, resumeId, model, effort, send, end }) {
       try {
         const lottieJson = readFileSync(scenePath, 'utf8')
         JSON.parse(lottieJson)
-        send({ type: 'done', scene, sessionId, lottieJson })
+        send({ type: 'done', scene, sessionId, lottieJson, ...controlsPayload(scene) })
       } catch (e) {
         send({ type: 'error', text: `Scene produced but unreadable: ${e.message}` })
       }
@@ -837,7 +855,7 @@ const server = createServer(async (req, res) => {
         const lottieJson = readFileSync(snap, 'utf8')
         JSON.parse(lottieJson)
         writeFileSync(current, lottieJson)
-        return res.end(JSON.stringify({ ok: true, lottieJson, versions: readHistory(slug) }))
+        return res.end(JSON.stringify({ ok: true, lottieJson, versions: readHistory(slug), ...controlsPayload(`${slug}/scene-1`) }))
       } catch (e) {
         return res.end(JSON.stringify({ ok: false, error: String(e?.message ?? e) }))
       }

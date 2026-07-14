@@ -16,7 +16,7 @@ and fields.
 | POST | `/generate` | `{slug, svg, brief, kind, model?, effort?}` | NDJSON event stream |
 | POST | `/propose` | `{slug, svg, model?, effort?}` | NDJSON stream ending in a `proposal` event (v1.1) |
 | POST | `/edit` | `{slug, instruction, frame?, layer?, model?, effort?}` | NDJSON event stream |
-| POST | `/revert` | `{slug, version}` | `{ok, lottieJson, versions}` or `{ok:false, error}` (v1.1) |
+| POST | `/revert` | `{slug, version}` | `{ok, lottieJson, versions, controlsJson?}` or `{ok:false, error}` (v1.1; `controlsJson` added v1.2) |
 | POST | `/cancel` | `{slug}` | `{ok}` — `true` if a queued/running job was cancelled |
 | POST | `/title` | `{prompt, model?}` | `{title}` — a 3–5 word project name from the prompt, generated on the engine (no browser API key); `""` on failure |
 
@@ -53,7 +53,7 @@ One JSON object per line. Every event of an accepted job carries `jobId`
 | `queued` | `position` | job is waiting for a concurrency slot (1 = next); re-sent when the position advances |
 | `preview` | `dataUrl`, `file` | one of the agent's own verification frames (PNG data URL, longest side ≤512px) |
 | `proposal` | `text` | terminal (`/propose` only): the agent's proposed brief |
-| `done` | `scene`, `sessionId`, `lottieJson` | terminal: the produced scene |
+| `done` | `scene`, `sessionId`, `lottieJson`, `controlsJson?` | terminal: the produced scene; `controlsJson` (v1.2, optional) is the scene's raw `controls.json` when one exists — carries the agent-authored `layerControls` spec |
 | `cancelled` | — | terminal: job cancelled (client abort or `/cancel`) |
 | `error` | `text` | terminal: no scene was produced |
 

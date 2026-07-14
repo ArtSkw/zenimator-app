@@ -64,6 +64,18 @@ export async function createLayerBoundsSampler(
     }
   }
 
+  // Track mattes: a matted layer (`tt`) is invisible without its matte SOURCE —
+  // the layer directly before it in the array (`td:1`). Keep those too, else
+  // isolating a letter under a wipe matte renders zero pixels and the selection
+  // box never appears. Descending so chained mattes propagate.
+  for (let i = layers.length - 1; i >= 1; i--) {
+    const l = layers[i] as Layer & { tt?: number }
+    if (l.tt && l.ind != null && keep.has(l.ind)) {
+      const m = layers[i - 1]
+      if (m.ind != null) keep.add(m.ind)
+    }
+  }
+
   // Hide everything else (opacity 0). Mutating our own parsed copy only.
   for (const l of layers) {
     if (l.ind != null && !keep.has(l.ind)) l.ks = { ...(l.ks ?? {}), o: { a: 0, k: 0 } }
