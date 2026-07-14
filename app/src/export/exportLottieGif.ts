@@ -17,7 +17,7 @@ export type GifResult = {
  */
 export async function exportLottieGif(
   lottieJson: string,
-  opts: { loop?: boolean } = {},
+  opts: { loop?: boolean; signal?: AbortSignal } = {},
   onProgress?: (progress: number) => void,
 ): Promise<GifResult> {
   const src = await createLottieFrameSource(lottieJson, { maxDim: MAX_DIM })
@@ -34,6 +34,8 @@ export async function exportLottieGif(
     const gif = GIFEncoder()
 
     for (let frame = 0; frame < totalFrames; frame++) {
+      // Bail cleanly if the user cancelled — src.dispose() runs in finally.
+      if (opts.signal?.aborted) throw new DOMException('Export cancelled', 'AbortError')
       renderFrame(frame)
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, w, h)

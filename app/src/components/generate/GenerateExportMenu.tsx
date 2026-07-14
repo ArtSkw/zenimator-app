@@ -14,6 +14,12 @@ import {
 import { downloadLottieHtml } from '@/export/exportLottieHtml'
 import { bakeLottieJson } from '@/store/generateStore'
 
+/** True when an export rejected because the user hit Cancel (AbortError),
+ *  distinguishing a deliberate stop from a genuine failure. */
+function isAbort(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError'
+}
+
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -43,11 +49,15 @@ export function GenerateExportMenu({ loop }: { loop: boolean }) {
   const handleGif = async () => {
     if (busy) return
     setBusy('gif')
-    const id = toast.loading('Encoding GIF…')
+    const controller = new AbortController()
+    // Re-pass the Cancel action on every toast.loading update, else it vanishes
+    // when the percentage ticks. Clicking Cancel dismisses the toast + aborts.
+    const cancel = { label: 'Cancel', onClick: () => controller.abort() }
+    const id = toast.loading('Encoding GIF…', { cancel })
     try {
       const { exportLottieGif } = await import('@/export/exportLottieGif')
-      const { blob, oversized, sizeKb } = await exportLottieGif(bakeLottieJson(), { loop }, (p) =>
-        toast.loading(`Encoding GIF… ${Math.round(p * 100)}%`, { id }),
+      const { blob, oversized, sizeKb } = await exportLottieGif(bakeLottieJson(), { loop, signal: controller.signal }, (p) =>
+        toast.loading(`Encoding GIF… ${Math.round(p * 100)}%`, { id, cancel }),
       )
       triggerDownload(blob, `zenimator-${Date.now()}.gif`)
       if (oversized) {
@@ -56,8 +66,11 @@ export function GenerateExportMenu({ loop }: { loop: boolean }) {
         toast.success(`GIF exported (${sizeKb} KB)`, { id })
       }
     } catch (err) {
-      console.error('[zenimator] lottie gif export error:', err)
-      toast.error('GIF export failed — check console', { id })
+      if (isAbort(err)) toast.dismiss(id)
+      else {
+        console.error('[zenimator] lottie gif export error:', err)
+        toast.error('GIF export failed — check console', { id })
+      }
     } finally {
       setBusy(null)
     }
@@ -66,17 +79,22 @@ export function GenerateExportMenu({ loop }: { loop: boolean }) {
   const handleWebm = async () => {
     if (busy) return
     setBusy('webm')
-    const id = toast.loading('Rendering video…')
+    const controller = new AbortController()
+    const cancel = { label: 'Cancel', onClick: () => controller.abort() }
+    const id = toast.loading('Rendering video…', { cancel })
     try {
       const { exportLottieWebm } = await import('@/export/exportLottieWebm')
-      const blob = await exportLottieWebm(bakeLottieJson(), { loop }, (p) =>
-        toast.loading(`Rendering video… ${Math.round(p * 100)}%`, { id }),
+      const blob = await exportLottieWebm(bakeLottieJson(), { loop, signal: controller.signal }, (p) =>
+        toast.loading(`Rendering video… ${Math.round(p * 100)}%`, { id, cancel }),
       )
       triggerDownload(blob, `zenimator-${Date.now()}.webm`)
       toast.success('Video exported!', { id })
     } catch (err) {
-      console.error('[zenimator] lottie webm export error:', err)
-      toast.error('Video export failed — check console', { id })
+      if (isAbort(err)) toast.dismiss(id)
+      else {
+        console.error('[zenimator] lottie webm export error:', err)
+        toast.error('Video export failed — check console', { id })
+      }
     } finally {
       setBusy(null)
     }

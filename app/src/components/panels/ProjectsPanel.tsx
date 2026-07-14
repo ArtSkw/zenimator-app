@@ -49,10 +49,11 @@ export function ProjectsPanel() {
   }
 
   return (
-    // Fixed cap (≈5 rows) instead of a viewport percentage — keeps Projects
-    // compact and hands the rest of the sidebar to Layers, the same on any
-    // desktop height. `max-h-56` = 14rem from the Tailwind spacing scale.
-    <div className="flex flex-col shrink-0 max-h-56">
+    // Fixed cap (≈3–4 rows) instead of a viewport percentage — keeps Projects
+    // deliberately compact so Layers, the working surface, always owns the
+    // majority of the sidebar. Beyond the cap the list scrolls INSIDE (the
+    // ScrollArea below) rather than pushing Layers down. `max-h-44` = 11rem.
+    <div className="flex flex-col shrink-0 max-h-44">
       <SidebarSectionLabel title="Projects" count={projects.length} />
 
       <ScrollArea className="flex-1 min-h-0 px-2.5">
