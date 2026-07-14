@@ -1,0 +1,22 @@
+# ZENimator engine — one command to run the containerized motion agent.
+#
+#   1. Put your secrets in a .env next to this file (see server/DEPLOY.md):
+#        STUDIO_AGENT_TOKEN=<a long random string>
+#        CLAUDE_CODE_OAUTH_TOKEN=<output of: claude setup-token>
+#   2. docker compose up --build
+#
+# The app (GitHub Pages) then points Settings → Studio engine at this host's
+# URL with the same STUDIO_AGENT_TOKEN.
+services:
+  engine:
+    build: .
+    ports:
+      - "4545:4545"
+    environment:
+      # Required — the service fails closed without the token (it binds 0.0.0.0),
+      # and the CLI can't authenticate without the OAuth token.
+      STUDIO_AGENT_TOKEN: ${STUDIO_AGENT_TOKEN:?set STUDIO_AGENT_TOKEN}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set CLAUDE_CODE_OAUTH_TOKEN}
+      # The browser origin(s) allowed to drive the engine (comma-separated).
+      STUDIO_ALLOWED_ORIGINS: ${STUDIO_ALLOWED_ORIGINS:-https://artskw.github.io}
+    restart: unless-stopped

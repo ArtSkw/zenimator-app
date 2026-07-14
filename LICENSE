@@ -1,0 +1,38 @@
+Zenimator Studio — Proprietary & Confidential
+Copyright (c) 2026 ZEN.COM. All rights reserved.
+
+This repository is published for authorized ZEN.COM team members to evaluate
+and run the tool. It is source-available, NOT open source.
+
+You MAY, solely if you are an authorized ZEN.COM team member:
+  - clone and run this software locally to test and evaluate it;
+  - propose changes back to this repository.
+
+You MAY NOT, without prior written permission from ZEN.COM:
+  - use this software or any part of it for any production or commercial
+    purpose;
+  - copy, redistribute, sublicense, sell, or publish this software or
+    derivative works;
+  - remove or alter this notice.
+
+No license or right is granted by implication, estoppel, or otherwise except
+as expressly stated above.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+THIRD-PARTY COMPONENTS
+
+The animation workbench (workbench/) is adapted from Diffusion Studio's
+open-source "text-to-lottie" project, licensed under the MIT License
+(Copyright (c) 2026 Diffusion Studio Inc.). Its full MIT license text is
+retained at workbench/LICENSE and continues to govern that directory's
+upstream code. Where this notice and the MIT license conflict for material in
+workbench/, the MIT license controls for the upstream-derived portions.

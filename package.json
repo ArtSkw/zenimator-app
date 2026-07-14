@@ -1,0 +1,17 @@
+{
+  "name": "zenimator",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ZENimator UI + headless Claude Code engine (text-to-lottie workbench)",
+  "type": "module",
+  "scripts": {
+    "agent": "node server/agent.mjs",
+    "app": "npm --prefix app run dev",
+    "workbench": "npm --prefix workbench run dev",
+    "dev": "node server/agent.mjs & npm --prefix app run dev",
+    "doctor": "node server/doctor.mjs",
+    "selftest": "node server/selftest.mjs",
+    "install:all": "npm --prefix app install && npm --prefix workbench install",
+    "build": "npm --prefix app run build"
+  }
+}

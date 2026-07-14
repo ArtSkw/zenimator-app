@@ -1,0 +1,14 @@
+# Keep the engine image lean — the app ships separately (GitHub Pages), and all
+# node_modules are (re)installed inside the build.
+app
+node_modules
+**/node_modules
+**/dist
+.git
+.github
+*.log
+.DS_Store
+# Internal-only material (also gitignored) — never bake into the image.
+BRIEF.md
+docs/plan.md
+CLAUDE.md

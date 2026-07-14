@@ -1,0 +1,21 @@
+# Dependencies & builds (per-package .gitignore files cover their specifics)
+node_modules/
+dist/
+
+# Local state — the agent service recreates this; session ids are per-machine
+server/sessions.json
+
+# Strategy/roadmap docs — kept out of the repo regardless of visibility (the
+# PRD and execution spec; the root CLAUDE.md carries the roadmap). Brand/mascot
+# TEST material (eval corpus, workbench scenes/assets/docs/build scripts) IS
+# included now — the team needs it to exercise the app.
+BRIEF.md
+docs/plan.md
+/CLAUDE.md
+
+# OS / editor noise
+.DS_Store
+*.log
+.idea
+.vscode/*
+!.vscode/extensions.json
