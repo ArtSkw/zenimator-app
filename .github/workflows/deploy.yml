@@ -32,6 +32,10 @@ jobs:
         working-directory: app
       - run: npm run build
         working-directory: app
+        env:
+          # The hosted UI defaults to the shared Fly engine (not localhost, which
+          # only the owner has). Testers still only need to paste the access token.
+          VITE_STUDIO_AGENT_URL: https://zenimator-app.fly.dev
       - uses: actions/upload-pages-artifact@v3
         with:
           path: app/dist
