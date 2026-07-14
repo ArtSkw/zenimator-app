@@ -79,6 +79,19 @@ SVG-like path behavior.
   gradient is "subtle" or because there are several to port is a **regression of
   the artwork**, not a safe simplification (static gradients render fine here —
   only *animating a gradient's stops* fails; see lottie-spec-map Renderer gotchas).
+  - **Converting a `userSpaceOnUse` `radialGradient` to a Lottie `gf`:** parse the
+    def, don't transcribe by hand. A gradient built as the common
+    `cx="0" cy="0" r="1"` unit circle plus
+    `gradientTransform="translate(tx ty) rotate(a) scale(sx sy)"` maps to
+    `gf.s = [tx, ty]` and `gf.e = [tx + sx*cos(a·π/180), ty + sx*sin(a·π/180)]`
+    (radial `gf` has no independent x/y radius, so only `sx` sets the radius;
+    reach for `h`/`a` highlight fields only if the source has an off-center
+    focal point). Stops become `g.k = [...colorStops, ...alphaStops]` —
+    color quadruples (`offset, r, g, b`, 0-1 range) followed by alpha pairs
+    (`offset, alpha`) for the same offsets, `g.p` = stop count. A gradient
+    whose every stop shares one hue and only ramps opacity (a soft highlight
+    taper, common on hand-lettered strokes) is still a real gradient — encode
+    the alpha ramp, don't collapse it to one flat opacity.
 - Rebuild SVG filters, shadows, blurs, and blend modes as simple Lottie shapes
   or restrained effect layers where possible.
 - Align crisp icon geometry to avoid fuzzy fractional-pixel edges.
