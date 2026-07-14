@@ -102,11 +102,11 @@ export function SettingsDrawer() {
           <section className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="api-key" className="text-sm font-semibold">
-                Claude API key
+                Claude API key <span className="font-normal text-muted-foreground">· optional</span>
               </Label>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Stored in this browser's localStorage. Starts with{' '}
-                <code className="font-mono">sk-ant-</code>.
+                Only used to auto-name projects — generation doesn't need it. Stored in
+                this browser's localStorage. Starts with <code className="font-mono">sk-ant-</code>.
               </p>
             </div>
             <Input

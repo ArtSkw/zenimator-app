@@ -25,7 +25,8 @@ import { rasterizeSvg } from '@/engine/detector/rasterize'
 import { sanitizeSvg } from '@/engine/detector/sanitizeSvg'
 import { humanizeLlmError } from '@/engine/llm/errors'
 import { deriveControls, INTENSITY_FEEL_PREFIX } from '@/engine/controls/deriveControls'
-import { studioCancel, studioGenerate, studioPropose, studioEdit, studioRevert, studioSlugFor, labelsFromDoc } from '@/engine/studio/studioClient'
+import { studioCancel, studioGenerate, studioPropose, studioEdit, studioRevert, studioSlugFor, labelsFromDoc, studioPreflight } from '@/engine/studio/studioClient'
+import { useEngineConnect } from '@/store/engineConnectStore'
 import { HEARTBEAT_QUIET_MS, HEARTBEAT_TICK_MS, heartbeatLine } from '@/engine/studio/studioHeartbeat'
 
 /** Every generation runs through the STUDIO engine: headless Claude Code in
@@ -234,6 +235,10 @@ export function GenerateView() {
 
   const handleGenerate = async () => {
     if (!canGenerate || !grounding) return
+    // Preflight the engine so a disconnected teammate gets the connect modal
+    // immediately, not a multi-minute run against an unreachable/unauthorized engine.
+    const status = await studioPreflight()
+    if (status !== 'ok') { useEngineConnect.getState().show(status); return }
     const ac = new AbortController()
     abortRef.current = ac
     startGenerating()
@@ -314,6 +319,8 @@ export function GenerateView() {
 
   const handlePropose = async () => {
     if (!grounding || proposing || generating) return
+    const status = await studioPreflight()
+    if (status !== 'ok') { useEngineConnect.getState().show(status); return }
     const ac = new AbortController()
     abortRef.current = ac
     setProposing(true)

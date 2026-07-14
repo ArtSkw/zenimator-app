@@ -61,6 +61,23 @@ export async function studioHealth(): Promise<boolean> {
   }
 }
 
+export type EngineStatus = 'ok' | 'unauthorized' | 'unreachable'
+
+/** Preflight before a job: is the engine reachable AND does our token authenticate?
+ *  /health returns the full payload (with `jobs`) only to an authenticated caller;
+ *  a bare {ok:true} means reachable-but-unauthorized (missing/wrong token). Lets the
+ *  UI gate a generation with a clear reason instead of a long, doomed run. */
+export async function studioPreflight(): Promise<EngineStatus> {
+  try {
+    const r = await fetch(`${baseUrl()}/health`, { headers: authHeaders() })
+    if (!r.ok) return 'unauthorized'
+    const j = (await r.json()) as { ok?: boolean; jobs?: unknown }
+    return j.jobs != null ? 'ok' : 'unauthorized'
+  } catch {
+    return 'unreachable'
+  }
+}
+
 async function streamRequest(
   path: string,
   body: unknown,
