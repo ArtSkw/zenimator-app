@@ -25,6 +25,19 @@ export function castFromControls(
     seen.add(nm)
     out.push({ nm, label: labels[nm] ?? prettifyNm(nm) })
   }
+  // A staggered scene reads as a SEQUENCE — letters writing on, parts arriving
+  // one after another. When at least three members carry a start time (their
+  // Delay control), list them in that order; otherwise keep manifest
+  // (importance) order. Sort is stable, so ties keep their importance rank.
+  const startBy = new Map<string, number>()
+  for (const c of manifest.controls) {
+    if (c.binding.kind === 'layer-delay' && c.layerNm && !startBy.has(c.layerNm)) {
+      startBy.set(c.layerNm, c.value)
+    }
+  }
+  if (out.filter((m) => startBy.has(m.nm)).length >= 3) {
+    out.sort((a, b) => (startBy.get(a.nm) ?? Infinity) - (startBy.get(b.nm) ?? Infinity))
+  }
   return out
 }
 

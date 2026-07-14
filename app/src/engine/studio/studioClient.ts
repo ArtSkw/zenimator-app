@@ -39,9 +39,12 @@ export type StudioEvent = {
   scene?: string
   sessionId?: string | null
   lottieJson?: string
+  /** done: the scene's raw controls.json when one exists — carries the
+   *  agent-authored `layerControls` spec (parse with parseLayerControlSpecs). */
+  controlsJson?: string
 }
 
-export type StudioDone = { lottieJson: string; scene: string }
+export type StudioDone = { lottieJson: string; scene: string; controlsJson?: string }
 
 /** Thrown when the job ended with a `cancelled` event (Stop button, /cancel). */
 export class StudioCancelled extends Error {
@@ -144,7 +147,13 @@ async function streamRequest(
         continue
       }
       onEvent(evt)
-      if (evt.type === 'done' && evt.lottieJson) done = { lottieJson: evt.lottieJson, scene: evt.scene ?? '' }
+      if (evt.type === 'done' && evt.lottieJson) {
+        done = {
+          lottieJson: evt.lottieJson,
+          scene: evt.scene ?? '',
+          ...(typeof evt.controlsJson === 'string' ? { controlsJson: evt.controlsJson } : {}),
+        }
+      }
       if (evt.type === 'cancelled') cancelled = true
       if (evt.type === 'error') errText = evt.text ?? 'Studio engine failed.'
     }
@@ -189,15 +198,22 @@ export async function studioDossier(slug: string): Promise<SceneDossierData | nu
 
 /** Restore a prior version; the current state is snapshotted first (revert is
  *  itself revertible). Returns the restored Lottie JSON. */
-export async function studioRevert(slug: string, version: number): Promise<{ lottieJson: string; versions: SceneVersion[] }> {
+export async function studioRevert(
+  slug: string,
+  version: number,
+): Promise<{ lottieJson: string; versions: SceneVersion[]; controlsJson?: string }> {
   const r = await fetch(`${baseUrl()}/revert`, {
     method: 'POST',
     headers: authHeaders(true),
     body: JSON.stringify({ slug, version }),
   })
-  const j = (await r.json()) as { ok?: boolean; error?: string; lottieJson?: string; versions?: SceneVersion[] }
+  const j = (await r.json()) as { ok?: boolean; error?: string; lottieJson?: string; versions?: SceneVersion[]; controlsJson?: string }
   if (!j.ok || !j.lottieJson) throw new Error(j.error ?? 'Revert failed.')
-  return { lottieJson: j.lottieJson, versions: (j.versions ?? []).slice().reverse() }
+  return {
+    lottieJson: j.lottieJson,
+    versions: (j.versions ?? []).slice().reverse(),
+    ...(typeof j.controlsJson === 'string' ? { controlsJson: j.controlsJson } : {}),
+  }
 }
 
 /** Explicit server-side cancel (the client abort alone also cancels, but this

@@ -23,7 +23,7 @@ import { castFromControls, reconcileCast } from '@/engine/controls/cast'
 import { rasterizeSvg } from '@/engine/detector/rasterize'
 import { sanitizeSvg } from '@/engine/detector/sanitizeSvg'
 import { humanizeLlmError } from '@/engine/llm/errors'
-import { deriveControls, INTENSITY_FEEL_PREFIX } from '@/engine/controls/deriveControls'
+import { deriveControls, parseLayerControlSpecs, INTENSITY_FEEL_PREFIX } from '@/engine/controls/deriveControls'
 import { studioCancel, studioGenerate, studioPropose, studioEdit, studioRevert, studioSlugFor, labelsFromDoc, studioPreflight, studioTitle } from '@/engine/studio/studioClient'
 import { useEngineConnect } from '@/store/engineConnectStore'
 import { HEARTBEAT_QUIET_MS, HEARTBEAT_TICK_MS, heartbeatLine } from '@/engine/studio/studioHeartbeat'
@@ -264,7 +264,11 @@ export function GenerateView() {
       )
       const json = done.lottieJson
       const labels = labelsFromDoc(json)
-      const controls = deriveControls(JSON.parse(json), labels, [], kind !== 'loop')
+      // The agent's own bespoke knobs (controls.json layerControls) join the
+      // derived basics; specs that don't match real motion are dropped.
+      const controls = deriveControls(
+        JSON.parse(json), labels, parseLayerControlSpecs(done.controlsJson), kind !== 'loop',
+      )
       // The cast is curated ONCE here, from the freshly-authored motion, then
       // frozen for the life of the scene (edits reconcile, never rebuild).
       const freshCast = castFromControls(controls, labels)
@@ -356,11 +360,11 @@ export function GenerateView() {
     const proj = useProjectsStore.getState().projects.find((p) => p.id === activeProjectId)
     if (!proj?.studioSlug || applying) return
     try {
-      const { lottieJson: json } = await studioRevert(proj.studioSlug, version)
+      const { lottieJson: json, controlsJson } = await studioRevert(proj.studioSlug, version)
       const doc = JSON.parse(json)
       const labels = labelsFromDoc(json)
       const effectiveKind = (resultKind ?? kind) === 'loop' ? ('loop' as const) : ('entry' as const)
-      const newControls = deriveControls(doc, labels, [], effectiveKind !== 'loop')
+      const newControls = deriveControls(doc, labels, parseLayerControlSpecs(controlsJson), effectiveKind !== 'loop')
       // A revert restores a prior doc — reconcile the cast to match it.
       const nextCast = reconcileCast(proj.cast ?? cast, doc, newControls, labels, { allowAdd: true })
       setResult(json, resultSignature ?? '', resultKind ?? kind, newControls, labels, {})
@@ -423,7 +427,7 @@ export function GenerateView() {
       const json = done.lottieJson
       const doc = JSON.parse(json)
       const labels = labelsFromDoc(json)
-      const newControls = deriveControls(doc, labels, [], effectiveKind !== 'loop')
+      const newControls = deriveControls(doc, labels, parseLayerControlSpecs(done.controlsJson), effectiveKind !== 'loop')
       // A surgical edit must not reset the user's OTHER adjustments: keep
       // every override whose control still exists on the new result (ids are
       // layer-name-based, so untouched layers keep their exact values).
@@ -690,12 +694,21 @@ export function GenerateView() {
                 </div>
                 {canChat && activeProject?.studioSlug && (
                   <>
-                    <button
-                      onClick={() => setHistoryOpen(true)}
-                      className="pressable absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm hover:text-foreground shadow-sm"
-                    >
-                      <History size={11} /> History
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            aria-label="History"
+                            onClick={() => setHistoryOpen(true)}
+                            className="pressable absolute bottom-3 left-3 flex size-8 items-center justify-center rounded-full border border-border bg-background/80 text-foreground backdrop-blur-sm shadow-sm"
+                          >
+                            <History size={13} />
+                          </button>
+                        }
+                      />
+                      <TooltipContent side="top">History</TooltipContent>
+                    </Tooltip>
                     <div className="absolute bottom-3 right-3">
                       <SceneDossier slug={activeProject.studioSlug} />
                     </div>

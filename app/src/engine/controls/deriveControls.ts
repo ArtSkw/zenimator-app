@@ -37,6 +37,7 @@ export type ControlBinding =
   | { kind: 'layer-delay'; layer: number }
   | { kind: 'layer-motion'; layer: number } // toggle: off pins the layer to its most-visible rest pose
   | { kind: 'feel'; layer: number } // layer < 0 → all layers (global)
+  | { kind: 'stagger' } // global: scales the spread of per-layer start times
   // A motion-program parameter — applied by RE-RUNNING the program with the
   // override (generateStore.recomputeProgram), never by applyControlValues.
   | { kind: 'program-param'; name: string }
@@ -87,6 +88,46 @@ export type CustomControlSpec = {
 
 const MAX_CONTROLS = 64
 const MAX_CUSTOM_PER_LAYER = 2
+const MAX_CUSTOM_SPECS = 24
+
+/** Parse the engine's `controls.json` into custom-control specs — the
+ *  agent-authored knobs (player-contract "Layer Controls"). Defensive by
+ *  design: the file is model-authored, so unknown kinds/properties and
+ *  malformed entries are dropped silently; grounding against the doc's real
+ *  keyframes happens later in resolveCustoms, so a spec can never conjure a
+ *  dead knob. */
+export function parseLayerControlSpecs(controlsJson: string | null | undefined): CustomControlSpec[] {
+  if (!controlsJson) return []
+  let raw: unknown
+  try { raw = JSON.parse(controlsJson) } catch { return [] }
+  const list = (raw as { layerControls?: unknown } | null)?.layerControls
+  if (!Array.isArray(list)) return []
+  const out: CustomControlSpec[] = []
+  for (const item of list.slice(0, MAX_CUSTOM_SPECS)) {
+    const s = item as Record<string, unknown>
+    const kind = s.kind
+    if (kind !== 'amount' && kind !== 'steps' && kind !== 'toggle' && kind !== 'feel') continue
+    if (typeof s.target !== 'string' || !s.target.trim()) continue
+    if (typeof s.label !== 'string' || !s.label.trim()) continue
+    const property = s.property
+    if (kind !== 'feel' && property !== 'position' && property !== 'rotation' && property !== 'scale') continue
+    const steps = Array.isArray(s.steps)
+      ? (s.steps as Array<Record<string, unknown>>)
+          .filter((st) => typeof st?.label === 'string' && Number.isFinite(st?.intensity))
+          .map((st) => ({ label: String(st.label), intensity: Number(st.intensity) }))
+      : undefined
+    if (kind === 'steps' && (!steps || steps.length < 2)) continue
+    out.push({
+      target: s.target.trim(),
+      kind,
+      ...(kind !== 'feel' ? { property: property as 'position' | 'rotation' | 'scale' } : {}),
+      label: s.label,
+      description: typeof s.description === 'string' ? s.description : '',
+      ...(steps?.length ? { steps } : {}),
+    })
+  }
+  return out
+}
 
 /** Convert a motion program's declared params into sidebar controls. These are
  *  the truest motion-derived knobs — the program's own tunables (jump height,
@@ -123,6 +164,7 @@ const DESCRIPTIONS: Record<string, string> = {
   'layer-speed': 'How many frames this layer’s motion takes (lower = faster).',
   'layer-delay': 'The frame this layer starts moving on (higher = later).',
   'layer-motion': 'Whether this part animates at all — off holds it still in its visible pose.',
+  stagger: 'How much the parts take turns — 0% starts everything at once (fast, all together), higher writes them one after another (slower, more deliberate).',
 }
 
 // "Feel" presets — index 0 keeps the agent's authored easing untouched.
@@ -153,8 +195,15 @@ export function deriveControls(
   const basics: (ParamControl & { score: number })[] = []
 
   lottie.layers.forEach((layer, idx) => {
-    const nm = labels[layer.nm] ? truncate(labels[layer.nm]) : shortName(layer.nm)
-    const ln = layer.nm
+    // A matte source's knobs belong, creatively, to the layer it reveals — a
+    // handwriting wipe's timing IS the letter's timing. Present them under the
+    // revealed layer's name so the cast lists the letters, never "__matte"
+    // plumbing. The binding keeps the matte's index (that's where the keys live).
+    const next = lottie.layers[idx + 1]
+    const isMatteSrc = layer.ty !== 3 && layer.td === 1
+    const hostNm = isMatteSrc && next && next.ty !== 3 && next.tt ? next.nm : layer.nm
+    const nm = labels[hostNm] ? truncate(labels[hostNm]) : shortName(hostNm)
+    const ln = hostNm
     const seamless = isSeamless(layer)
 
     const add = (c: Omit<ParamControl, 'description'> & { score: number }) =>
@@ -199,6 +248,22 @@ export function deriveControls(
         unit: 'f', value: Math.round(ts.span), layerNm: ln, binding: { kind: 'trim-dur', layer: idx },
         score: ts.span,
       })
+    } else if (layer.ty === 4) {
+      // Trimless write-on — a gradient sweep or baked reveal path. Expose its
+      // duration as Draw-on through the layer-speed binding; applyControlValues
+      // already remaps gf/gs and __reveal times with the layer's speed factor.
+      // The value is the layer's WHOLE animation window (what layer-speed
+      // divides by), so dragging maps 1:1 onto the applied speed factor.
+      const at = revealWindow((layer as ShapeLayer).shapes) && anyTimes(layer)
+      const rspan = at ? at.last - at.first : 0
+      if (at && rspan >= 4) {
+        add({
+          id: `${ln}:speed`, label: `${nm} · Draw-on`, control: 'slider',
+          min: Math.max(4, Math.round(rspan * 0.3)), max: Math.round(rspan * 2.5), step: 1,
+          unit: 'f', value: Math.round(rspan), layerNm: ln, binding: { kind: 'layer-speed', layer: idx },
+          score: rspan,
+        })
+      }
     }
 
     // Every visibly-animated layer gets a Moves on/off switch — the direct
@@ -274,7 +339,27 @@ export function deriveControls(
         }]
       : []
 
-  return { controls: [duration, ...feel, ...keptBasics, ...customControls] }
+  // Global "Stagger" — ONLY for staggered WRITE-ONS: 3+ parts whose animation
+  // is a reveal mechanic (trim draw-on or sweep wipe — letters writing, lines
+  // tracing). There it genuinely tunes the hand's pacing. Generic entries
+  // (parts flying/fading/popping in) deliberately do NOT get it: a scene's
+  // controls must feel authored for that scene, not copied from a template —
+  // contextual knobs for those come from the agent, not a blanket default.
+  const starts = lottie.layers
+    .filter((l) => l.ty === 4 &&
+      (findTrim((l as ShapeLayer).shapes) || revealWindow((l as ShapeLayer).shapes)))
+    .map((l) => anyTimes(l)?.first)
+    .filter((n): n is number => n != null)
+  const spread = starts.length ? Math.max(...starts) - Math.min(...starts) : 0
+  const stagger: ParamControl[] =
+    isEntry && starts.length >= 3 && spread >= 4
+      ? [{
+          id: 'stagger', label: 'Stagger', description: DESCRIPTIONS.stagger, control: 'slider',
+          min: 0, max: 250, step: 5, unit: '%', value: 100, binding: { kind: 'stagger' },
+        }]
+      : []
+
+  return { controls: [duration, ...feel, ...stagger, ...keptBasics, ...customControls] }
 }
 
 /** Ground each custom spec against the actual keyframes; drop the inapplicable. */
@@ -398,6 +483,7 @@ export function applyControlValues(
   const speedBy = new Map<number, number>()
   const delayBy = new Map<number, number>()
   const trimDurBy = new Map<number, number>()
+  let staggerF = 1
   for (const c of manifest.controls) {
     const v = values[c.id]
     if (v == null) continue
@@ -405,6 +491,18 @@ export function applyControlValues(
     if (k.kind === 'layer-speed') speedBy.set(k.layer, v)
     else if (k.kind === 'layer-delay') delayBy.set(k.layer, v)
     else if (k.kind === 'trim-dur') trimDurBy.set(k.layer, v)
+    else if (k.kind === 'stagger') staggerF = v / 100
+  }
+
+  // Stagger scales each layer's start offset around the EARLIEST start, so 0%
+  // brings everything to the first mover and >100% spreads the entrance out.
+  let staggerT0 = Infinity
+  if (staggerF !== 1) {
+    for (const bl of base.layers) {
+      const at = anyTimes(bl)
+      if (at) staggerT0 = Math.min(staggerT0, at.first)
+    }
+    if (!Number.isFinite(staggerT0)) staggerF = 1
   }
 
   // Per-layer time remap — global × speed × delay (and trim span), from BASE.
@@ -420,7 +518,8 @@ export function applyControlValues(
     const at = anyTimes(bl)
     const first = at ? at.first : 0
     const layerSpan = at ? at.last - at.first : 0
-    const newFirst = delay != null ? delay : first
+    const staggered = at && staggerF !== 1 ? staggerT0 + (first - staggerT0) * staggerF : first
+    const newFirst = delay != null ? delay : staggered
     const delta = newFirst - first
     const speedF = speed != null && layerSpan > 0 ? speed / layerSpan : 1
 
@@ -526,13 +625,25 @@ function freezeLayerMotion(dl: AnyLayer, bl: AnyLayer): void {
     const v = valueNear(bl.ks[key])
     if (v) dl.ks[key] = { a: 0, k: [...v] }
   }
-  if (dl.ty === 4) {
-    const tm = findTrim((dl as ShapeLayer).shapes)
-    if (tm) {
-      // Fully drawn: each animated trim prop pins to its LAST keyframe value.
-      for (const key of ['s', 'e', 'o'] as const) {
-        const ks = animKeys(tm[key])
-        if (ks) tm[key] = { a: 0, k: ks[ks.length - 1].s[0] ?? 0 }
+  if (dl.ty === 4) pinReveals((dl as ShapeLayer).shapes)
+}
+
+/** Pin every animated reveal in a shape tree fully drawn: trims (`tm`) and
+ *  gradient sweeps (`gf`/`gs`) settle at their LAST keyframe value. */
+function pinReveals(groups: GrGroup[]): void {
+  for (const g of groups) {
+    for (const item of g.it) {
+      const node = item as { ty: string } & Record<string, Prop | unknown>
+      if (node.ty === 'tm' || node.ty === 'gf' || node.ty === 'gs') {
+        for (const key of ['s', 'e', 'o'] as const) {
+          const ks = animKeys(node[key] as Prop | undefined)
+          if (!ks) continue
+          const last = ks[ks.length - 1].s
+          // Trim props are scalars; sweep endpoints are [x, y] points.
+          node[key] = node.ty === 'tm' ? { a: 0, k: last[0] ?? 0 } : { a: 0, k: [...last] }
+        }
+      } else if (node.ty === 'gr') {
+        pinReveals([item as GrGroup])
       }
     }
   }
@@ -602,7 +713,48 @@ function keyTimeWindow(
     const tm = findTrim(shapes)
     const span = tm && trimSpan(tm)
     if (span) { found = true; first = Math.min(first, span.first); last = Math.max(last, span.first + span.span) }
+    const rv = revealWindow(shapes)
+    if (rv) { found = true; first = Math.min(first, rv.first); last = Math.max(last, rv.last) }
   }
+  return found ? { first, last } : null
+}
+
+/** Time window of a shape tree's trimless reveals: gradient sweeps (gf/gs
+ *  animated s·e — the handwriting wipe) and baked reveal paths (`__reveal` sh —
+ *  the radial draw-on wedge). These are exactly the mechanisms
+ *  applyControlValues already remaps (mapGradientTimes / mapShapeTimes);
+ *  counting them as animation is what makes a sweep-built scene surface Feel,
+ *  Draw-on, Delay, and Stagger instead of a lone Duration knob. */
+function revealWindow(groups: GrGroup[]): { first: number; last: number } | null {
+  let first = Infinity, last = -Infinity, found = false
+  const note = (ks: NumKeyframe[] | null) => {
+    if (!ks) return
+    found = true
+    first = Math.min(first, ks[0].t)
+    last = Math.max(last, ks[ks.length - 1].t)
+  }
+  const visit = (gs: GrGroup[]) => {
+    for (const g of gs) {
+      for (const item of g.it) {
+        const node = item as { ty: string; nm?: string } & Record<string, unknown>
+        if (node.ty === 'gf' || node.ty === 'gs') {
+          note(animKeys(node.s as Prop | undefined))
+          note(animKeys(node.e as Prop | undefined))
+        } else if (node.ty === 'sh' && node.nm?.startsWith('__reveal')) {
+          const ks = node.ks as { a?: number; k?: unknown } | undefined
+          if (ks?.a === 1 && Array.isArray(ks.k) && ks.k.length >= 2) {
+            const times = ks.k as { t: number }[]
+            found = true
+            first = Math.min(first, times[0].t)
+            last = Math.max(last, times[times.length - 1].t)
+          }
+        } else if (node.ty === 'gr') {
+          visit([item as GrGroup])
+        }
+      }
+    }
+  }
+  visit(groups)
   return found ? { first, last } : null
 }
 
