@@ -53,7 +53,7 @@ export function SceneDossier({ slug }: { slug: string }) {
               type="button"
               aria-label="How it was made"
               onClick={() => onOpenChange(true)}
-              className="pressable flex size-8 items-center justify-center rounded-full border border-border bg-background/80 text-muted-foreground backdrop-blur-sm hover:text-foreground shadow-sm"
+              className="pressable flex size-8 items-center justify-center rounded-full border border-border bg-background/80 text-foreground backdrop-blur-sm shadow-sm"
             >
               <BookOpen size={13} />
             </button>

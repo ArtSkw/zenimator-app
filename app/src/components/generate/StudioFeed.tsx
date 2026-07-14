@@ -7,9 +7,9 @@ import { useStudioFeed, type FeedEntry } from '@/store/studioFeedStore'
 /**
  * The studio activity feed (plan Phase 1.3): the agent's narration, de-noised
  * tool lines, and — the trust feature — its OWN verification frames as
- * clickable thumbnails, streaming while it works. Expanded during a job,
- * auto-collapses to a one-line summary when done; reopenable to review how
- * the scene was made.
+ * clickable thumbnails, streaming while it works. Collapsed by default (the
+ * pulsing header signals progress); expandable at any time to watch the
+ * stream or review how the scene was made.
  */
 export function StudioFeed() {
   const { entries, live, expanded, queuedPosition, setExpanded } = useStudioFeed()
