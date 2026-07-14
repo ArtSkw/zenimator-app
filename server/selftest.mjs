@@ -214,6 +214,13 @@ try {
 
     const goodOrigin = await fetch(`${BASE}/health`, { headers: { origin: 'http://localhost:5173' } })
     check('allowlisted Origin is echoed back', goodOrigin.headers.get('access-control-allow-origin') === 'http://localhost:5173')
+    // The browser preflight must allow the Authorization header, or token-gated
+    // requests are silently blocked client-side ("engine not reachable").
+    const preflight = await fetch(`${BASE}/health`, {
+      method: 'OPTIONS',
+      headers: { origin: 'http://localhost:5173', 'access-control-request-headers': 'authorization' },
+    })
+    check('CORS preflight allows the Authorization header', /authorization/i.test(preflight.headers.get('access-control-allow-headers') ?? ''))
 
     const plain = await fetch(`${BASE}/cancel`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{"slug":"x"}' })
     check('non-JSON POST is rejected (415 — preflight is load-bearing)', plain.status === 415)

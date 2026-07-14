@@ -639,7 +639,9 @@ const server = createServer(async (req, res) => {
     }
     res.setHeader('Access-Control-Allow-Origin', origin)
     res.setHeader('Vary', 'Origin')
-    res.setHeader('Access-Control-Allow-Headers', 'content-type')
+    // `authorization` is required or the browser's preflight blocks every
+    // token-carrying request (the app sends `Authorization: Bearer <token>`).
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization')
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
   }
   if (req.method === 'OPTIONS') return res.end()
