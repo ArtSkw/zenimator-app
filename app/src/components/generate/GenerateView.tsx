@@ -18,14 +18,13 @@ import { useGenerateStore, useBakedLottieJson, type Subject, type Kind } from '@
 import { useGeneratePlayback } from '@/store/generatePlaybackStore'
 import { useStudioFeed } from '@/store/studioFeedStore'
 import { useStudioEditBridge } from '@/store/studioEditBridge'
-import { useSettingsStore } from '@/store/settingsStore'
 import { useProjectsStore } from '@/store/projectsStore'
 import { castFromControls, reconcileCast } from '@/engine/controls/cast'
 import { rasterizeSvg } from '@/engine/detector/rasterize'
 import { sanitizeSvg } from '@/engine/detector/sanitizeSvg'
 import { humanizeLlmError } from '@/engine/llm/errors'
 import { deriveControls, INTENSITY_FEEL_PREFIX } from '@/engine/controls/deriveControls'
-import { studioCancel, studioGenerate, studioPropose, studioEdit, studioRevert, studioSlugFor, labelsFromDoc, studioPreflight } from '@/engine/studio/studioClient'
+import { studioCancel, studioGenerate, studioPropose, studioEdit, studioRevert, studioSlugFor, labelsFromDoc, studioPreflight, studioTitle } from '@/engine/studio/studioClient'
 import { useEngineConnect } from '@/store/engineConnectStore'
 import { HEARTBEAT_QUIET_MS, HEARTBEAT_TICK_MS, heartbeatLine } from '@/engine/studio/studioHeartbeat'
 
@@ -48,7 +47,6 @@ export function GenerateView() {
   const { attach, detach, setPlaying, setProgress } = useGeneratePlayback()
   const isPlaying = useGeneratePlayback((s) => s.isPlaying)
   const playFrame = useGeneratePlayback((s) => s.frame)
-  const { apiKey, model } = useSettingsStore()
   const saveProject = useProjectsStore((s) => s.saveProject)
   const updateProject = useProjectsStore((s) => s.updateProject)
   const activeProjectId = useProjectsStore((s) => s.activeProjectId)
@@ -294,13 +292,12 @@ export function GenerateView() {
         sceneDoc: `docs/${studioSlug}-animation.md`,
         sessionAt: Date.now(),
       })
-      // Background title refinement — needs the (optional) app-side API key;
-      // generation itself never does.
-      if (apiKey.trim()) {
-        generateProjectTitle(intent, apiKey, model).then((title) => {
-          if (title) updateProject(newId, { name: title })
-        })
-      }
+      // Background title polish — runs on the shared ENGINE (its subscription),
+      // so every teammate gets it with just the access token; no per-user key.
+      // Falls back silently to the heuristic name on any failure.
+      studioTitle(intent).then((title) => {
+        if (title) updateProject(newId, { name: title })
+      })
       setEditingSetup(false)
     } catch (err) {
       if (ac.signal.aborted || (err instanceof Error && err.name === 'StudioCancelled')) {
@@ -819,28 +816,6 @@ export function GenerateView() {
 const SUBJECT_LABEL: Record<Subject, string> = { illustration: 'Illustration', screen: 'Screen' }
 const KIND_LABEL: Record<Kind, string> = { entry: 'Entry', loop: 'Loop' }
 
-
-/**
- * Ask the LLM for a short descriptive project title (3-5 words).
- * Runs in the background after generation; updates the stored project name once ready.
- * Returns an empty string on any error so callers can ignore failures silently.
- */
-async function generateProjectTitle(prompt: string, apiKey: string, model: string): Promise<string> {
-  try {
-    const Anthropic = await import('@anthropic-ai/sdk')
-    const client = new Anthropic.default({ apiKey, dangerouslyAllowBrowser: true })
-    const response = await client.messages.create({
-      model,
-      max_tokens: 12,
-      system: 'You name animation projects. Reply with ONLY 3-5 words — no quotes, no punctuation, no explanation.',
-      messages: [{ role: 'user', content: `Name this animation project based on the user's prompt:\n${prompt}` }],
-    })
-    const raw = (response.content[0] as { type: string; text: string }).text?.trim() ?? ''
-    return raw.length > 2 && raw.length < 60 ? raw : ''
-  } catch {
-    return ''
-  }
-}
 
 /**
  * Derive a short 2–3 word project name from a user prompt.

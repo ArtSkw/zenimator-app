@@ -84,10 +84,6 @@ export function EngineConnectDialog() {
             />
           </details>
 
-          <p className="text-xs leading-snug text-muted-foreground">
-            The Claude API key in Settings is <span className="font-medium">optional</span> — it only auto-names projects.
-          </p>
-
           {result === 'ok' && (
             <p className="flex items-center gap-1 text-xs text-emerald-600"><Check size={12} /> Connected</p>
           )}

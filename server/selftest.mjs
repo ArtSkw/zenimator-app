@@ -40,6 +40,8 @@ if (args.includes('--version')) { console.log('9.9.9 (stub)'); process.exit(0) }
 const prompt = args[args.indexOf('-p') + 1] ?? ''
 const resume = args.includes('--resume') ? args[args.indexOf('--resume') + 1] : null
 if (resume === 'dead-session-id') { console.error('No conversation found with session id dead-session-id'); process.exit(1) }
+// Title requests use plain-text output (no stream-json) — answer and exit.
+if (prompt.includes('Name this animation project')) { console.log('Test Title'); process.exit(0) }
 const slug = (prompt.match(/PROJECT SLUG: ([\\w-]+)/) ?? prompt.match(/assets\\/([\\w-]+)\\.svg/) ?? prompt.match(/the ([\\w-]+) scene/))?.[1] ?? 'unknown'
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\\n')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -282,6 +284,16 @@ try {
     check('dossier: returns {doc, script, versions}', 'doc' in d && 'script' in d && Array.isArray(d.versions))
     check('dossier: includes the build script + learnings doc', Boolean(d.script) && Boolean(d.doc))
     check('dossier: carries the version history', d.versions.length >= 2)
+  }
+
+  // 11b. Engine-side project title (no browser API key)
+  {
+    const r = await fetch(`${BASE}/title`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: 'a bouncing ball', model: 'claude-sonnet-5' }),
+    })
+    const j = await r.json()
+    check('title: engine names the project (no browser key)', j.title === 'Test Title')
   }
 
   // 12. Bearer-token gate + fail-closed (v1.3 remote exposure)

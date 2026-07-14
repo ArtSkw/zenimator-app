@@ -78,6 +78,29 @@ export async function studioPreflight(): Promise<EngineStatus> {
   }
 }
 
+/** Ask the ENGINE to name a project (3–5 words) from the prompt. Runs on the
+ *  engine's own Claude subscription, so every teammate gets it with just the
+ *  access token — no per-user API key. Returns '' on any failure; callers fall
+ *  back to the heuristic name. */
+export async function studioTitle(prompt: string): Promise<string> {
+  try {
+    const r = await fetch(`${baseUrl()}/title`, {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify({
+        prompt,
+        model: useSettingsStore.getState().model,
+        effort: useSettingsStore.getState().effort,
+      }),
+    })
+    if (!r.ok) return ''
+    const j = (await r.json()) as { title?: string }
+    return (j.title ?? '').trim()
+  } catch {
+    return ''
+  }
+}
+
 async function streamRequest(
   path: string,
   body: unknown,

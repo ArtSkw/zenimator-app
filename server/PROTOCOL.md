@@ -18,6 +18,7 @@ and fields.
 | POST | `/edit` | `{slug, instruction, frame?, layer?, model?, effort?}` | NDJSON event stream |
 | POST | `/revert` | `{slug, version}` | `{ok, lottieJson, versions}` or `{ok:false, error}` (v1.1) |
 | POST | `/cancel` | `{slug}` | `{ok}` — `true` if a queued/running job was cancelled |
+| POST | `/title` | `{prompt, model?}` | `{title}` — a 3–5 word project name from the prompt, generated on the engine (no browser API key); `""` on failure |
 
 `kind` is `'loop' \| 'entry'`. Slugs are normalized server-side (lowercase,
 `[a-z0-9-]`, ≤48 chars).

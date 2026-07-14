@@ -20,6 +20,7 @@ import {
   lstatSync, readdirSync, realpathSync,
 } from 'node:fs'
 import { join, dirname } from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import { timingSafeEqual } from 'node:crypto'
@@ -539,6 +540,35 @@ function runClaude({ job, prompt, resumeId, model, effort, send, end }) {
   })
 }
 
+/** Name a project (3–5 words) on the engine — a quick, low-effort `claude -p`
+ *  in a NEUTRAL cwd (no workbench skill/CLAUDE.md loaded, so it stays cheap and
+ *  fast). Runs on the engine's own auth, so no per-user API key is needed.
+ *  Resolves to '' on any failure/timeout; the caller falls back to a heuristic. */
+function generateTitle(prompt, model) {
+  return new Promise((resolve) => {
+    const p =
+      'Name this animation project in 3 to 5 words. Reply with ONLY the name — ' +
+      `no quotes, no punctuation, no preamble.\n\nPrompt:\n${String(prompt ?? '').slice(0, 2000)}`
+    let child
+    try {
+      child = spawn('claude', ['-p', p, '--model', cleanModel(model), '--effort', 'low', '--strict-mcp-config'], {
+        cwd: tmpdir(), env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'],
+      })
+    } catch { resolve(''); return }
+    let out = ''
+    child.stdout.on('data', (c) => { out = capBuffer(out + c.toString()) })
+    const timer = setTimeout(() => { try { child.kill('SIGKILL') } catch { /* already gone */ } }, 30_000)
+    timer.unref?.()
+    child.on('error', () => { clearTimeout(timer); resolve('') })
+    child.on('close', () => {
+      clearTimeout(timer)
+      const line = out.split('\n').map((s) => s.trim()).filter(Boolean).pop() ?? ''
+      const title = line.replace(/^["'`]+|["'`]+$/g, '').trim()
+      resolve(title.length >= 2 && title.length <= 60 ? title : '')
+    })
+  })
+}
+
 // ── HTTP plumbing ────────────────────────────────────────────────────────────
 
 /** Resolved once on first /health call; undefined = not probed yet. */
@@ -701,6 +731,13 @@ const server = createServer(async (req, res) => {
       const ok = jobs.cancel(slugify(body.slug ?? ''))
       res.setHeader('content-type', 'application/json')
       return res.end(JSON.stringify({ ok }))
+    }
+
+    if (req.method === 'POST' && req.url === '/title') {
+      const body = JSON.parse((await readBody(req)) || '{}')
+      const title = await generateTitle(body.prompt ?? '', body.model)
+      res.setHeader('content-type', 'application/json')
+      return res.end(JSON.stringify({ title }))
     }
 
     if (req.method === 'POST' && (req.url === '/generate' || req.url === '/edit' || req.url === '/propose')) {
