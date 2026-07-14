@@ -603,9 +603,9 @@ export function GenerateView() {
                           </span>
                         </span>
                         <Button
-                          variant="outline"
+                          variant="default"
                           size="sm"
-                          className="shrink-0 rounded-full gap-1.5"
+                          className="shrink-0 rounded-full gap-1.5 font-semibold"
                           onClick={handleStop}
                         >
                           <Square size={13} />

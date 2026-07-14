@@ -164,7 +164,7 @@ const DESCRIPTIONS: Record<string, string> = {
   'layer-speed': 'How many frames this layer’s motion takes (lower = faster).',
   'layer-delay': 'The frame this layer starts moving on (higher = later).',
   'layer-motion': 'Whether this part animates at all — off holds it still in its visible pose.',
-  stagger: 'How much the parts take turns — 0% starts everything at once (fast, all together), higher writes them one after another (slower, more deliberate).',
+  stagger: 'Low writes all parts at once and fast; high, one-by-one and slower.',
 }
 
 // "Feel" presets — index 0 keeps the agent's authored easing untouched.

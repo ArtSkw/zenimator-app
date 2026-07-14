@@ -25,6 +25,8 @@ export type WebmOptions = {
   bitrate?: number
   /** Render supersampling factor (crispness vs. file size). Defaults to 2×. */
   scale?: number
+  /** Abort the render mid-flight (user cancelled the export). */
+  signal?: AbortSignal
 }
 
 /**
@@ -72,6 +74,11 @@ export async function exportLottieWebm(
 
     for (let pass = 0; pass < passes; pass++) {
       for (let frame = 0; frame < totalFrames; frame++) {
+        // User cancelled: stop the recorder and bail (src disposed in finally).
+        if (opts.signal?.aborted) {
+          try { recorder.stop() } catch { /* already inactive */ }
+          throw new DOMException('Export cancelled', 'AbortError')
+        }
         renderFrame(frame)
         if (background) {
           ctx.fillStyle = background
