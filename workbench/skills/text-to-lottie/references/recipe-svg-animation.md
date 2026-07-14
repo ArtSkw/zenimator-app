@@ -26,6 +26,9 @@ Always read `svg-compatibility.md` with this recipe.
 - `path-draw`: strokes draw on with trim paths, then settle/fill.
 - `layer-unfold`: grouped elements reveal in depth or reading order.
 - `fill-sweep`: solid regions receive a directional color or opacity reveal.
+  For gradient-painted regions and hand-lettered artwork, use the matte-wipe
+  recipe in recipe-typography ("Handwritten Write-On Over Gradient Artwork") —
+  the fill stays untouched, the sweep lives in the matte.
 - `illustration-drift`: tiny grouped parallax/position motion after reveal.
 - `morph-lite`: small shape/position changes, only when source paths are safe.
 

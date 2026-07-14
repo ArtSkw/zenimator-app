@@ -119,7 +119,9 @@ These few defaults are non-negotiable and apply to every designed scene. Load
   behavior, focal element strongest); do not fall back to one uniform ease for
   every layer.
 - Use slots for important editable values and add `controls.json` labels/ranges
-  when they improve the properties panel.
+  when they improve the properties panel. For the scene's key layers, also
+  author 1–2 bespoke `layerControls` knobs (contextual names like "Bag sway",
+  never generic) — see the player-contract "Layer controls" section.
 - For SVG input, preserve the viewBox, normalize styling, watch fill rules and
   intersections, and verify the result in Skottie.
 - Native Lottie text/text slots (`ty:5`) render in this player when the scene

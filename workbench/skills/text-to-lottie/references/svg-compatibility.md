@@ -13,6 +13,16 @@ SVG-like path behavior.
 - Render the SVG statically first, before parsing. Recognizing what it depicts
   (a launch, a mechanism, a character, a diagram) reframes the brief and often
   makes the choreography obvious.
+- **When per-path grouping (which paths form one letter/element) isn't obvious
+  from IDs or bbox adjacency** — common in hand-lettered SVGs, where a pen
+  stroke splits into a new fill region every time it crosses itself, so one
+  letter can be 1-3 paths with heavily overlapping bounding boxes vs its
+  neighbors — render each path **in isolation** (one throwaway CanvasKit-in-Node
+  script: `ck.Path.MakeFromSVGString(d)` per path, drawn in red over the rest
+  in gray, one cell per path index) and read off which glyph/element it lights
+  up. Bbox math alone reliably fails here; a quick zoomed crop of just the
+  ambiguous cluster resolves what the numbers can't. Discard the script after;
+  it's a diagnostic, not a deliverable.
 - Inspect the `viewBox`, width, height, coordinate origin, groups, masks,
   gradients, style tags, and text before animating.
 - Preserve the intended viewBox and scale the Lottie composition around it.
