@@ -1,34 +1,29 @@
 #!/usr/bin/env node
 /**
- * Builds public/projects/gradient-verify/scene-1/lottie.json from the
- * "live better" script-lettering SVG (identical source to
- * assets/live-better-k7ur.svg — same 20-path letter geometry, same 14
- * per-path radial gradients) as a continuous handwritten draw-on.
+ * Builds public/projects/live-better-4a8z/scene-1/lottie.json from the
+ * "live better" script-lettering SVG — a continuous handwritten draw-on.
  *
- * Unlike the sibling live-better-k7ur scene (which flattened every path to
- * one solid ink color), this build PRESERVES each path's native SVG radial
- * gradient — per the skill's hard requirement that source gradient paint
- * must survive intake (references/lottie-spec-map.md, svg-compatibility.md).
- * Gradients are parsed programmatically from the SVG's <defs> (center +
- * radius from gradientTransform, color+opacity stops) and emitted as static
- * Lottie `gf` radial gradient fills — static gradients render correctly in
- * Skottie; only *animating* a gradient's own stops fails, which this scene
- * never does (the wipe animates a clip rectangle, not the fill).
+ * The source is 20 separate filled paths (no ids, no strokes — each glyph
+ * stroke is already a solid calligraphic fill, some with a small entry/exit
+ * tail rendered as its own path). Read them by document order from the SVG
+ * itself rather than transcribing coordinates, per the SVG-compatibility
+ * guidance to parse programmatically.
  *
- * Letter grouping (confirmed by isolating + highlighting each path over the
- * full artwork, see docs/live-better-k7ur-animation.md for the method) into
- * 13 letter-units in reading order:
+ * Grouped by eye (confirmed by isolating + highlighting each path over the
+ * full artwork — see docs/live-better-k7ur-animation.md, same source SVG)
+ * into 13 letter-units in reading order:
  *   live:   l(0+1) i(3, +dot 2) v(4) e(5+6) .(7)
  *   better: b(10+11) e(8+9) t(14) t(17) ‾(13 shared crossbar) e(12+16) r(15+19) .(18)
- * Multi-path letters reveal on the same timing window so they read as one
- * unit, never as separate fragments.
+ * Multi-path letters (main stroke + entry/exit tail) reveal on the same
+ * timing window so they read as one unit, never as separate fragments.
  *
- * Reveal technique: clip the exact, already-gradiented glyph path against a
- * second animated region with a Merge Paths "Intersect" (never a
- * stroke/trim standing in for the fill). Each component gets its OWN copy of
- * the reveal rectangle in its OWN group — intersect combines every preceding
- * shape in a group pairwise in list order, so two different glyph paths can
- * never share one intersect stack.
+ * Reveal technique is the proven one from build-zenimator.mjs: clip the
+ * exact, already-solid glyph path against a second animated region with a
+ * Merge Paths "Intersect" (never a stroke/trim standing in for the fill).
+ * Each component gets its OWN copy of the reveal rectangle in its OWN group
+ * — intersect combines every preceding shape in a group pairwise in list
+ * order, so two different glyph paths can never share one intersect stack
+ * (confirmed pitfall, see svg-compatibility.md and build-allset.mjs).
  * Dots/periods pop (scale+opacity) instead of wiping — a real pen doesn't
  * "draw" a dot left-to-right.
  *
@@ -45,8 +40,8 @@ import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const SVG_PATH = join(__dirname, '../assets/gradient-verify.svg')
-const OUT_DIR = join(__dirname, '../public/projects/gradient-verify/scene-1')
+const SVG_PATH = join(__dirname, '../assets/live-better-4a8z.svg')
+const OUT_DIR = join(__dirname, '../public/projects/live-better-4a8z/scene-1')
 
 const FR = 60
 const OP = 100 // ~1s brisk write-on (0-59) + settle hold to a clean still
@@ -55,6 +50,7 @@ const EASE = {
   entranceSharp: { o: { x: [0.20], y: [0.75] }, i: { x: [0.34], y: [0.94] } },
   settleSoft: { o: { x: [0.00], y: [0.65] }, i: { x: [0.51], y: [0.99] } },
 }
+const INK = [0x22 / 255, 0xe2 / 255, 0x43 / 255]
 
 // ---------- SVG path parsing (M, C, Z — verified sufficient for this SVG) ----------
 
@@ -138,10 +134,10 @@ function bboxCenter(subpaths) {
 }
 
 // Vertex-only bbox understates a cursive glyph's true extent — control handles
-// on these sweeping strokes bulge past their vertices (confirmed on this SVG in
-// the sibling live-better-k7ur build). A wipe mask sized from vertices alone
-// leaves the "closed" rect's edge inside the curve's real silhouette, so a
-// sliver of ink shows before the letter's start frame. Sample the cubics.
+// on these sweeping strokes bulge up to ~8px past their vertices (confirmed by
+// sampling). A wipe mask sized from vertices alone leaves the "closed" rect's
+// edge inside the curve's real silhouette, so a sliver of ink shows before the
+// letter's start frame and clips a sliver at its end frame. Sample the cubics.
 function curveBbox(subpaths) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   const bez = (p0, p1, p2, p3, t) => {
@@ -166,57 +162,6 @@ function curveBbox(subpaths) {
     }
   }
   return { minX, minY, maxX, maxY }
-}
-
-// ---------- Radial gradient parsing (SVG <defs> -> Lottie static `gf`) ----------
-
-function parseAttrs(tag) {
-  const attrs = {}
-  for (const m of tag.matchAll(/([\w-]+)="([^"]*)"/g)) attrs[m[1]] = m[2]
-  return attrs
-}
-
-function hexToRgb01(hex) {
-  const h = hex.replace('#', '')
-  return [parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255]
-}
-
-function parseGradientTransform(t) {
-  const nums = (s) => s.trim().split(/[\s,]+/).map(Number)
-  const tx_ty = nums(t.match(/translate\(([^)]+)\)/)[1])
-  const angle = nums(t.match(/rotate\(([^)]+)\)/)[1])[0]
-  const scale = nums(t.match(/scale\(([^)]+)\)/)[1])
-  return { tx: tx_ty[0], ty: tx_ty[1], angle, sx: scale[0], sy: scale.length > 1 ? scale[1] : scale[0] }
-}
-
-// Unit circle (cx=0,cy=0,r=1) mapped through gradientTransform: center stays
-// at the translation, and the radius vector is the transform's rotated,
-// scaled x-axis — matches SVG's userSpaceOnUse radial gradient exactly.
-function gradientGeometry({ tx, ty, angle, sx }) {
-  const rad = (angle * Math.PI) / 180
-  return { s: [tx, ty], e: [tx + sx * Math.cos(rad), ty + sx * Math.sin(rad)] }
-}
-
-function parseGradients(svg) {
-  const gradients = {}
-  for (const m of svg.matchAll(/<radialGradient\s+([^>]*)>([\s\S]*?)<\/radialGradient>/g)) {
-    const attrs = parseAttrs(m[1])
-    const id = attrs.id
-    const geom = gradientGeometry(parseGradientTransform(attrs.gradientTransform))
-    const stopEls = [...m[2].matchAll(/<stop\s+([^/]*)\/>/g)].map((s) => parseAttrs(s[1]))
-    const stops = stopEls.map((s, i) => ({
-      offset: s.offset !== undefined ? Number(s.offset) : i === 0 ? 0 : 1,
-      rgb: hexToRgb01(s['stop-color']),
-      opacity: s['stop-opacity'] !== undefined ? Number(s['stop-opacity']) : 1,
-    }))
-    gradients[id] = { stops, ...geom }
-  }
-  return gradients
-}
-
-function parseFillRef(fillAttr) {
-  const m = fillAttr.match(/^url\(#(.+)\)$/)
-  return m ? { kind: 'gradient', id: m[1] } : { kind: 'flat', hex: fillAttr }
 }
 
 // ---------- Lottie shape builders ----------
@@ -248,20 +193,8 @@ function popTransform(center, start, end) {
     o: { a: 0, k: 100 },
   }
 }
-// Faithful to source: a flat SVG fill becomes a solid Lottie fill, a gradient
-// SVG fill becomes a static Lottie radial gradient fill — never flattened.
-function fillItemForRef(ref, gradients) {
-  if (ref.kind === 'flat') {
-    return { ty: 'fl', nm: 'fill', c: { a: 0, k: [...hexToRgb01(ref.hex), 1] }, o: { a: 0, k: 100 }, r: 1 }
-  }
-  const g = gradients[ref.id]
-  const colorArr = [], alphaArr = []
-  for (const st of g.stops) { colorArr.push(st.offset, ...st.rgb); alphaArr.push(st.offset, st.opacity) }
-  return {
-    ty: 'gf', nm: 'gradient fill', o: { a: 0, k: 100 }, r: 1,
-    g: { p: g.stops.length, k: { a: 0, k: [...colorArr, ...alphaArr] } },
-    s: { a: 0, k: g.s }, e: { a: 0, k: g.e }, t: 2,
-  }
+function fillItem() {
+  return { ty: 'fl', nm: 'ink', c: { sid: 'inkColor' }, o: { a: 0, k: 100 }, r: 1 }
 }
 function opacityKF(start, end, from, to) {
   return { a: 1, k: [{ t: start, s: [from], e: [to], o: EASE_INOUT.o, i: EASE_INOUT.i }, { t: end, s: [to] }] }
@@ -274,9 +207,10 @@ function slantRectKS(x0, y0, x1, y1, edgeX, slant) {
 }
 
 // Clips the exact glyph path against a rectangle that grows left-to-right —
-// the true geometry (and its native gradient paint) is on screen at every
-// frame, just progressively more of it.
-function wipeRevealGroup(nm, subpaths, fillItem, { start, end }) {
+// the true geometry is on screen at every frame, just progressively more of
+// it (see build-zenimator.mjs for the fuller rationale on why this beats
+// trimming a filled path or crossfading a stroke stand-in).
+function wipeRevealGroup(nm, subpaths, { start, end }) {
   const b = curveBbox(subpaths)
   const slant = Math.min(2.2, (b.maxY - b.minY) * 0.3)
   const margin = slant + 1
@@ -292,14 +226,14 @@ function wipeRevealGroup(nm, subpaths, fillItem, { start, end }) {
       ],
     },
   }
-  return { ty: 'gr', nm, it: [...pathShapes(subpaths), rectShape, mergeIntersect(), fillItem, staticTransform()] }
+  return { ty: 'gr', nm, it: [...pathShapes(subpaths), rectShape, mergeIntersect(), fillItem(), staticTransform()] }
 }
 
 // Dots/periods pop into place (scale + opacity) rather than wiping — a pen
 // taps a dot, it doesn't draw one left-to-right.
-function popGroup(nm, subpaths, fillItem, { start, end }) {
+function popGroup(nm, subpaths, { start, end }) {
   const center = bboxCenter(subpaths)
-  return { ty: 'gr', nm, it: [...pathShapes(subpaths), fillItem, popTransform(center, start, end)] }
+  return { ty: 'gr', nm, it: [...pathShapes(subpaths), fillItem(), popTransform(center, start, end)] }
 }
 
 function layer({ nm, ind, group }) {
@@ -317,8 +251,6 @@ const W = Number(svg.match(/width="(\d+)"/)[1])
 const H = Number(svg.match(/height="(\d+)"/)[1])
 const rawPathEls = svg.match(/<path[^>]*\/>/g)
 const PATHS = rawPathEls.map((el) => parsePathData(el.match(/d="([^"]+)"/)[1]))
-const FILL_REFS = rawPathEls.map((el) => parseFillRef(el.match(/\sfill="([^"]+)"/)[1]))
-const GRADIENTS = parseGradients(svg)
 
 // ---------- Timing: 11 brisk overlapping wipe slots (5f stagger, 9f trace) ----------
 const STEP = 5, TRACE = 9
@@ -359,10 +291,9 @@ const layers = []
 for (let i = 0; i < PATHS.length; i++) {
   const spec = PLAN[i]
   const subpaths = PATHS[i]
-  const fillItem = fillItemForRef(FILL_REFS[i], GRADIENTS)
   const group = spec.type === 'wipe'
-    ? wipeRevealGroup(spec.key, subpaths, fillItem, spec.t)
-    : popGroup(spec.key, subpaths, fillItem, spec.t)
+    ? wipeRevealGroup(spec.key, subpaths, spec.t)
+    : popGroup(spec.key, subpaths, spec.t)
   layers.push({ i, l: layer({ nm: spec.key, ind: ind++, group }) })
 }
 // Later SVG elements paint on top; Lottie layers array index 0 = frontmost.
@@ -370,13 +301,16 @@ layers.sort((a, b) => b.i - a.i)
 const finalLayers = layers.map((x) => x.l)
 
 const lottie = {
-  v: '5.9.0', fr: FR, ip: 0, op: OP, w: W, h: H, nm: 'Gradient Verify Entrance',
+  v: '5.9.0', fr: FR, ip: 0, op: OP, w: W, h: H, nm: 'Live Better Entrance',
   ddd: 0,
+  slots: { inkColor: { p: { a: 0, k: [...INK, 1] } } },
   assets: [],
   layers: finalLayers,
   markers: [],
 }
+const controls = { controls: [{ sid: 'inkColor', label: 'Ink color' }] }
 
 mkdirSync(OUT_DIR, { recursive: true })
 writeFileSync(join(OUT_DIR, 'lottie.json'), JSON.stringify(lottie))
+writeFileSync(join(OUT_DIR, 'controls.json'), JSON.stringify(controls, null, 2))
 console.log(`Wrote ${join(OUT_DIR, 'lottie.json')} — ${finalLayers.length} layers, ${OP}f @ ${FR}fps, canvas ${W}x${H}`)
