@@ -349,6 +349,16 @@ const DEFAULT_MODEL = 'claude-sonnet-5'
 const cleanModel = (m) =>
   typeof m === 'string' && /^[a-z0-9][a-z0-9[\]._-]{0,63}$/i.test(m) ? m : DEFAULT_MODEL
 
+// Per-turn reasoning depth. Passed explicitly so the engine doesn't inherit the
+// host's ambient default (Claude Code's is `xhigh` — deepest and slowest). We
+// default to `high`: the documented quality/speed sweet spot, faster than xhigh
+// while still running the full write→run→look→fix loop. Lower values (`medium`,
+// `low`) trade verification for speed — the app can request them, but the floor
+// is a deliberate product choice, not the CLI's ambient default.
+const DEFAULT_EFFORT = 'high'
+const EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
+const cleanEffort = (e) => (typeof e === 'string' && EFFORT_LEVELS.has(e) ? e : DEFAULT_EFFORT)
+
 /** Flags shared by every engine spawn. --strict-mcp-config stops the run from
  *  inheriting user/global MCP servers: each one adds process startup and its
  *  tool definitions to EVERY request the engine makes — pure latency/token
@@ -365,9 +375,10 @@ const capBuffer = (buf) => (buf.length > MAX_LINE_BUFFER ? buf.slice(-1_000_000)
 /** Run a propose job: spawn headless Claude Code to author a brief, stream
  *  progress, then emit the finished brief as a `proposal` event. Simpler than
  *  runClaude — no scene, snapshots, or session resume. */
-function runProposeClaude({ job, prompt, model, send, end }) {
+function runProposeClaude({ job, prompt, model, effort, send, end }) {
   const child = spawn('claude', [
-    '-p', prompt, '--output-format', 'stream-json', '--model', cleanModel(model), ...SPAWN_FLAGS,
+    '-p', prompt, '--output-format', 'stream-json',
+    '--model', cleanModel(model), '--effort', cleanEffort(effort), ...SPAWN_FLAGS,
   ], { cwd: WORKBENCH, env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'] })
   job.child = child
 
@@ -416,11 +427,12 @@ function runProposeClaude({ job, prompt, model, send, end }) {
 /** Spawn headless Claude Code in the workbench for a job, forwarding progress
  *  as NDJSON. Handles the terminal event, the dead-session edit fallback, and
  *  releasing the job's slot. */
-function runClaude({ job, prompt, resumeId, model, send, end }) {
+function runClaude({ job, prompt, resumeId, model, effort, send, end }) {
   const args = [
     '-p', prompt,
     '--output-format', 'stream-json',
     '--model', cleanModel(model),
+    '--effort', cleanEffort(effort),
     ...SPAWN_FLAGS, // local workbench, writes confined by CLAUDE.md
   ]
   if (resumeId) args.push('--resume', resumeId)
@@ -497,7 +509,7 @@ function runClaude({ job, prompt, resumeId, model, send, end }) {
       delete sessions[job.slug]
       saveSessions()
       send({ type: 'status', text: 'Original session expired — reopening the scene from its build script…' })
-      runClaude({ job, prompt: seededEditPrompt(job.slug, job.instruction, job.anchor ?? {}), resumeId: null, model, send, end })
+      runClaude({ job, prompt: seededEditPrompt(job.slug, job.instruction, job.anchor ?? {}), resumeId: null, model, effort, send, end })
       return
     }
 
@@ -550,7 +562,7 @@ const readBody = (req) =>
 
 /** Submit a job and wire its stream to the response; handles busy slugs and
  *  client-disconnect cancellation. */
-function submitJob({ res, req, slug, kind, prompt, resumeId, model, instruction, anchor, runner = runClaude }) {
+function submitJob({ res, req, slug, kind, prompt, resumeId, model, effort, instruction, anchor, runner = runClaude }) {
   let job = null // assigned below; queued events fire first and carry their own jobId
   const send = (obj) => {
     if (res.writableEnded) return
@@ -566,7 +578,7 @@ function submitJob({ res, req, slug, kind, prompt, resumeId, model, instruction,
   job = jobs.submit(slug, kind, {
     emit: (evt) => send(evt),
     end,
-    start: (j) => runner({ job: j, prompt, resumeId, model, send, end }),
+    start: (j) => runner({ job: j, prompt, resumeId, model, effort, send, end }),
   })
   if (job === 'full') {
     res.write(JSON.stringify({ type: 'error', text: 'The studio is at capacity — try again in a moment.' }) + '\n')
@@ -710,7 +722,7 @@ const server = createServer(async (req, res) => {
         }
         mkdirSync(join(WORKBENCH, 'assets'), { recursive: true })
         writeFileSync(join(WORKBENCH, 'assets', `${slug}.svg`), String(body.svg))
-        submitJob({ res, req, slug, kind: 'propose', prompt: proposePrompt(slug), resumeId: null, model: body.model, runner: runProposeClaude })
+        submitJob({ res, req, slug, kind: 'propose', prompt: proposePrompt(slug), resumeId: null, model: body.model, effort: body.effort, runner: runProposeClaude })
       } else if (req.url === '/generate') {
         if (!body.svg || !body.brief) {
           res.write(JSON.stringify({ type: 'error', text: 'generate needs {slug, svg, brief, kind}' }) + '\n')
@@ -724,6 +736,7 @@ const server = createServer(async (req, res) => {
           prompt: generatePrompt(slug, String(body.brief), body.kind === 'loop' ? 'loop' : 'entry'),
           resumeId: null,
           model: body.model,
+          effort: body.effort,
         })
       } else {
         if (!body.instruction) {
@@ -742,6 +755,7 @@ const server = createServer(async (req, res) => {
           prompt: editPrompt(slug, String(body.instruction), anchor),
           resumeId: sessions[slug]?.id ?? null,
           model: body.model,
+          effort: body.effort,
           instruction: String(body.instruction),
           anchor,
         })

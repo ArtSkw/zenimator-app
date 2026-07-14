@@ -148,7 +148,7 @@ try {
 
   // 1. Full generate stream
   {
-    const events = await stream('/generate', { slug: 'selftest-a', svg: '<svg/>', brief: 'test', kind: 'loop', model: 'claude-sonnet-5' })
+    const events = await stream('/generate', { slug: 'selftest-a', svg: '<svg/>', brief: 'test', kind: 'loop', model: 'claude-sonnet-5', effort: 'medium' })
     const types = events.map((e) => e.type)
     check('generate: status → narration → done', types.includes('status') && types.includes('narration') && types.at(-1) === 'done')
     const preview = events.find((e) => e.type === 'preview')
@@ -161,6 +161,7 @@ try {
     const { readFileSync } = await import('node:fs')
     const spawnArgs = JSON.parse(readFileSync(join(wb, 'assets', 'selftest-a.args.json'), 'utf8'))
     check('generate: spawn passes the requested --model', spawnArgs[spawnArgs.indexOf('--model') + 1] === 'claude-sonnet-5')
+    check('generate: spawn passes the requested --effort', spawnArgs[spawnArgs.indexOf('--effort') + 1] === 'medium')
     check('generate: spawn isolates MCP (--strict-mcp-config)', spawnArgs.includes('--strict-mcp-config'))
   }
 

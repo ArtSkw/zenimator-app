@@ -98,10 +98,20 @@ Upstream specs:
 Failure modes reproduced and isolated in this Skottie/CanvasKit build — known
 traps, each with the fix that avoids it.
 
-- **Animated gradients render nothing.** A gradient fill or stroke (`gf`/`gs`)
-  whose stops — or `s`/`e` start/end points — are keyframed silently draws
-  *nothing at all*, with no error. Keep the gradient static and animate a trim
-  (`tm`) or a mask/matte over it to fake motion.
+- **Animated gradients render nothing — but STATIC gradients render fine.** A
+  gradient fill or stroke (`gf`/`gs`) whose stops — or `s`/`e` start/end points —
+  are keyframed silently draws *nothing at all*, with no error. Only *animation
+  of the gradient itself* fails; a static gradient renders correctly. So keep the
+  gradient static and animate a trim (`tm`) or a mask/matte *over* it.
+  - **Preserve the source's gradient paint — do NOT flatten it to a solid "to be
+    safe."** When the artwork ships per-path gradient fills (tapers, sheens,
+    highlights) and the animation is a *reveal* or *transform* (draw-on, wipe,
+    move, scale, rotate — none of which touch the fill), carry each path's
+    gradient through unchanged and reveal over it. Flattening to one ink color
+    throws away texture the source intended and is only warranted when you must
+    animate the gradient's own stops (rare) — reach for it as a last resort, not a
+    default. Porting N static gradients is more work than one flat fill; do the
+    work.
 - **Descending or out-of-order keyframe `t` silently freezes the property.** No
   error is raised; the property (and any sibling built the same way) simply
   stops animating. Assert `t` is strictly monotonic before trusting a track. In

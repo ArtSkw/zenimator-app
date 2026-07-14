@@ -13,13 +13,13 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Settings2, Check, X, Loader2, Sun, Moon, Monitor } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { useSettingsStore, DEFAULT_MODEL } from '@/store/settingsStore'
+import { useSettingsStore, DEFAULT_MODEL, EFFORT_LEVELS } from '@/store/settingsStore'
 import { useTheme, type Theme } from '@/components/theme-provider'
 
 type TestResult = { ok: true } | { ok: false; error: string } | null
 
 export function SettingsDrawer() {
-  const { apiKey, model, agentUrl, agentToken, setApiKey, setModel, setAgentUrl, setAgentToken } = useSettingsStore()
+  const { apiKey, model, effort, agentUrl, agentToken, setApiKey, setModel, setEffort, setAgentUrl, setAgentToken } = useSettingsStore()
 
   const { theme, setTheme } = useTheme()
 
@@ -172,6 +172,35 @@ export function SettingsDrawer() {
               className="font-mono text-xs"
               spellCheck={false}
             />
+          </section>
+
+          <Separator />
+
+          <section className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm font-semibold">Reasoning effort</Label>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                How hard the engine thinks per step. Higher is more thorough but
+                slower; <span className="font-medium">high</span> is the balanced
+                default. <span className="font-medium">medium</span>/<span className="font-medium">low</span> are
+                faster but verify less; <span className="font-medium">xhigh</span>/<span className="font-medium">max</span> go
+                deeper for hero scenes.
+              </p>
+            </div>
+            <div className="flex gap-1">
+              {EFFORT_LEVELS.map((level) => (
+                <Button
+                  key={level}
+                  type="button"
+                  variant={effort === level ? 'default' : 'secondary'}
+                  size="sm"
+                  className="rounded-full flex-1 text-xs"
+                  onClick={() => setEffort(level)}
+                >
+                  {level}
+                </Button>
+              ))}
+            </div>
           </section>
 
           <Separator />
