@@ -24,6 +24,10 @@ normal animation work.
 - JSON parses successfully.
 - The official Skottie player renders the scene.
 - Assets are colocated with the scene and referenced by bare filename.
+- **Source paint is preserved:** if the source SVG uses gradient fills, the
+  rendered scene shows those gradients — a flat-color render of gradient source
+  art is a defect (only *animating* a gradient's stops is disallowed; static
+  gradients must survive intake).
 
 ## Controls And Background
 

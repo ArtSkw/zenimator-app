@@ -73,6 +73,12 @@ SVG-like path behavior.
 - If a mask moves, check all masked frames for popping or disappearing content.
 - Prefer simple linear/radial gradients. Provide solid fallback shapes if the
   look is critical.
+- **Keep the source's gradient fills — do not flatten them to a solid.** If a
+  path ships a gradient (`fill="url(#…)"`), carry that gradient into the Lottie
+  shape unchanged; the reveal/transform animates *over* it. Flattening because a
+  gradient is "subtle" or because there are several to port is a **regression of
+  the artwork**, not a safe simplification (static gradients render fine here —
+  only *animating a gradient's stops* fails; see lottie-spec-map Renderer gotchas).
 - Rebuild SVG filters, shadows, blurs, and blend modes as simple Lottie shapes
   or restrained effect layers where possible.
 - Align crisp icon geometry to avoid fuzzy fractional-pixel edges.

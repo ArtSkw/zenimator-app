@@ -103,15 +103,19 @@ traps, each with the fix that avoids it.
   are keyframed silently draws *nothing at all*, with no error. Only *animation
   of the gradient itself* fails; a static gradient renders correctly. So keep the
   gradient static and animate a trim (`tm`) or a mask/matte *over* it.
-  - **Preserve the source's gradient paint — do NOT flatten it to a solid "to be
-    safe."** When the artwork ships per-path gradient fills (tapers, sheens,
-    highlights) and the animation is a *reveal* or *transform* (draw-on, wipe,
+  - **Preserve the source's gradient paint — this is a REQUIREMENT, not a
+    judgment call.** If the artwork ships per-path gradient fills (tapers, sheens,
+    highlights), the output MUST keep them: source-paint fidelity is part of the
+    deliverable. When the animation is a *reveal* or *transform* (draw-on, wipe,
     move, scale, rotate — none of which touch the fill), carry each path's
-    gradient through unchanged and reveal over it. Flattening to one ink color
-    throws away texture the source intended and is only warranted when you must
-    animate the gradient's own stops (rare) — reach for it as a last resort, not a
-    default. Porting N static gradients is more work than one flat fill; do the
-    work.
+    gradient through **unchanged** and reveal/transform *over* it. **Do NOT
+    flatten to a solid color.** "The gradient is subtle / just a highlight" and
+    "there are N gradients, that's more work" are **NOT** acceptable reasons to
+    flatten — port every one; the work is the job. The *only* time flattening is
+    allowed is when the brief requires animating the gradient's own stops (which
+    doesn't render — rare); otherwise a flattened result that shipped with
+    gradients in the source is a defect. Verify against the source: if the source
+    has a gradient and your render is flat, you have regressed the artwork.
 - **Descending or out-of-order keyframe `t` silently freezes the property.** No
   error is raised; the property (and any sibling built the same way) simply
   stops animating. Assert `t` is strictly monotonic before trusting a track. In
