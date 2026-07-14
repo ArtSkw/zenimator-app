@@ -1,0 +1,28 @@
+{
+  "controls": [
+    {
+      "sid": "accentColor",
+      "label": "Checkmark & circle color"
+    },
+    {
+      "sid": "cloudColor",
+      "label": "Cloud line color"
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "cloud-left",
+      "kind": "amount",
+      "property": "position",
+      "label": "Cloud float height",
+      "description": "How far the clouds drift upward as they draw themselves in."
+    },
+    {
+      "target": "start-dot",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Badge pop",
+      "description": "How much the circle's start and end sparks bounce in as it closes."
+    }
+  ]
+}
