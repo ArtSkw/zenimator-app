@@ -99,6 +99,17 @@ the accepted studio technique — field-proven on the "Live better" motto — is
    writing direction (its ductus) — left-to-right for most Latin script,
    angled to match the stroke. The soft leading edge is what makes it read as
    ink flowing rather than a hard shutter.
+   - **Non-horizontal sweeps** (a diagonal brush stroke, a ribbon wrapping
+     around an object, anything whose ductus isn't left-to-right): compute a
+     unit direction `u` from the segment's own start/end (its two rounded
+     caps, or its bbox diagonal), then project every vertex onto `u` from any
+     point on that line to get the sweep's `minP`/`maxP` range — a linear
+     gradient's color only depends on projection onto `(e−s)`, so shifting
+     `s`/`e` perpendicular to `u` never changes the reveal, meaning the
+     projection origin doesn't need to be the shape's true center. Slide
+     `s`/`e` along `u` the same opaque→transparent way as the horizontal
+     case. This is how `entry-3s-tender-cvol` draws a ribbon wrapping a phone
+     in three diagonal segments instead of a flat directional wipe.
 4. **Alternative for single-stroke or curvy glyphs**: matte with a wide
    round-cap stroke tracing the letter's spine, revealed with an animated trim
    (`tm`) — follows curvature exactly. Pick per letter; both matte styles can
