@@ -77,7 +77,7 @@ SVG-like path behavior.
   instead of a clip.
 - Verify holes at frame `0`, during reveal, and at the settled frame.
 
-## Masks, Clips, Gradients, And Effects
+## Masks, Clips, Gradients, Patterns, And Effects
 
 - Use masks and clip paths only when needed; simple grouped shapes are safer.
 - If a mask moves, check all masked frames for popping or disappearing content.
@@ -102,6 +102,38 @@ SVG-like path behavior.
     whose every stop shares one hue and only ramps opacity (a soft highlight
     taper, common on hand-lettered strokes) is still a real gradient — encode
     the alpha ramp, don't collapse it to one flat opacity.
+- **Keep the source's `<pattern>` fills too — carry the texture, do NOT flatten
+  it.** A `fill="url(#patternN)"` — especially one tiling an embedded raster
+  image (`<image>`/base64 PNG referenced by `<use>`) — is the same class of trap
+  as a dropped gradient. Skottie has **no tiled-pattern fill**, so the naive move
+  is to collapse the shape to a solid, which silently erases the texture. This is
+  exactly what dropped the diagonal-hatch "grey cog" and its shadow on the
+  data-processing scene. Preserve it, and pick the path by whether the piece
+  moves:
+  - **Preferred — revectorize the motif and clip it to the shape.** Rebuild the
+    pattern's repeating unit as real vector geometry (a diagonal hatch → a set of
+    stroke lines or thin rects) and clip it to the target shape's silhouette with
+    a track matte. It stays vector, so it recolors, scales crisply, and — the
+    point — **transforms WITH the shape**: the hatch rotates with its gear, the
+    shadow texture breathes with the shadow. A baked bitmap can't do that
+    cleanly. This is how the accepted data-processing scene does it: `shine`
+    (71 hatch shards) and `shadow` (14), each a flat-fill subpath cluster matted
+    by the badge. Match the source tile's spacing/angle and the pattern's
+    `fill-opacity`.
+  - **Fallback — rasterize the filled shape to an image layer + matte.** If the
+    motif is too intricate to revectorize faithfully AND the piece is static,
+    render the pattern-filled shape to a PNG, add it as an image asset, and clip
+    it with a shape matte. Acceptable, but the texture is now a rigid bitmap —
+    it can only move as one piece, so never use this for anything that must
+    rotate or scale independently.
+  - **Never** flatten the pattern to a solid fill and drop the texture — that is
+    a regression of the artwork, same severity as flattening a gradient. Verify
+    against the source: if the source has a hatch/texture and your render is
+    flat, you have regressed it.
+  - **Export note:** the same illustration can export a texture either as a
+    raster `<pattern>` (hard) or as pre-expanded vector subpaths (easy — carry
+    them straight through as shapes). Both are valid inputs and both must keep
+    the texture; if you control the export, prefer the vector one.
 - Rebuild SVG filters, shadows, blurs, and blend modes as simple Lottie shapes
   or restrained effect layers where possible.
 - Align crisp icon geometry to avoid fuzzy fractional-pixel edges.

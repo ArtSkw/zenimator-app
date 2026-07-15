@@ -77,10 +77,19 @@ Always read `svg-compatibility.md` with this recipe.
   Keyframing a gradient's stops or `s`/`e` renders nothing in Skottie — animate
   a trim or mask over a STATIC gradient instead.
 
+- Raster `<pattern>` fill (`fill="url(#patternN)"` tiling an embedded PNG —
+  hatches, textures, halftones): Skottie has no tiled-pattern fill, so DON'T
+  flatten it to a solid. Revectorize the motif as vector geometry clipped to the
+  shape so it animates with the piece (a rotating textured gear keeps its hatch),
+  or rasterize the filled shape to an image+matte only when it's static. Full
+  rule + the accepted example in svg-compatibility ("Masks, Clips, Gradients,
+  Patterns, And Effects").
+
 ## Common Failure Modes
 
 - Final frame no longer matches the source.
 - Hidden CSS styling disappears after conversion.
+- A raster `<pattern>` fill gets flattened to a solid, dropping the texture.
 - Fill rules or masks break holes/intersections.
 - Arbitrary path fragments move without a readable idea.
 
