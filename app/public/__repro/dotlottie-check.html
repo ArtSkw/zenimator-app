@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- Dev-only helper (plan §3.7): drop an exported .lottie here to confirm it
+     plays in the reference dotlottie-web player — the same ThorVG engine every
+     dotlottie mobile runtime uses. Not part of the app bundle's UI. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>dotLottie check</title>
+  <style>
+    body { font-family: system-ui, sans-serif; display: grid; place-items: center; gap: 16px; min-height: 100vh; margin: 0; background: #fafafa; }
+    canvas { width: 480px; height: 480px; background: #fff; border: 1px solid #ddd; border-radius: 12px; }
+    p { color: #666; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <p>Pick an exported <code>.lottie</code> (or a pack's <code>animation.lottie</code>) — it should autoplay below.</p>
+  <input type="file" id="file" accept=".lottie,.json" />
+  <canvas id="canvas" width="960" height="960"></canvas>
+  <script type="module">
+    // Version pinned (immutable jsdelivr URL) — this page shares the app's
+    // origin, so it never auto-upgrades to an unreviewed script.
+    import { DotLottie } from 'https://cdn.jsdelivr.net/npm/@lottiefiles/dotlottie-web@0.77.1/+esm'
+    let player = null
+    document.getElementById('file').addEventListener('change', async (e) => {
+      const f = e.target.files?.[0]
+      if (!f) return
+      const data = await f.arrayBuffer()
+      player?.destroy()
+      player = new DotLottie({ canvas: document.getElementById('canvas'), data, autoplay: true, loop: true })
+    })
+  </script>
+</body>
+</html>

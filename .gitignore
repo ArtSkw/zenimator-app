@@ -11,6 +11,7 @@ server/sessions.json
 # included now — the team needs it to exercise the app.
 BRIEF.md
 docs/plan.md
+docs/impl-*.md
 /CLAUDE.md
 
 # OS / editor noise
