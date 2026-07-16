@@ -1,5 +1,5 @@
 import { SettingsDrawer } from '@/components/settings/SettingsDrawer'
-import { GenerateExportMenu } from '@/components/generate/GenerateExportMenu'
+import { GenerateExport } from '@/components/generate/GenerateExport'
 import { useGenerateStore } from '@/store/generateStore'
 import { useProjectsStore } from '@/store/projectsStore'
 import logoLightUrl from '@/assets/zenimator-logo-light.svg'
@@ -36,7 +36,7 @@ export function TopBar() {
             useBakedLottieJson would re-parse/clone/stringify the whole doc on
             every control commit just to keep this button current. */}
         {lottieJson && (
-          <GenerateExportMenu loop={resultKind === 'loop'} />
+          <GenerateExport loop={resultKind === 'loop'} />
         )}
       </div>
     </header>
