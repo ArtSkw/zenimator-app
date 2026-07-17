@@ -220,8 +220,12 @@ export class SkottiePlayer {
     this.canvas.height = height
     this.surface?.delete()
     this.surface = this.makeSurface(width, height)
-    this.dirty = true
-    this.scheduleTick()
+    // Paint the current frame SYNCHRONOUSLY: a freshly (re)created GL surface
+    // starts blank, and waiting for the next rAF tick shows a one-frame flash
+    // on every resize — very visible while zooming. Drawing now removes it.
+    this.draw()
+    this.dirty = false
+    if (this.playing) this.scheduleTick()
   }
 
   /** Create an on-screen GL surface. Owns the WebGL context + GrContext so they

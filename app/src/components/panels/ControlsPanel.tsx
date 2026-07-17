@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Switch } from '@/components/ui/switch'
 import { Check } from 'lucide-react'
 import { SlotControlsPanel } from '@/components/generate/SlotControlsPanel'
+import { SceneDossier } from '@/components/generate/SceneDossier'
 import { useGenerateStore } from '@/store/generateStore'
 import { useProjectsStore } from '@/store/projectsStore'
 import { useStudioEditBridge } from '@/store/studioEditBridge'
@@ -126,7 +127,11 @@ export function ControlsPanel() {
         ) : (
           <div className="p-4 space-y-5">
             {general.length > 0 && (
-              <Section title="Animation" icon={Film}>
+              <Section
+                title="Animation"
+                icon={Film}
+                action={isStudioScene && activeSlug ? <SceneDossier slug={activeSlug} variant="inline" /> : undefined}
+              >
                 <SlotControlsPanel manifest={{ controls: general }} />
               </Section>
             )}
@@ -233,7 +238,7 @@ function HistoryPanel({ slug, onClose }: { slug: string; onClose: () => void }) 
         <span className="text-[13px] font-semibold text-foreground">History</span>
         {/* Same ghost icon button the Settings / dossier sheets use for close —
             one close-button shape everywhere. */}
-        <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close history" className="ml-auto">
+        <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close history" className="ml-auto rounded-full">
           <X />
         </Button>
       </div>
@@ -393,16 +398,20 @@ function IntensityControl({
   )
 }
 
-function Section({ title, icon: Icon, children }: { title: string; icon?: LucideIcon; children: React.ReactNode }) {
+function Section({ title, icon: Icon, action, children }: { title: string; icon?: LucideIcon; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="space-y-4">
       {/* Same section-label recipe as the left sidebar — one voice everywhere.
           A layer section carries the layer glyph so it's clear WHICH part is
-          being edited. */}
-      <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-foreground/70 truncate">
-        {Icon && <Icon size={13} className="shrink-0 text-muted-foreground" />}
-        <span className="truncate">{title}</span>
-      </p>
+          being edited. `action` sits opposite the label (e.g. the scene
+          dossier on the Animation section). */}
+      <div className="flex items-center gap-1.5">
+        <p className="flex min-w-0 flex-1 items-center gap-1.5 text-xs font-semibold tracking-wide text-foreground/70 truncate">
+          {Icon && <Icon size={13} className="shrink-0 text-muted-foreground" />}
+          <span className="truncate">{title}</span>
+        </p>
+        {action && <div className="-my-1 shrink-0">{action}</div>}
+      </div>
       {children}
     </div>
   )
