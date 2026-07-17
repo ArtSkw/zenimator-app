@@ -10,10 +10,27 @@ type Props = {
   autoPlay?: boolean
   /** Loop continuously (default true); false plays once and holds (entry kind). */
   loop?: boolean
+  /** Backing-store density multiplier over the element's device-pixel box
+   *  (default 1). The zoom control raises this so a magnified vector stays
+   *  crisp — Skottie re-rasterizes into a proportionally denser surface — WITHOUT
+   *  changing the element's layout size (the CSS transform does the visual
+   *  scaling). Changing it re-renders the surface once; it never recreates the
+   *  engine. */
+  renderScale?: number
   /** Receives imperative controls when ready (and null on teardown). */
   onReady?: (controls: SkottieControls | null, loop: boolean) => void
   onPlayStateChange?: (playing: boolean) => void
   onFrame?: (frame: number, total: number) => void
+}
+
+/** Backing-store cap: a magnified surface must never exceed the max GPU texture
+ *  a mainstream device reliably allocates. Beyond this the density stops rising
+ *  (the CSS upscale takes over) rather than risk a black surface. */
+const MAX_BACKING = 4096
+
+function scaledDevice(w: number, h: number, scale: number): { w: number; h: number } {
+  const s = Math.max(0.25, Math.min(scale, MAX_BACKING / w, MAX_BACKING / h))
+  return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)) }
 }
 
 /**
@@ -22,15 +39,17 @@ type Props = {
  * critical path — only mount it inside the generate lane.
  */
 export function SkottiePlayer({
-  lottieJson, className, autoPlay = true, loop = true,
+  lottieJson, className, autoPlay = true, loop = true, renderScale = 1,
   onReady, onPlayStateChange, onFrame,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const engineRef = useRef<SkottieEngine | null>(null)
-  /** Latest exact device-pixel box from the ResizeObserver; null until the
-   *  browser delivers one (or forever, where device-pixel-content-box is
-   *  unsupported — then the clientWidth × dpr path stays in charge). */
-  const deviceBox = useRef<{ w: number; h: number } | null>(null)
+  /** Latest raw device-pixel box from the ResizeObserver (element layout size ×
+   *  dpr, BEFORE renderScale); null until the browser delivers one. The applied
+   *  backing store is this × renderScale, so a zoom that only changes
+   *  renderScale can re-derive the target without a fresh observer entry. */
+  const rawBox = useRef<{ w: number; h: number } | null>(null)
+  const renderScaleRef = useRef(renderScale)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -50,6 +69,11 @@ export function SkottiePlayer({
     setLoading(true)
     setError(null)
 
+    const applyResize = (raw: { w: number; h: number }) => {
+      const d = scaledDevice(raw.w, raw.h, renderScaleRef.current)
+      engineRef.current?.resize(d.w, d.h)
+    }
+
     SkottieEngine.create(
       canvas,
       lottieJson,
@@ -67,7 +91,7 @@ export function SkottiePlayer({
         engineRef.current = engine
         // The observer's initial entry fired before the engine existed — apply
         // the exact device-pixel box it captured so the first paint is crisp.
-        if (deviceBox.current) engine.resize(deviceBox.current.w, deviceBox.current.h)
+        if (rawBox.current) applyResize(rawBox.current)
         setLoading(false)
         onReadyRef.current?.(
           {
@@ -89,19 +113,25 @@ export function SkottiePlayer({
         }
       })
 
-    // Keep the backing store at the EXACT physical-pixel size of the element.
-    // device-pixel-content-box entries fire on layout resizes AND on browser
-    // zoom / devicePixelRatio changes, and they carry the true device-pixel
-    // box — no CSS-px × dpr rounding, so vector output stays crisp at any
-    // zoom. (The box is stashed because the initial entry fires while the
-    // engine is still loading CanvasKit.)
+    // Keep the backing store at the EXACT physical-pixel size of the element
+    // (× renderScale). device-pixel-content-box entries fire on layout resizes
+    // AND on browser zoom / devicePixelRatio changes, and carry the true
+    // device-pixel box — no CSS-px × dpr rounding, so vector output stays crisp.
+    // (The box is stashed because the initial entry fires while the engine is
+    // still loading CanvasKit.) Note: CSS transforms do NOT trigger this
+    // observer, so stage-zoom density changes are driven by the renderScale
+    // effect below, not here.
     const observer = new ResizeObserver((entries) => {
       const box = entries[entries.length - 1]?.devicePixelContentBoxSize?.[0]
       if (box) {
-        deviceBox.current = { w: box.inlineSize, h: box.blockSize }
-        engineRef.current?.resize(box.inlineSize, box.blockSize)
+        rawBox.current = { w: box.inlineSize, h: box.blockSize }
+        applyResize(rawBox.current)
       } else {
-        engineRef.current?.resize()
+        // Safari < 17.2: no device-pixel-content-box. Derive from client size ×
+        // dpr so renderScale still applies (density, not just 1×).
+        const dpr = window.devicePixelRatio || 1
+        rawBox.current = { w: canvas.clientWidth * dpr, h: canvas.clientHeight * dpr }
+        applyResize(rawBox.current)
       }
     })
     try {
@@ -119,7 +149,11 @@ export function SkottiePlayer({
       dprCleanup?.()
       const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
       const onChange = () => {
-        if (!deviceBox.current) engineRef.current?.resize()
+        if (rawBox.current) {
+          const dpr = window.devicePixelRatio || 1
+          rawBox.current = { w: canvas.clientWidth * dpr, h: canvas.clientHeight * dpr }
+          applyResize(rawBox.current)
+        }
         watchDpr()
       }
       mq.addEventListener('change', onChange, { once: true })
@@ -136,6 +170,16 @@ export function SkottiePlayer({
       engineRef.current = null
     }
   }, [lottieJson, autoPlay, loop])
+
+  // Density-only change (stage zoom settled): re-render the surface at the new
+  // backing scale over the same element box. One resize, no engine churn.
+  useEffect(() => {
+    renderScaleRef.current = renderScale
+    if (rawBox.current) {
+      const d = scaledDevice(rawBox.current.w, rawBox.current.h, renderScale)
+      engineRef.current?.resize(d.w, d.h)
+    }
+  }, [renderScale])
 
   return (
     <div className={className} style={{ position: 'relative' }}>

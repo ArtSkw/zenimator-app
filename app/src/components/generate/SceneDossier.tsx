@@ -28,7 +28,7 @@ const PROSE =
  * and a pointer to version history. The agent's documentation becomes
  * user-facing product value (plan Phase 2.3).
  */
-export function SceneDossier({ slug }: { slug: string }) {
+export function SceneDossier({ slug, variant = 'floating' }: { slug: string; variant?: 'floating' | 'inline' }) {
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<SceneDossierData | null | 'loading'>('loading')
   const [showScript, setShowScript] = useState(false)
@@ -45,7 +45,8 @@ export function SceneDossier({ slug }: { slug: string }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       {/* Icon-only trigger (controlled open — no SheetTrigger needed); the label
-          lives in the tooltip. Sits where Clear used to. */}
+          lives in the tooltip. 'floating' = pill over the canvas; 'inline' = a
+          quiet ghost button that sits in the Controls sidebar header. */}
       <Tooltip>
         <TooltipTrigger
           render={
@@ -53,13 +54,17 @@ export function SceneDossier({ slug }: { slug: string }) {
               type="button"
               aria-label="How it was made"
               onClick={() => onOpenChange(true)}
-              className="pressable flex size-8 items-center justify-center rounded-full border border-border bg-background/80 text-foreground backdrop-blur-sm shadow-sm"
+              className={
+                variant === 'inline'
+                  ? 'pressable flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'pressable flex size-8 items-center justify-center rounded-full border border-border bg-background/80 text-foreground backdrop-blur-sm shadow-sm'
+              }
             >
-              <BookOpen size={13} />
+              <BookOpen size={variant === 'inline' ? 14 : 13} />
             </button>
           }
         />
-        <TooltipContent side="top">How it was made</TooltipContent>
+        <TooltipContent side={variant === 'inline' ? 'bottom' : 'top'}>How it was made</TooltipContent>
       </Tooltip>
       <SheetContent side="right" className="w-full sm:max-w-2xl">
         <SheetHeader>

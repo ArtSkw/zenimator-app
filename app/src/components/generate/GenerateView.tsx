@@ -13,7 +13,7 @@ import { SkottiePlayer } from '@/components/player/SkottiePlayer'
 import { SkeletonSelectionOverlay } from '@/components/generate/SkeletonSelectionOverlay'
 import { StudioSelectionOverlay } from '@/components/generate/StudioSelectionOverlay'
 import { StudioFeed } from '@/components/generate/StudioFeed'
-import { SceneDossier } from '@/components/generate/SceneDossier'
+import { ZoomableStage } from '@/components/generate/StageZoom'
 import { useGenerateStore, useBakedLottieJson, type Subject, type Kind } from '@/store/generateStore'
 import { useGeneratePlayback } from '@/store/generatePlaybackStore'
 import { useStudioFeed } from '@/store/studioFeedStore'
@@ -205,15 +205,16 @@ export function GenerateView() {
   // is additionally capped by the viewport-height budget (~21rem of chrome
   // around the stage) so the result and the chat stay on screen together,
   // with a 20rem floor so small laptops never drop below the old stage size.
-  const docAspect = useMemo(() => {
-    if (!lottieJson) return 1
+  const docMeta = useMemo(() => {
+    if (!lottieJson) return { aspect: 1, w: 512 }
     try {
       const d = JSON.parse(lottieJson) as { w?: number; h?: number }
-      return d.w && d.h ? d.w / d.h : 1
+      return d.w && d.h ? { aspect: d.w / d.h, w: d.w } : { aspect: 1, w: 512 }
     } catch {
-      return 1
+      return { aspect: 1, w: 512 }
     }
   }, [lottieJson])
+  const docAspect = docMeta.aspect
 
   // The current edit anchor, shown as a dismissible chip above the chat: a
   // pinned frame ("fix this moment") and/or the selected layer (from the
@@ -675,44 +676,45 @@ export function GenerateView() {
           {bakedLottieJson && (
             <div className="mt-6 space-y-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-400 ease-out-strong">
               <div className="relative rounded-2xl border border-border p-2" style={CHECKER_BG}>
-                <div
-                  className="relative mx-auto w-full"
-                  style={{
+                <ZoomableStage
+                  key={activeProject?.studioSlug ?? 'draft'}
+                  docWidth={docMeta.w}
+                  sizingStyle={{
                     aspectRatio: docAspect,
                     maxWidth: `min(100%, max(20rem, calc((100dvh - 21rem) * ${docAspect.toFixed(4)})))`,
                   }}
                 >
-                  <SkottiePlayer
-                    lottieJson={bakedLottieJson}
-                    loop={resultKind === 'loop'}
-                    onReady={(c, lp) => (c ? attach(c, lp) : detach())}
-                    onPlayStateChange={setPlaying}
-                    onFrame={setProgress}
-                    className="h-full w-full"
-                  />
-                  {skeleton ? <SkeletonSelectionOverlay /> : <StudioSelectionOverlay />}
-                </div>
-                {canChat && activeProject?.studioSlug && (
-                  <>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            aria-label="History"
-                            onClick={() => setHistoryOpen(true)}
-                            className="pressable absolute bottom-3 left-3 flex size-8 items-center justify-center rounded-full border border-border bg-background/80 text-foreground backdrop-blur-sm shadow-sm"
-                          >
-                            <History size={13} />
-                          </button>
-                        }
+                  {(renderScale) => (
+                    <>
+                      <SkottiePlayer
+                        lottieJson={bakedLottieJson}
+                        loop={resultKind === 'loop'}
+                        renderScale={renderScale}
+                        onReady={(c, lp) => (c ? attach(c, lp) : detach())}
+                        onPlayStateChange={setPlaying}
+                        onFrame={setProgress}
+                        className="h-full w-full"
                       />
-                      <TooltipContent side="top">History</TooltipContent>
-                    </Tooltip>
-                    <div className="absolute bottom-3 right-3">
-                      <SceneDossier slug={activeProject.studioSlug} />
-                    </div>
-                  </>
+                      {skeleton ? <SkeletonSelectionOverlay /> : <StudioSelectionOverlay />}
+                    </>
+                  )}
+                </ZoomableStage>
+                {canChat && activeProject?.studioSlug && (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label="History"
+                          onClick={() => setHistoryOpen(true)}
+                          className="pressable absolute bottom-3 left-3 flex size-8 items-center justify-center rounded-full border border-border bg-background/80 text-foreground backdrop-blur-sm shadow-sm"
+                        >
+                          <History size={13} />
+                        </button>
+                      }
+                    />
+                    <TooltipContent side="top">History</TooltipContent>
+                  </Tooltip>
                 )}
               </div>
 
