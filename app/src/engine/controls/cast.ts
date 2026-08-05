@@ -1,4 +1,5 @@
 import type { ControlManifest } from './deriveControls'
+import { sceneLayers } from '@/engine/lottie/sceneRoot'
 
 /**
  * The creative CAST of a studio scene — the curated layer list the panels
@@ -58,7 +59,7 @@ export function reconcileCast(
   labels: Record<string, string>,
   { allowAdd }: { allowAdd: boolean },
 ): CastMember[] {
-  const present = new Set((doc?.layers ?? []).map((l) => l.nm).filter(Boolean) as string[])
+  const present = new Set(sceneLayers(doc).map((l) => l.nm).filter(Boolean) as string[])
   const kept = prev
     .filter((m) => present.has(m.nm))
     .map((m) => ({ nm: m.nm, label: labels[m.nm] ?? m.label }))

@@ -5,6 +5,7 @@
  * produced Lottie JSON.
  */
 import { useSettingsStore } from '@/store/settingsStore'
+import { sceneLayers } from '@/engine/lottie/sceneRoot'
 
 const DEFAULT_STUDIO_URL = (import.meta.env.VITE_STUDIO_AGENT_URL as string | undefined) ?? 'http://localhost:4545'
 
@@ -231,17 +232,47 @@ export async function studioCancel(slug: string): Promise<void> {
 }
 
 export function studioGenerate(
-  params: { slug: string; svg: string; brief: string; kind: 'entry' | 'loop' },
+  params: {
+    slug: string
+    /** Single-attachment contract (unchanged; old engines understand it). */
+    svg?: string
+    /** Sequence briefs (v1.2 §3.8): 2+ artworks in story order — gate on
+     *  `studioFeatures()` including 'multi-svg' before sending. */
+    svgs?: { name: string; svg: string }[]
+    brief: string
+    kind: 'entry' | 'loop'
+  },
   onEvent: (e: StudioEvent) => void,
   signal?: AbortSignal,
 ): Promise<StudioDone> {
   return streamRequest('/generate', params, onEvent, signal)
 }
 
+/** Capabilities the engine advertises on /health (`features`, v1.2 —
+ *  additive; empty on older engines). Uncached: the engine can be upgraded
+ *  and restarted mid-session, and one extra health fetch per gated action
+ *  is nothing. */
+export async function studioFeatures(): Promise<string[]> {
+  try {
+    const r = await fetch(`${baseUrl()}/health`, { headers: authHeaders() })
+    const j = (await r.json()) as { features?: string[] }
+    return Array.isArray(j.features) ? j.features : []
+  } catch {
+    return []
+  }
+}
+
 /** Ask the agent to study the SVG and propose a brief. Streams progress like a
  *  job; resolves with the proposed brief text (from the `proposal` event). */
 export async function studioPropose(
-  params: { slug: string; svg: string },
+  params: {
+    slug: string
+    /** Single-attachment contract (unchanged; old engines understand it). */
+    svg?: string
+    /** Sequence briefs (v1.2 §3.8): 2+ artworks in story order — the proposal
+     *  connects all of them. Gate on `studioFeatures()` before sending. */
+    svgs?: { name: string; svg: string }[]
+  },
   onEvent: (e: StudioEvent) => void,
   signal?: AbortSignal,
 ): Promise<string> {
@@ -306,7 +337,9 @@ export function labelsFromDoc(lottieJson: string): Record<string, string> {
   const labels: Record<string, string> = {}
   try {
     const doc = JSON.parse(lottieJson) as { layers?: Array<{ nm?: string; ty?: number; td?: number }> }
-    for (const l of doc.layers ?? []) {
+    // A screen scene's layers live inside a wrapping precomp — label those, or
+    // the Layers panel falls back to raw `nm`s for the whole cast.
+    for (const l of sceneLayers(doc)) {
       if (!l.nm || l.ty === 3 || l.td === 1) continue
       const pretty = l.nm.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
       labels[l.nm] = pretty.charAt(0).toUpperCase() + pretty.slice(1)

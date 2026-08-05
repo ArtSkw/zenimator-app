@@ -7,6 +7,7 @@ import { TrendingUp, Waves } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Switch } from '@/components/ui/switch'
 import { Check } from 'lucide-react'
+import { sceneLayers } from '@/engine/lottie/sceneRoot'
 import { SlotControlsPanel } from '@/components/generate/SlotControlsPanel'
 import { SceneDossier } from '@/components/generate/SceneDossier'
 import { useGenerateStore } from '@/store/generateStore'
@@ -44,8 +45,9 @@ export function ControlsPanel() {
     if (!lottieJson || !selNm) return out
     try {
       const doc = JSON.parse(lottieJson) as { layers: { nm: string; ind: number; parent?: number }[] }
-      const byInd = new Map(doc.layers.map((l) => [l.ind, l]))
-      let cur = doc.layers.find((l) => l.nm === selNm)
+      const layers = sceneLayers(doc)
+      const byInd = new Map(layers.map((l) => [l.ind, l]))
+      let cur = layers.find((l) => l.nm === selNm)
       while (cur && cur.parent != null) {
         const p = byInd.get(cur.parent)
         if (!p || out.has(p.nm)) break
