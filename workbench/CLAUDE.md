@@ -17,7 +17,11 @@ the text-to-lottie skill prescribes.
    shape/keyframe programmatically — see `scripts/build-*.mjs` for the house
    pattern), then run it with `node` to produce the JSON. The script is the
    durable artifact; edits modify and re-run it.
-3. **Source SVGs** arrive at `assets/<project>.svg`.
+3. **Source SVGs** arrive at `assets/<project>.svg`. Sequence briefs may
+   supply several sources — `assets/<project>.svg`, `<project>-2.svg`, … —
+   the prompt enumerates them with their original filenames; connect them
+   into ONE seamless scene per the chapterization reference's transition
+   grammar.
 4. **Headless verification** (no browser here): use the deterministic
    CanvasKit-in-Node previewer —
    `node scripts/preview-scene.mjs <project> scene-1 [f1,f2,...]`

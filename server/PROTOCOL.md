@@ -9,12 +9,12 @@ and fields.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/health` | — | `{ok, claude, jobs:{running, queued}}` |
+| GET | `/health` | — | `{ok, claude, jobs:{running, queued}, features:["multi-svg", …]}` — `features` (v1.2, additive) advertises optional capabilities so clients can gate UI affordances |
 | GET | `/scene/<slug>` | — | the scene's `lottie.json` (404 `{}` if absent) |
 | GET | `/history/<slug>` | — | `{versions:[{v, at, note}]}` — edit snapshots, oldest first (v1.1) |
 | GET | `/dossier/<slug>` | — | `{doc, script, versions}` — learnings doc + build script + history (v1.1) |
-| POST | `/generate` | `{slug, svg, brief, kind, model?, effort?}` | NDJSON event stream |
-| POST | `/propose` | `{slug, svg, model?, effort?}` | NDJSON stream ending in a `proposal` event (v1.1) |
+| POST | `/generate` | `{slug, svg, brief, kind, model?, effort?}` — or (v1.2, additive) `svgs: [{name, svg}, …]` in story order for sequence briefs; first file lands at `assets/<slug>.svg`, the rest at `<slug>-2.svg`…, and the prompt enumerates them | NDJSON event stream |
+| POST | `/propose` | `{slug, svg, model?, effort?}` — or (v1.2, additive) the same `svgs` array, in which case the proposal is ONE brief connecting all of them | NDJSON stream ending in a `proposal` event (v1.1). The brief is a structured document (opening · BEATS · FIDELITY MUSTS · ending · check line), not a paragraph — clients render it as-is into the composer |
 | POST | `/edit` | `{slug, instruction, frame?, layer?, model?, effort?}` | NDJSON event stream |
 | POST | `/revert` | `{slug, version}` | `{ok, lottieJson, versions, controlsJson?}` or `{ok:false, error}` (v1.1; `controlsJson` added v1.2) |
 | POST | `/cancel` | `{slug}` | `{ok}` — `true` if a queued/running job was cancelled |
@@ -33,6 +33,13 @@ faster than the CLI's `xhigh` default while still running the full
 write→run→look→fix loop. Engine spawns also run with `--strict-mcp-config` so
 user/global MCP servers are never inherited (their startup + tool definitions
 would tax every request for nothing).
+
+**Source artwork limits:** 5 MB per SVG and 12 artworks per request, both
+answered with a single `error` event — never a silent truncation, since a run
+that quietly animates 12 of 15 supplied artworks is indistinguishable from an
+engine bug. Whole request bodies over 20 MB are severed by the body reader
+before any handler sees them, so clients must keep their own total under that
+(the app caps attachments at 12 MB of SVG).
 
 **Edit anchoring (v1.1, optional):** `/edit` accepts `frame` (integer — the
 agent renders that frame with `--zoom 3` and looks before editing) and `layer`

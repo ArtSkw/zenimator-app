@@ -170,6 +170,26 @@ try {
     check('generate: spawn isolates MCP (--strict-mcp-config)', spawnArgs.includes('--strict-mcp-config'))
   }
 
+  // 1b. Sequence briefs: multiple artworks in one generate (v1.2 §3.8)
+  {
+    const events = await stream('/generate', {
+      slug: 'selftest-m', brief: 'the card taps, then the check confirms', kind: 'entry',
+      svgs: [{ name: 'card.svg', svg: '<svg id="card"/>' }, { name: 'check.svg', svg: '<svg id="check"/>' }],
+    })
+    check('multi-svg: stream completes', events.at(-1)?.type === 'done')
+    const { readFileSync } = await import('node:fs')
+    check('multi-svg: both asset files written',
+      existsSync(join(wb, 'assets', 'selftest-m.svg')) && existsSync(join(wb, 'assets', 'selftest-m-2.svg')))
+    const mPrompt = readFileSync(join(wb, 'assets', 'selftest-m.prompt.txt'), 'utf8')
+    check('multi-svg: prompt enumerates both assets with filenames',
+      mPrompt.includes('asset 1 of 2 — "card.svg" → assets/selftest-m.svg') &&
+      mPrompt.includes('asset 2 of 2 — "check.svg" → assets/selftest-m-2.svg'))
+    check('multi-svg: prompt routes to Grounded Handoffs', mPrompt.includes('Grounded Handoffs'))
+    // Regression lock: the single-svg prompt must stay manifest-free.
+    const aPrompt = readFileSync(join(wb, 'assets', 'selftest-a.prompt.txt'), 'utf8')
+    check('multi-svg: single-svg prompt unchanged (no manifest)', !aPrompt.includes('asset 1 of'))
+  }
+
   // 2. Queueing under concurrency 1
   {
     const [b, c] = await Promise.all([
@@ -210,6 +230,7 @@ try {
   {
     const h = await fetch(`${BASE}/health`).then((r) => r.json())
     check('health reports job counts', h.jobs && typeof h.jobs.running === 'number' && typeof h.jobs.queued === 'number')
+    check('health advertises multi-svg (v1.2 features handshake)', Array.isArray(h.features) && h.features.includes('multi-svg'))
   }
 
   // 7. Security posture: origin allowlist, content-type gate, host check
@@ -279,6 +300,53 @@ try {
     const proposal = events.find((e) => e.type === 'proposal')
     check('propose: emits a proposal event with brief text', Boolean(proposal?.text && proposal.text.length > 5))
     check('propose: proposal is the terminal event', events.at(-1)?.type === 'proposal')
+
+    // Multi-artwork propose (v1.2 §3.8): the brief must be asked to connect
+    // ALL supplied artworks — briefing only the first would silently discard
+    // half the input, and it would take a full run to notice.
+    const { readFileSync } = await import('node:fs')
+    const mEvents = await stream('/propose', {
+      slug: 'selftest-pm',
+      svgs: [{ name: 'card.svg', svg: '<svg id="card"/>' }, { name: 'check.svg', svg: '<svg id="check"/>' }],
+    })
+    check('propose multi: still ends in a proposal event', mEvents.at(-1)?.type === 'proposal')
+    check('propose multi: both asset files written',
+      existsSync(join(wb, 'assets', 'selftest-pm.svg')) && existsSync(join(wb, 'assets', 'selftest-pm-2.svg')))
+    const pmPrompt = readFileSync(join(wb, 'assets', 'selftest-pm.prompt.txt'), 'utf8')
+    check('propose multi: prompt enumerates both assets with filenames',
+      pmPrompt.includes('asset 1 of 2 — "card.svg" → assets/selftest-pm.svg') &&
+      pmPrompt.includes('asset 2 of 2 — "check.svg" → assets/selftest-pm-2.svg'))
+    check('propose multi: names the shared-element rule', pmPrompt.includes('never crossfade'))
+    check('propose multi: routes to Grounded Handoffs', pmPrompt.includes('Grounded Handoffs'))
+
+    // The brief's ANATOMY is the feature (v1.2): a proposal is only as good as
+    // the reading behind it, so the prompt has to demand inspection first and
+    // then a fixed shape — beats, and the fidelity traps that reading turned
+    // up. Both are asserted for single and multi; a prompt that lost either
+    // would still produce a plausible paragraph and a worse scene.
+    const pPrompt = readFileSync(join(wb, 'assets', 'selftest-p.prompt.txt'), 'utf8')
+    for (const [label, text] of [['single', pPrompt], ['multi', pmPrompt]]) {
+      check(`propose ${label}: demands inspection before writing`,
+        text.includes('READ THE ARTWORK') && text.includes('before writing a word'))
+      check(`propose ${label}: names the hazards worth hunting`,
+        text.includes('exported TWICE') && text.includes('compound path'))
+      check(`propose ${label}: dictates the brief anatomy`,
+        text.includes('BEATS:') && text.includes('FIDELITY MUSTS:'))
+      check(`propose ${label}: keeps the settle/loop requirement`,
+        text.includes('ENTRY settles exactly') && text.includes("LOOP's first frame equals its last"))
+      check(`propose ${label}: still writes the brief file and the sentinel`,
+        text.includes('.brief.txt') && text.includes('BRIEF_READY'))
+    }
+    check('propose single: carries no asset manifest', !pPrompt.includes('asset 1 of'))
+  }
+
+  // 10b. Source-artwork ceilings answer with an error, never a silent truncation
+  {
+    const many = Array.from({ length: 13 }, (_, i) => ({ name: `a${i}.svg`, svg: `<svg id="a${i}"/>` }))
+    const over = await stream('/generate', { slug: 'selftest-cap', brief: 'too many', kind: 'entry', svgs: many })
+    check('cap: 13 artworks is rejected with an error event', over.at(-1)?.type === 'error')
+    check('cap: the error names the limit', /12 max/.test(over.at(-1)?.text ?? ''))
+    check('cap: nothing was written for a rejected request', !existsSync(join(wb, 'assets', 'selftest-cap.svg')))
   }
 
   // 11. Scene dossier (v1.1) — selftest-g was generated + edited above

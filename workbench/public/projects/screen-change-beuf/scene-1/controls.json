@@ -1,0 +1,23 @@
+{
+  "controls": [
+    {
+      "sid": "bgColor",
+      "label": "Screen background"
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "cloud-near",
+      "kind": "amount",
+      "property": "position",
+      "label": "Sky drift",
+      "description": "How far the clouds travel before settling."
+    },
+    {
+      "target": "global",
+      "kind": "feel",
+      "label": "Feel",
+      "description": "The easing personality of the mark draw-on and confirmation reveal."
+    }
+  ]
+}

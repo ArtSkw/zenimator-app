@@ -21,7 +21,9 @@ Upstream specs:
 
 - Static properties use `{ "a": 0, "k": value }`.
 - Animated properties use `{ "a": 1, "k": [keyframes] }`.
-- Keyframes must be sorted by ascending `t`.
+- Keyframes must be sorted by strictly ascending `t`. A descending or
+  out-of-order `t` does not error — it silently freezes that property (see
+  Renderer gotchas).
 - Non-hold interpolation should put `o` on the start keyframe and `i` on the
   destination keyframe; the final keyframe does not need an outgoing `o`.
 - Scalar animated values use arrays in keyframes, for example `"s": [45]` for
@@ -42,8 +44,18 @@ Upstream specs:
 - Image layers reference entries in `assets`.
 - Layer visibility is `ip <= frame < op`.
 - Parent transforms compose through `parent` references. Avoid cycles.
-- Mattes, masks, precomps, and time remap are valid but more fragile; use them
-  only when simpler shape/layer structure will not produce the result.
+- Mattes, masks, precomps, and time remap are valid but more fragile; reach for
+  them only when simpler shape/layer structure will not produce the result.
+  Track-matte mechanics, precisely:
+  - `td: 1` marks a layer as a matte **source** — it supplies alpha (or luma)
+    only and renders no visible content of its own.
+  - `tt: 1` makes a layer use the layer **immediately above it in the array**
+    as its matte. Adjacency is what pairs them — not any id or name — so the
+    matte (`td: 1`) must sit directly before its matted layer in the
+    front-to-back `layers` array, with nothing between them.
+  - A matte clips only the **single** layer directly below it. To matte several
+    layers at once, precompose them into one asset and matte that precomp layer
+    once, rather than copying the matte above each layer.
 
 ## Shapes
 
@@ -80,3 +92,56 @@ Upstream specs:
   renderers. Verify in Skottie.
 - Avoid expressions or renderer-specific extensions unless the player explicitly
   supports them.
+
+## Renderer gotchas (confirmed)
+
+Failure modes reproduced and isolated in this Skottie/CanvasKit build — known
+traps, each with the fix that avoids it.
+
+- **Gradients are fully supported — static AND animated (re-verified 2026-07-14
+  on both current renderers: the headless previewer's CanvasKit 0.41 and the
+  app player's 0.39).** `gf`/`gs` with keyframed `s`/`e` sweep points, keyframed
+  stops (`g.k` with `a:1`), gradient strokes under an animated trim — all render
+  correctly. An earlier note here claimed animated gradients draw nothing; that
+  was a stale-build artifact and must not be used as a reason to avoid or
+  simplify gradients. House preference for *reveals* is still a static gradient
+  on the artwork with the motion in a trim (`tm`) or matte *over* it — not
+  because animation fails, but because the app's parametric controls (Draw-on,
+  Delay, Feel, Stagger) understand trim and matte-sweep mechanics and can retime
+  them; a hand-animated gradient on the artwork itself is opaque to those knobs.
+  - **Preserve the source's gradient paint — this is a REQUIREMENT, not a
+    judgment call.** If the artwork ships per-path gradient fills (tapers, sheens,
+    highlights), the output MUST keep them: source-paint fidelity is part of the
+    deliverable. When the animation is a *reveal* or *transform* (draw-on, wipe,
+    move, scale, rotate — none of which touch the fill), carry each path's
+    gradient through **unchanged** and reveal/transform *over* it. **Do NOT
+    flatten to a solid color.** "The gradient is subtle / just a highlight",
+    "there are N gradients, that's more work", and "animated gradients are
+    risky" are **NOT** acceptable reasons to flatten — port every one; the work
+    is the job. Verify against the source: if the source has a gradient and your
+    render is flat, you have regressed the artwork.
+- **Descending or out-of-order keyframe `t` silently freezes the property.** No
+  error is raised; the property (and any sibling built the same way) simply
+  stops animating. Assert `t` is strictly monotonic before trusting a track. In
+  generated staggers/round-robins, a cycle whose `start + span` overruns the
+  loop can emit a keyframe *after* the loop-closing one — **drop any such cycle
+  entirely** before appending the closing keyframe; do not clip it.
+- **The anchor + animated-position "freeze."** A non-zero anchor combined with
+  animated `position` has been seen to freeze a layer at its rest value in this
+  build. But a blank frame is *often a stale-tooling artifact* — before
+  concluding a layer has stalled, restart the dev server and re-render
+  deterministically. Either way, prefer the safe pattern to relying on the
+  combo:
+  - Animate `position` only on a **zero-anchor** layer.
+  - Put any **pivoted** scale/rotation on a **separate static-position null**
+    (anchor at the pivot, `p` fixed), or bake the pivot into the shape's own
+    vertices around its rest center.
+  - When one element must **both** translate *and* pivot-scale/rotate, split it
+    across two chained nulls: the parent animates `position` (zero anchor); its
+    child animates the pivoted scale/rotation (non-zero anchor, static `p`).
+- **Verify with a deterministic CanvasKit-in-Node render, not headless-browser
+  screenshots.** A cold headless browser can screenshot the same frame blank on
+  one run and correct on the next (GPU/timing race), sending you chasing a
+  rendering bug that isn't there. Seek and render each frame through
+  `canvaskit-wasm` in Node for reproducible pixels; a stuck/blank frame is
+  trustworthy there, but in a browser path may be only a tooling artifact.

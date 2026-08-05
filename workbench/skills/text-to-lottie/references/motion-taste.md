@@ -208,6 +208,22 @@ by what it is doing this beat. Bezier is `x1,y1,x2,y2`.
   flicks.
 - Engineer loop seams with identical first/last frames, integer wave cycles,
   closed rotations, wrapped drift, or recycled emanation rings.
+- **Wrapped drift with no expressions available** (an element exits one edge
+  and re-enters the opposite edge, e.g. a scrolling background element):
+  bake the wrap as an instant position jump placed at a moment the element is
+  fully offscreen on *both* sides of the jump (verify against its own bbox
+  with a safety margin). Make that jump a **held keyframe** (`h:1`), not a
+  1-frame ramp. A ramp only looks instant because the player samples whole
+  frames, and that stops being true the moment anything retimes the scene: the
+  Duration control moves keyframes onto fractional frames, a sample lands
+  between the ramp's endpoints, and the element is stranded mid-screen for one
+  frame — a visible flash. A hold snaps at any scale. Pick
+  a total travel distance equal to a whole number of wrap cycles so the
+  element lands back on its exact starting position at the end; if two
+  elements share a duration but travel different per-cycle distances (e.g. a
+  "nearer" element doing more wraps than a "farther" one), dividing each
+  one's distance by the same shared duration gives correctly different
+  constant velocities for free — no separate speed constant needed.
 - When several elements loop at different rates and must all seam at once, fix
   the loop length **T = the least common multiple (LCM) of the exact
   sub-periods**. Treat "about N frames" periods as flexible: scan T's integer
