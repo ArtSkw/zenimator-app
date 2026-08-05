@@ -1,4 +1,5 @@
 import { loadCanvasKit } from '@/lib/skottie'
+import { sceneLayers } from '@/engine/lottie/sceneRoot'
 
 type Rect = { x: number; y: number; w: number; h: number }
 
@@ -34,7 +35,11 @@ export async function createLayerBoundsSampler(
   } catch {
     return null
   }
-  const layers = doc.layers ?? []
+  // Isolate within the SCENE's layers — for a screen scene that's inside the
+  // wrapping precomp. The array is live, so hiding siblings below still edits
+  // the doc we stringify, and the top level (matte + wrapper) stays visible —
+  // hiding it would render nothing at all.
+  const layers = sceneLayers<Layer>(doc)
   const W = Math.round(doc.w ?? 0)
   const H = Math.round(doc.h ?? 0)
   if (!W || !H || layers.length === 0) return null

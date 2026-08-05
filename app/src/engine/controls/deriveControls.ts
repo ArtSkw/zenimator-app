@@ -24,6 +24,34 @@
  */
 
 import type { LottieDoc, AnyLayer, ShapeLayer, Prop, NumKeyframe, GrGroup, TmTrim, Transform, Bezier } from '@/engine/lottie/core'
+import { sceneLayers } from '@/engine/lottie/sceneRoot'
+
+/** A doc-shaped view onto the SCENE's layers — identical to the document for a
+ *  flat scene, and the wrapping precomp's layers for a nested one (see
+ *  sceneRoot). Bindings index into this view, so a screen scene's controls land
+ *  on its clouds and its mark rather than on plumbing that never moves.
+ *
+ *  The view SHARES layer objects with the document, so every mutation below
+ *  edits the real doc. Only comp-level writes (`op`, the inert top level) have
+ *  to be made against the document itself. */
+function layerView(doc: LottieDoc): LottieDoc {
+  const layers = sceneLayers<AnyLayer>(doc)
+  return layers === doc.layers ? doc : ({ ...doc, layers } as LottieDoc)
+}
+
+/** Every layer list in a document — the top level plus each precomp asset's —
+ *  paired with its counterpart in `base`. `doc` is a clone of `base`, so the
+ *  lists align by index. */
+function layerLists(doc: LottieDoc, base: LottieDoc): Array<[AnyLayer[], AnyLayer[]]> {
+  const out: Array<[AnyLayer[], AnyLayer[]]> = [[doc.layers, base.layers]]
+  const dAssets = (doc.assets ?? []) as unknown as Array<{ layers?: AnyLayer[] }>
+  const bAssets = (base.assets ?? []) as unknown as Array<{ layers?: AnyLayer[] }>
+  dAssets.forEach((a, i) => {
+    const b = bAssets[i]
+    if (Array.isArray(a?.layers) && Array.isArray(b?.layers)) out.push([a.layers, b.layers])
+  })
+  return out
+}
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -187,19 +215,21 @@ export function deriveControls(
   /** True for a one-shot entrance (never a loop) — see the global feel control below. */
   isEntry = false,
 ): ControlManifest {
+  const lv = layerView(lottie)
+
   // 1) Resolve agent-authored custom controls first; they claim amplitude
   //    properties so the matching basic control is suppressed.
-  const { controls: customControls, claimed } = resolveCustoms(lottie, labels, customs)
+  const { controls: customControls, claimed } = resolveCustoms(lv, labels, customs)
 
   // 2) Auto-derived basics.
   const basics: (ParamControl & { score: number })[] = []
 
-  lottie.layers.forEach((layer, idx) => {
+  lv.layers.forEach((layer, idx) => {
     // A matte source's knobs belong, creatively, to the layer it reveals — a
     // handwriting wipe's timing IS the letter's timing. Present them under the
     // revealed layer's name so the cast lists the letters, never "__matte"
     // plumbing. The binding keeps the matte's index (that's where the keys live).
-    const next = lottie.layers[idx + 1]
+    const next = lv.layers[idx + 1]
     const isMatteSrc = layer.ty !== 3 && layer.td === 1
     const hostNm = isMatteSrc && next && next.ty !== 3 && next.tt ? next.nm : layer.nm
     const nm = labels[hostNm] ? truncate(labels[hostNm]) : shortName(hostNm)
@@ -331,7 +361,7 @@ export function deriveControls(
   // agent already declared its own (avoid a duplicate) or nothing is animated.
   const hasCustomGlobalFeel = customControls.some((c) => c.binding.kind === 'feel' && c.binding.layer < 0)
   const feel: ParamControl[] =
-    isEntry && !hasCustomGlobalFeel && lottie.layers.some((l) => anyTimes(l))
+    isEntry && !hasCustomGlobalFeel && lv.layers.some((l) => anyTimes(l))
       ? [{
           id: 'feel', label: 'Feel', description: 'The overall easing and personality of the entrance.',
           control: 'select', options: FEEL_LABELS.map((l, i) => ({ label: l, value: i })),
@@ -345,7 +375,7 @@ export function deriveControls(
   // (parts flying/fading/popping in) deliberately do NOT get it: a scene's
   // controls must feel authored for that scene, not copied from a template —
   // contextual knobs for those come from the agent, not a blanket default.
-  const starts = lottie.layers
+  const starts = lv.layers
     .filter((l) => l.ty === 4 &&
       (findTrim((l as ShapeLayer).shapes) || revealWindow((l as ShapeLayer).shapes)))
     .map((l) => anyTimes(l)?.first)
@@ -470,6 +500,10 @@ export function applyControlValues(
   values: Record<string, number>,
 ): LottieDoc {
   const doc = structuredClone(base)
+  // Views onto the scene's real layers (see layerView). They share layer
+  // objects with the documents, so remapping through `dv` edits `doc`.
+  const dv = layerView(doc)
+  const bv = layerView(base)
 
   let globalF = 1
   for (const c of manifest.controls) {
@@ -498,7 +532,7 @@ export function applyControlValues(
   // brings everything to the first mover and >100% spreads the entrance out.
   let staggerT0 = Infinity
   if (staggerF !== 1) {
-    for (const bl of base.layers) {
+    for (const bl of bv.layers) {
       const at = anyTimes(bl)
       if (at) staggerT0 = Math.min(staggerT0, at.first)
     }
@@ -506,8 +540,8 @@ export function applyControlValues(
   }
 
   // Per-layer time remap — global × speed × delay (and trim span), from BASE.
-  base.layers.forEach((bl, i) => {
-    const dl = doc.layers[i]
+  bv.layers.forEach((bl, i) => {
+    const dl = dv.layers[i]
     dl.ip = Math.round(bl.ip * globalF)
     dl.op = Math.round(bl.op * globalF)
 
@@ -524,7 +558,7 @@ export function applyControlValues(
     const speedF = speed != null && layerSpan > 0 ? speed / layerSpan : 1
 
     if (globalF !== 1 || delta !== 0 || speedF !== 1) {
-      const fn = (t: number) => clamp(Math.round(globalF * (first + delta + (t - first) * speedF)), 0, opFinal)
+      const fn = (t: number) => clamp(subFrame(globalF * (first + delta + (t - first) * speedF)), 0, opFinal)
       mapTransformTimes(dl.ks, bl.ks, fn)
       // Handwriting / reveal mattes animate via a gradient SWEEP (gf/gs s·e), not
       // a transform or trim — rescale those so changing Duration speeds up the
@@ -532,8 +566,7 @@ export function applyControlValues(
       // wedge instead bakes absolute position into a keyframed shape PATH (`sh`)
       // — rescale that too, or it drifts out of sync with the glyph it reveals.
       if (bl.ty === 4 && dl.ty === 4) {
-        mapGradientTimes((dl as ShapeLayer).shapes, (bl as ShapeLayer).shapes, fn)
-        mapShapeTimes((dl as ShapeLayer).shapes, (bl as ShapeLayer).shapes, fn)
+        mapShapeTreeTimes((dl as ShapeLayer).shapes, (bl as ShapeLayer).shapes, fn)
       }
     }
 
@@ -544,7 +577,7 @@ export function applyControlValues(
         const trimF = trimDur != null ? trimDur / span.span : speedF
         if (globalF !== 1 || delta !== 0 || trimF !== 1) {
           const fn = (t: number) =>
-            clamp(Math.round(globalF * (span.first + delta + (t - span.first) * trimF)), 0, opFinal)
+            clamp(subFrame(globalF * (span.first + delta + (t - span.first) * trimF)), 0, opFinal)
           mapTrimTimes((dl as ShapeLayer).shapes, (bl as ShapeLayer).shapes, fn)
         }
       }
@@ -552,14 +585,40 @@ export function applyControlValues(
   })
   doc.op = opFinal
 
+  // Duration is a property of the WHOLE document, not just the layers the
+  // controls address. Two lists get missed otherwise: the inert top level of a
+  // nested scene (whose ip/op still gate playback — leave them and a longer
+  // duration goes blank past the old out-point while the retimed content plays
+  // where nobody can see it), and any precomp a flat scene wraps part of itself
+  // in (whose gears would keep their original rate while the scene rescales
+  // around them). Bindings can't reach these, so they take the global factor
+  // alone — no per-layer speed, delay or draw-on.
+  if (globalF !== 1) {
+    const fn = (t: number) => clamp(subFrame(globalF * t), 0, opFinal)
+    for (const [dls, bls] of layerLists(doc, base)) {
+      if (dls === dv.layers) continue
+      dls.forEach((dl, i) => {
+        const bl = bls[i]
+        if (!bl) return
+        dl.ip = Math.round(bl.ip * globalF)
+        dl.op = Math.round(bl.op * globalF)
+        mapTransformTimes(dl.ks, bl.ks, fn)
+        if (dl.ty === 4 && bl.ty === 4) {
+          mapShapeTreeTimes((dl as ShapeLayer).shapes, (bl as ShapeLayer).shapes, fn)
+          mapTrimTimes((dl as ShapeLayer).shapes, (bl as ShapeLayer).shapes, fn)
+        }
+      })
+    }
+  }
+
   // Amplitude (value) overrides — independent of timing.
   for (const c of manifest.controls) {
     const v = values[c.id]
     if (v == null || v === c.value) continue
     switch (c.binding.kind) {
-      case 'pos-amp': applyPosAmp(doc, base, c.binding.layer, v); break
-      case 'rot-amp': applyRotAmp(doc, base, c.binding.layer, v); break
-      case 'scale-amp': applyScaleAmp(doc, base, c.binding.layer, v); break
+      case 'pos-amp': applyPosAmp(dv, bv, c.binding.layer, v); break
+      case 'rot-amp': applyRotAmp(dv, bv, c.binding.layer, v); break
+      case 'scale-amp': applyScaleAmp(dv, bv, c.binding.layer, v); break
     }
   }
 
@@ -568,7 +627,7 @@ export function applyControlValues(
     if (c.binding.kind !== 'feel') continue
     const v = values[c.id]
     if (v == null || v === c.value) continue
-    applyFeel(doc, c.binding.layer, v)
+    applyFeel(dv, c.binding.layer, v)
   }
 
   // Intensity-bundled per-layer easing — the presets carry a layer's easing
@@ -576,8 +635,8 @@ export function applyControlValues(
   // control-driven feel above so a layer's Intensity wins over a scene-wide Feel.
   for (const [key, v] of Object.entries(values)) {
     if (!key.startsWith(INTENSITY_FEEL_PREFIX) || v <= 0) continue
-    const idx = base.layers.findIndex((l) => l.nm === key.slice(INTENSITY_FEEL_PREFIX.length))
-    if (idx >= 0) applyFeel(doc, idx, v)
+    const idx = bv.layers.findIndex((l) => l.nm === key.slice(INTENSITY_FEEL_PREFIX.length))
+    if (idx >= 0) applyFeel(dv, idx, v)
   }
 
   // Motion switches LAST — freezing overrides every other adjustment.
@@ -585,8 +644,8 @@ export function applyControlValues(
     if (c.binding.kind !== 'layer-motion') continue
     const v = values[c.id]
     if (v == null || v !== (c.offValue ?? 0)) continue
-    const dl = doc.layers[c.binding.layer]
-    const bl = base.layers[c.binding.layer]
+    const dl = dv.layers[c.binding.layer]
+    const bl = bv.layers[c.binding.layer]
     if (dl && bl) freezeLayerMotion(dl, bl)
   }
 
@@ -722,7 +781,7 @@ function keyTimeWindow(
 /** Time window of a shape tree's trimless reveals: gradient sweeps (gf/gs
  *  animated s·e — the handwriting wipe) and baked reveal paths (`__reveal` sh —
  *  the radial draw-on wedge). These are exactly the mechanisms
- *  applyControlValues already remaps (mapGradientTimes / mapShapeTimes);
+ *  applyControlValues already remaps (mapShapeTreeTimes);
  *  counting them as animation is what makes a sweep-built scene surface Feel,
  *  Draw-on, Delay, and Stagger instead of a lone Duration knob. */
 function revealWindow(groups: GrGroup[]): { first: number; last: number } | null {
@@ -794,6 +853,76 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n))
 }
 
+/** Retimed keyframes keep SUB-FRAME precision. Lottie allows fractional times,
+ *  and rounding a retime to whole frames collapses adjacent keyframes as soon
+ *  as the scale isn't 1× — an instant jump (a cloud wrapping from the left edge
+ *  back to the right) is authored as a 1-frame PAIR, so at 200/360 both ends
+ *  round onto frame 17. Three decimals is finer than any player samples. */
+const subFrame = (t: number) => Math.round(t * 1000) / 1000
+
+/** Remap a keyframe array's times through `fn`, preserving STRICT monotonicity.
+ *
+ *  Duplicate or backwards times are invalid Lottie, and players don't fail
+ *  gracefully: the property stops advancing and its layer reads as frozen —
+ *  or vanishes — for the WHOLE clip, not just at that instant. Sub-frame
+ *  precision removes the collisions a retime would otherwise cause; what can
+ *  still collide is the clamp at the end of the comp, so any pair landing
+ *  non-increasing collapses to ONE keyframe carrying the LATER value — the
+ *  settled pose, never a stale one.
+ *
+ *  Returns the surviving keyframes; callers assign it back when the length
+ *  changed. Mutates `dst` entries in place, so `to`/`ti` tangents ride along. */
+function remapKeyTimes<T extends { t: number }>(
+  dst: T[],
+  src: readonly { t: number }[],
+  fn: (t: number) => number,
+): T[] {
+  const kept: T[] = []
+  dst.forEach((k, j) => {
+    const s = src[j]
+    if (!s) return
+    holdInstantJump(k, src, j)
+    const t = fn(s.t)
+    const last = kept[kept.length - 1]
+    if (last && t <= last.t) {
+      k.t = last.t
+      kept[kept.length - 1] = k
+    } else {
+      k.t = t
+      kept.push(k)
+    }
+  })
+  return kept
+}
+
+/** Keep an authored instant jump instant, by holding it.
+ *
+ *  A cut is often authored as a 1-frame ramp — a cloud wrapping from x=-165 to
+ *  x=378 between frames 30 and 31. At the authored rate the player only ever
+ *  samples its endpoints, so it reads as a cut. Retimed, that ramp lands on a
+ *  FRACTION of a frame, and an integer sample can fall inside it: at 260/360
+ *  frame 22 catches the cloud at x=85, stranded mid-screen for one frame. That
+ *  is the flash. Scaling UP has the same problem in reverse — the ramp spreads
+ *  over more than a frame and the jump becomes a visible slide.
+ *
+ *  A held keyframe (`h:1`) keeps its value until the next one and then snaps,
+ *  so no sample can ever land inside the jump, at any scale.
+ *
+ *  Only for an ISOLATED step. A densely baked track — the radial draw-on's
+ *  wedge carries a keyframe per frame — is nothing but 1-frame gaps, and
+ *  holding those would turn a smooth morph into a staircase. Requiring both
+ *  neighbouring gaps to be several frames away distinguishes a deliberate snap
+ *  from a per-frame bake. */
+function holdInstantJump(key: { t: number }, src: readonly { t: number }[], j: number): void {
+  const k = key as { h?: number }
+  if (k.h) return
+  const gap = j + 1 < src.length ? src[j + 1].t - src[j].t : Infinity
+  if (gap > 1) return
+  const prevGap = j > 0 ? src[j].t - src[j - 1].t : Infinity
+  const nextGap = j + 2 < src.length ? src[j + 2].t - src[j + 1].t : Infinity
+  if (prevGap >= 3 && nextGap >= 3) k.h = 1
+}
+
 // ── Apply helpers (values) ───────────────────────────────────────────────────
 
 function applyPosAmp(doc: LottieDoc, base: LottieDoc, idx: number, value: number) {
@@ -837,7 +966,9 @@ function mapTransformTimes(dk: Transform, bk: Transform, fn: (t: number) => numb
   for (const key of TRANSFORM_KEYS) {
     const d = animKeys(dk[key])
     const b = animKeys(bk[key])
-    if (d && b) d.forEach((k, j) => { k.t = fn(b[j].t) })
+    if (!d || !b) continue
+    const kept = remapKeyTimes(d, b, fn)
+    if (kept.length !== d.length) (dk[key] as { k: NumKeyframe[] }).k = kept
   }
 }
 
@@ -853,7 +984,9 @@ function mapTrimTimes(dg: GrGroup[], bg: GrGroup[], fn: (t: number) => number) {
         for (const key of ['s', 'e', 'o'] as const) {
           const d = animKeys(tm[key])
           const b = animKeys((bItem as TmTrim)[key])
-          if (d && b) d.forEach((k, j) => { k.t = fn(b[j].t) })
+          if (!d || !b) continue
+          const kept = remapKeyTimes(d, b, fn)
+          if (kept.length !== d.length) (tm[key] as { k: NumKeyframe[] }).k = kept
         }
       } else if ((item as GrGroup).ty === 'gr') {
         mapTrimTimes([item as GrGroup], [bItem as GrGroup], fn)
@@ -862,89 +995,40 @@ function mapTrimTimes(dg: GrGroup[], bg: GrGroup[], fn: (t: number) => number) {
   })
 }
 
-/** Remap the keyframe times of gradient SWEEPS (gf/gs `s`·`e`) — the mechanism
- *  behind a handwriting reveal matte — by the same time function as transforms,
- *  so global Duration / per-layer speed scale the write-on instead of clipping it. */
-function mapGradientTimes(dg: GrGroup[], bg: GrGroup[], fn: (t: number) => number) {
-  dg.forEach((g, gi) => {
-    const bgi = bg[gi]
-    if (!bgi) return
-    g.it.forEach((item, ii) => {
-      const bItem = bgi.it[ii]
-      if (!bItem) return
-      const ty = (item as { ty: string }).ty
-      if (ty === 'gf' || ty === 'gs') {
-        for (const key of ['s', 'e'] as const) {
-          const d = animKeys((item as Record<string, unknown>)[key] as Prop | undefined)
-          const b = animKeys((bItem as Record<string, unknown>)[key] as Prop | undefined)
-          if (d && b) d.forEach((k, j) => { k.t = fn(b[j].t) })
-        }
-      } else if (ty === 'gr') {
-        mapGradientTimes([item as GrGroup], [bItem as GrGroup], fn)
-      }
-    })
-  })
-}
-
-/** Remap the keyframe times of a keyframed shape PATH (`sh`, `ks.a === 1`) —
- *  the mechanism behind the radial draw-on's baked wedge (`animate.ts`'s
- *  `__reveal`, matched by name the same way `isRevealMod`/`trimEndFrame` do
- *  there) — by the same time function as everything else on the layer.
- *  Without this the wedge's baked-absolute-position keyframes stay pinned to
- *  their PRE-rescale frame numbers while the glyph's own transform keyframes
- *  (rescaled by `mapTransformTimes` above) move to new ones, desyncing the
- *  wedge from the glyph it's supposed to be revealing until both happen to
- *  reach their respective settled tails. Ordinary static shape paths
- *  (`ks.a === 0`) have nothing to remap and are left alone.
+/** Remap EVERY animated property inside a shape tree — group transforms (`tr`),
+ *  paths (`sh`), gradient sweeps and stops (`gf`/`gs`), stroke and fill
+ *  channels — through the layer's time function.
  *
- *  The wedge is baked nearly one keyframe per frame (up to ~180 of them —
- *  see `applyRadialDrawOn`), so rescaling by anything other than exactly 1×
- *  routinely rounds two adjacent original times onto the SAME new integer
- *  frame (`Math.round` isn't injective across consecutive integers once the
- *  ratio isn't 1). Duplicate/non-increasing keyframe times are invalid Lottie
- *  — lottie-web renders it as the WHOLE shape vanishing for the entire clip,
- *  not just a glitch at that instant, exactly matching "shrink the duration a
- *  little and the icon disappears completely." So collisions are resolved by
- *  DROPPING the earlier of any two keyframes that land on the same new time
- *  rather than keeping both — harmless since adjacent baked keyframes are
- *  already near-identical, and it guarantees the true final keyframe (always
- *  the largest new time) survives. */
-function mapShapeTimes(dg: GrGroup[], bg: GrGroup[], fn: (t: number) => number) {
-  dg.forEach((g, gi) => {
-    const bgi = bg[gi]
-    if (!bgi) return
-    g.it.forEach((item, ii) => {
-      const bItem = bgi.it[ii]
-      if (!bItem) return
-      const node = item as { ty: string; nm?: string; ks?: { a?: number; k?: unknown } }
-      const bNode = bItem as { ks?: { a?: number; k?: unknown } }
-      if (
-        node.ty === 'sh' && node.nm?.startsWith('__reveal') &&
-        node.ks?.a === 1 && Array.isArray(node.ks.k) &&
-        bNode.ks?.a === 1 && Array.isArray(bNode.ks.k)
-      ) {
-        const d = node.ks.k as Array<{ t: number }>
-        const b = bNode.ks.k as Array<{ t: number }>
-        const kept: typeof d = []
-        d.forEach((k, j) => {
-          const bj = b[j]
-          if (!bj) return
-          const t = fn(bj.t)
-          const last = kept[kept.length - 1]
-          if (last && t <= last.t) {
-            k.t = last.t
-            kept[kept.length - 1] = k
-          } else {
-            k.t = t
-            kept.push(k)
-          }
-        })
-        node.ks.k = kept
-      } else if (node.ty === 'gr') {
-        mapShapeTimes([item as GrGroup], [bItem as GrGroup], fn)
-      }
-    })
-  })
+ *  Generic on purpose. This started as a per-type allow-list (gradients, then
+ *  `__reveal` paths) and each omission was the same bug wearing a new hat: part
+ *  of a scene keeps its original timing while the rest rescales, so shortening
+ *  the Duration leaves a gear still turning at its old rate or a morph only
+ *  part-way through when the comp ends. `dollar-gear` animates rotation on a
+ *  GROUP transform and `doodle-sweep` carries twenty keyframed paths; neither
+ *  was ever retimed. Anything time-based inside a shape belongs to the
+ *  timeline, so walk the tree and remap whatever is animated.
+ *
+ *  Trims are the one exclusion: the Draw-on control retimes them against their
+ *  own span, in {@link mapTrimTimes}, after this pass. Walks the doc and base
+ *  trees in parallel so each keyframe is remapped from its PRISTINE time. */
+function mapShapeTreeTimes(d: unknown, b: unknown, fn: (t: number) => number, depth = 0): void {
+  if (depth > 16 || !d || !b || typeof d !== 'object' || typeof b !== 'object') return
+  if (Array.isArray(d)) {
+    if (!Array.isArray(b)) return
+    d.forEach((item, i) => mapShapeTreeTimes(item, b[i], fn, depth + 1))
+    return
+  }
+  const dr = d as Record<string, unknown>
+  const br = b as Record<string, unknown>
+  if (dr.ty === 'tm') return // Draw-on owns trim timing
+  const dk = animKeys(dr as unknown as Prop)
+  const bk = animKeys(br as unknown as Prop)
+  if (dk && bk) {
+    const kept = remapKeyTimes(dk, bk, fn)
+    if (kept.length !== dk.length) (dr as unknown as { k: NumKeyframe[] }).k = kept
+    return
+  }
+  for (const key of Object.keys(dr)) mapShapeTreeTimes(dr[key], br[key], fn, depth + 1)
 }
 
 // ── Apply helpers (feel / easing) ────────────────────────────────────────────
