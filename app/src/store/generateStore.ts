@@ -1,15 +1,19 @@
 import { useMemo } from 'react'
 import { create } from 'zustand'
 import { assembleProject, TRACK_KEYS, type GenerateProject, type LayerTracks, type Track } from '@/engine/lottie/project'
-import { applyControlValues, type ControlManifest } from '@/engine/controls/deriveControls'
+import { applyControlValues, deriveControls, type ControlManifest } from '@/engine/controls/deriveControls'
 import { castFromControls, type CastMember } from '@/engine/controls/cast'
+import { labelsFromDoc } from '@/engine/studio/studioClient'
+import { sceneLayers } from '@/engine/lottie/sceneRoot'
 import type { Skeleton } from '@/engine/legacy/skeleton'
 import { useStudioFeed } from '@/store/studioFeedStore'
 
 export type GenStatus = 'idle' | 'generating' | 'done' | 'error'
 
-/** The reference SVG that grounds every studio generation. */
-export type Grounding = { name: string; svgText: string; pngDataUrl: string }
+/** The reference SVG that grounds every studio generation. `id` is a stable
+ *  React key: attachments get re-sequenced by drag, and an index-based key
+ *  would re-mount the wrong tile (dropping focus and the entrance animation). */
+export type Grounding = { id: string; name: string; svgText: string; pngDataUrl: string }
 
 /** The property axes that configure a generation. */
 export type Subject = 'illustration' | 'screen'
@@ -23,7 +27,8 @@ type GenerateState = {
   /** Entry = play once then hold; Loop = continuous motion. */
   kind: Kind
   prompt: string
-  grounding: Grounding | null
+  /** Attached source artworks in story order (sequence briefs, v1.2 §3.8). */
+  groundings: Grounding[]
   /** The generated Lottie document as a JSON string, or null. */
   lottieJson: string | null
   /** Signature of the properties the current result was generated with; used to
@@ -66,7 +71,7 @@ type GenerateState = {
   setSubject: (s: Subject) => void
   setKind: (k: Kind) => void
   setPrompt: (p: string) => void
-  setGrounding: (g: Grounding | null) => void
+  setGroundings: (g: Grounding[]) => void
   startGenerating: () => void
   setStage: (s: string) => void
   setResult: (json: string, signature: string, kind: Kind, controls?: ControlManifest | null, layerLabels?: Record<string, string>, keepOverrides?: Record<string, unknown>) => void
@@ -110,7 +115,7 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   subject: 'illustration',
   kind: 'entry',
   prompt: '',
-  grounding: null,
+  groundings: [],
   lottieJson: null,
   resultSignature: null,
   resultKind: null,
@@ -130,7 +135,7 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   setSubject: (subject) => set({ subject }),
   setKind: (kind) => set({ kind }),
   setPrompt: (prompt) => set({ prompt }),
-  setGrounding: (grounding) => set({ grounding }),
+  setGroundings: (groundings) => set({ groundings }),
   startGenerating: () => set({ status: 'generating', stage: null, error: null, historyOpen: false }),
   setStage: (stage) => set({ stage }),
   setResult: (lottieJson, resultSignature, resultKind, controls, layerLabels, keepOverrides) =>
@@ -200,7 +205,7 @@ export const useGenerateStore = create<GenerateState>((set) => ({
       kind: 'entry',
       // The attachment belongs to the work being cleared — a fresh start
       // (home, Clear, deleting the open project) must not keep it around.
-      grounding: null,
+      groundings: [],
       lottieJson: null, resultSignature: null, resultKind: null,
       project: null, skeleton: null, controls: null, cast: [], historyOpen: false, layerLabels: {}, slotOverrides: {},
       selectedLayer: null, status: 'idle', stage: null, error: null,
@@ -213,15 +218,40 @@ export const useGenerateStore = create<GenerateState>((set) => ({
     // Program-param knobs belonged to the retired in-browser engine; the
     // program can no longer re-run, so those controls must not render on
     // legacy loads (no dead knobs) and their overrides are dropped.
-    const controls = data.controls
+    const stripped = data.controls
       ? { controls: data.controls.controls.filter((c) => !c.id.startsWith('param:')) }
       : null
     const slotOverrides = Object.fromEntries(
       Object.entries(data.slotOverrides ?? {}).filter(([k]) => !k.startsWith('param:')),
     )
-    // Cast: use the persisted list; legacy saves (pre-cast) fall back to
-    // deriving it once from their controls so the Layers panel still populates.
-    const cast = data.cast?.length ? data.cast : castFromControls(controls, data.layerLabels)
+    // Repair a manifest saved before controls could see inside a precomp: it
+    // has no per-layer knobs at all, because derivation only ever looked at a
+    // screen scene's two plumbing layers. Re-derive from the document rather
+    // than making someone regenerate a twenty-minute scene. Control ids are
+    // layer-name-based, so any saved overrides still land on their knob; the
+    // agent's own controls.json isn't persisted, so its bespoke LABELS return
+    // on the next generation while the mechanisms come back now.
+    const repairable =
+      !data.skeleton &&
+      !!data.lottieJson &&
+      !stripped?.controls.some((c) => c.layerNm)
+    let controls = stripped
+    let layerLabels = data.layerLabels
+    if (repairable) {
+      try {
+        const doc = JSON.parse(data.lottieJson)
+        if (sceneLayers<unknown>(doc).length > 1) {
+          layerLabels = Object.keys(layerLabels ?? {}).length ? layerLabels : labelsFromDoc(data.lottieJson)
+          const rederived = deriveControls(doc, layerLabels, [], data.resultKind !== 'loop')
+          if (rederived.controls.some((c) => c.layerNm)) controls = rederived
+        }
+      } catch {
+        /* keep what was saved */
+      }
+    }
+    // Cast: use the persisted list; legacy saves (pre-cast) and repaired
+    // manifests fall back to deriving it so the Layers panel populates.
+    const cast = data.cast?.length ? data.cast : castFromControls(controls, layerLabels)
     set({
       prompt: data.prompt,
       // Restore the composer axes so the setup reflects the loaded scene: the
@@ -233,7 +263,7 @@ export const useGenerateStore = create<GenerateState>((set) => ({
       skeleton: data.skeleton,
       cast,
       historyOpen: false,
-      layerLabels: data.layerLabels,
+      layerLabels,
       slotOverrides,
       resultKind: data.resultKind,
       project: null,
