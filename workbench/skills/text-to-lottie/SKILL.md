@@ -46,6 +46,7 @@ inline rules in this file.
 | Data, stats, KPIs, charts, metrics, dashboard figures | `references/recipe-data-stats.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | Product launch, feature announcement, social promo | `references/recipe-product-promo.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | Long text, multiple ideas, list/features/steps, timeline, before/after, problem/solution, quote+proof, recap/story, product walkthrough, multi-language variations, chapters, multi-beat sequence, episode, jump/hard cuts, transition grammar | `references/chapterization-transition-grammar.md`, `references/motion-taste.md` |
+| Multiple source SVGs — connect two or more illustrations into one continuous story (sequence briefs) | `references/chapterization-transition-grammar.md` (Grounded Handoffs), `references/svg-compatibility.md`, `references/motion-taste.md` |
 | Glow, glass, metal, gradient, fill, bubble/burst effects | `references/recipe-visual-effects.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | SVG input inside logo/icon/UI/lower-third work | The task recipe plus `references/svg-compatibility.md` |
 | Starter brief or reusable project direction | `references/recipe-starter-projects.md`, `references/design-taste.md`, `references/motion-taste.md` |

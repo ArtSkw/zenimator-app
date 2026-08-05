@@ -130,3 +130,24 @@ Inspect the two boundary frames per seam:
 - Cut-on-motion should usually match direction/velocity across the cut.
 - Avoid high-energy chapter cuts for calm luxury/institutional tone, final logo
   lockups, legal text, or anything that must settle to be understood.
+
+## Grounded Handoffs (multiple source artworks)
+
+When several source SVGs arrive (`assets/<project>.svg`, `-2`, `-3`, …), the
+brief describes ONE continuous story across them.
+
+- Sequence follows the brief's narrative; attachment order is the default
+  when the brief doesn't say. Confirm each asset's role by reading it.
+- Every supplied artwork gets the full SVG-fidelity treatment; never redraw
+  a supplied subject.
+- Pick each seam from the transition grammar above. Default for
+  process/confirmation stories: continuous carry or motion-masked swap — the
+  payoff subject enters THROUGH the outgoing subject's motion (the card's
+  exit arc becomes the check's draw-on path).
+- Continuity across seams: shared palette accents, consistent scale language,
+  one gravity. The seam must read as intentional at the exact boundary
+  frames — render and READ them.
+- Match-cuts over vertex morphs for supplied artwork. True shape morphs only
+  between endpoints you authored yourself with matched vertex counts.
+- You may author connective tissue (a wipe shape, a particle accent, a
+  trail) in the source's visual language.

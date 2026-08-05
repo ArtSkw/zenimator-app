@@ -114,6 +114,24 @@ http://localhost:<port>/<project>/<scene>?frame=<N>
 new scenes; use focused frames for small edits. The canvas is
 `<canvas id="main-canvas">`.
 
+## Layer Naming
+
+Layer `nm`s are user-facing: the app's Layers panel prettifies them directly
+("bag-body" → "Bag body"), selection and edit anchors reference them, and the
+parametric controls group under them. Naming is all-or-nothing:
+
+- **Every non-plumbing layer gets a name a non-technical user recognizes on
+  sight** — say what the thing IS: `letter-b`, `i-dot`, `t-crossbar`,
+  `left-arm`, `steam`, `headline`. Terse codes (`e2`, `t1`, `p3`) read as
+  random noise in the panel — prefix with the kind (`letter-e2`) or spell it
+  out.
+- **If contextual names aren't possible, name ALL layers generically**
+  (`layer-1`, `layer-2`, … in stacking order). Never mix the two styles in one
+  scene — a half-named list looks broken.
+- Plumbing keeps its conventions and stays out of the panel: matte sources are
+  `<host>__matte` (also how the app pairs a wipe's knobs to the layer it
+  reveals), sheen/emerge/mask helpers keep their `__` suffixes.
+
 ## Slots And Controls
 
 Use slots for user-editable values that should appear in the player properties
@@ -157,6 +175,45 @@ Slot value types map to controls:
 | string text slot | text input |
 
 Slot types must match the properties that reference them.
+
+### Layer controls (agent-authored knobs)
+
+Beyond slots, `controls.json` may carry a `layerControls` array — your own
+bespoke, contextual knobs for the scene's key layers. This is where the scene
+gets its signature controls: you know what each layer does and what a user
+would want to tune, so name the knob the way a motion designer would name it
+for THIS piece ("Bag sway", "Steam rise", "Landing feel") — never generic
+filler. 1–2 per key layer, only for motion that truly benefits from a handle.
+
+```json
+{
+  "controls": [ { "sid": "accentColor", "label": "Accent color" } ],
+  "layerControls": [
+    { "target": "bag", "kind": "amount", "property": "rotation",
+      "label": "Bag sway", "description": "How far the bag swings each step." },
+    { "target": "steam", "kind": "steps", "property": "position",
+      "label": "Steam rise", "description": "How tall the steam plume grows.",
+      "steps": [ { "label": "Wisp", "intensity": 0.5 },
+                 { "label": "Full", "intensity": 1 },
+                 { "label": "Billow", "intensity": 1.6 } ] },
+    { "target": "zenek-root", "kind": "toggle", "property": "position",
+      "label": "Bobbing", "description": "Whether Zenek bobs while walking." },
+    { "target": "global", "kind": "feel",
+      "label": "Feel", "description": "The easing personality of the whole entrance." }
+  ]
+}
+```
+
+- `kind`: `amount` (slider over the motion's amplitude), `steps` (named
+  intensities, 2–5, as multipliers of the authored amplitude), `toggle`
+  (on/off), `feel` (easing personality select).
+- `target` is a layer `nm`, or `"global"` for a scene-wide `feel`.
+- `property` (`position` | `rotation` | `scale`) is required except for `feel`,
+  and must name motion that actually exists on that layer — the app grounds
+  every spec against the real keyframes and silently drops what doesn't match,
+  so a knob can never be dead.
+- A custom amplitude knob replaces the auto-derived one for that property —
+  use it when your label/steps say it better than a generic "Rotation".
 
 ## Native Text
 

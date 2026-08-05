@@ -78,6 +78,12 @@ by what it is doing this beat. Bezier is `x1,y1,x2,y2`.
   (`settle-soft`, `travel-balanced`).
 - Distance/duration: large travel → smoother acceleration and more time (don't
   snap); tiny UI → short, not theatrical; camera → calmer than the objects in it.
+- Asymmetric per-phase easing: for a rise-then-fall, away-then-return, or
+  push-off-then-settle, ease **out** on the up/away phase and **in** on the
+  down/return phase — weight pushes off fast, hangs at the apex, then falls
+  faster than it rose. A symmetric (mirrored) split, or the up-curve simply
+  reversed for the down, reads mechanical — a hover, not a step, a bounce, or a
+  balloon settling. Choose the split deliberately for the character wanted.
 - Typography: support `settle-soft`; active word `expressive-pop`/`entrance-sharp`.
   Count-up: near-linear digits, `settle-soft` landing. Mask-wipe: `entrance-sharp`,
   revealed content `settle-soft`.
@@ -193,8 +199,38 @@ by what it is doing this beat. Bezier is `x1,y1,x2,y2`.
 
 - Repeated fields need phase offsets by index, distance, row, or path position.
   Lockstep pulsing reads mechanical unless the prompt asks for it.
+- Derive many elements' motion by sampling **one** cycle function at offset
+  phases, rather than hand-authoring each element's wrapped keyframes — it stays
+  coherent, is seamless by construction, and makes adding more voices trivial.
+  Space copies a fraction of the period apart (e.g. half-period, so one is
+  always mid-rise), and hide each reset behind an invisible fade: glide the
+  property back to its start value while opacity is already 0, so the seam never
+  flicks.
 - Engineer loop seams with identical first/last frames, integer wave cycles,
   closed rotations, wrapped drift, or recycled emanation rings.
+- **Wrapped drift with no expressions available** (an element exits one edge
+  and re-enters the opposite edge, e.g. a scrolling background element):
+  bake the wrap as an instant position jump placed at a moment the element is
+  fully offscreen on *both* sides of the jump (verify against its own bbox
+  with a safety margin). Make that jump a **held keyframe** (`h:1`), not a
+  1-frame ramp. A ramp only looks instant because the player samples whole
+  frames, and that stops being true the moment anything retimes the scene: the
+  Duration control moves keyframes onto fractional frames, a sample lands
+  between the ramp's endpoints, and the element is stranded mid-screen for one
+  frame — a visible flash. A hold snaps at any scale. Pick
+  a total travel distance equal to a whole number of wrap cycles so the
+  element lands back on its exact starting position at the end; if two
+  elements share a duration but travel different per-cycle distances (e.g. a
+  "nearer" element doing more wraps than a "farther" one), dividing each
+  one's distance by the same shared duration gives correctly different
+  constant velocities for free — no separate speed constant needed.
+- When several elements loop at different rates and must all seam at once, fix
+  the loop length **T = the least common multiple (LCM) of the exact
+  sub-periods**. Treat "about N frames" periods as flexible: scan T's integer
+  divisors for the nearest clean fit (single-digit-percent drift is fine)
+  instead of forcing a true LCM of everything, which explodes the loop length.
+  Make every full rotation an exact ×360° (compute turns as T / period, then
+  ×360) so nothing lands mid-cycle at the seam.
 - Give ambient loops one conceptual beat: pulse, mirror, morph, inversion,
   density build, or recovery to order.
 - Use one repeated primitive and one main animated property where possible.

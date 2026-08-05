@@ -86,9 +86,21 @@ const slugify = (s) =>
 
 // ── Prompts ──────────────────────────────────────────────────────────────────
 
-function generatePrompt(slug, brief, kind) {
+function generatePrompt(slug, brief, kind, assets = []) {
+  // Sequence briefs (v1.2 §3.8): when several artworks arrive, enumerate every
+  // file with its original filename so the agent can match the brief's
+  // narrative to the right asset. Single-SVG prompts stay byte-identical to
+  // the original contract.
+  const multi = assets.length > 1
+  const opening = multi
+    ? `Animate the source SVGs under assets/ (listed below) into ONE Lottie scene.\n\n` +
+      `This brief connects MULTIPLE source artworks into ONE seamless animation:\n` +
+      assets.map((a, i) => `  asset ${i + 1} of ${assets.length} — "${a.name}" → ${a.file}`).join('\n') + '\n' +
+      `The brief's narrative sets the sequence; attachment order is the default.\n` +
+      `Read references/chapterization-transition-grammar.md (Grounded Handoffs).\n\n`
+    : `Animate the SVG at assets/${slug}.svg into a Lottie scene.\n\n`
   return (
-    `Animate the SVG at assets/${slug}.svg into a Lottie scene.\n\n` +
+    opening +
     `PROJECT SLUG: ${slug} (write to public/projects/${slug}/scene-1/lottie.json via a build script ` +
     `at scripts/build-${slug}.mjs, per CLAUDE.md).\n` +
     `KIND: ${kind === 'loop' ? 'seamless LOOP (first frame = last frame on every property)' : 'ENTRY (plays once, settles exactly on the source composition)'}.\n\n` +
@@ -346,16 +358,112 @@ function toolLabel(name, input) {
 
 /** Prompt for the auto-propose flow — the agent studies the artwork and writes
  *  a production brief (no scene yet). */
-function proposePrompt(slug) {
+function proposePrompt(slug, assets = []) {
+  // The brief is the whole product here: a scene is only as good as the brief
+  // it was built from, and the briefs that produce good scenes are the ones
+  // written AFTER reading the raw SVG. What makes them good isn't prose style —
+  // it's that inspection surfaces the things artwork doesn't advertise (a
+  // composition exported twice, glyphs welded into one path, a masked inner
+  // border) and turns each into a constraint the build has to respect. So the
+  // prompt forces the reading first and then dictates the brief's anatomy.
+  const multi = assets.length > 1
+  const manifest = multi
+    ? `${assets.length} source SVGs, in the order they were attached:\n` +
+      assets.map((a, i) => `  asset ${i + 1} of ${assets.length} — "${a.name}" → ${a.file}`).join('\n') + '\n'
+    : `ONE source SVG — assets/${slug}.svg\n`
+
   return (
-    `Study the SVG at assets/${slug}.svg and propose a production animation brief for it — the kind a ` +
-    `motion designer would hand to the studio. Inspect the SVG directly (cat it, read its structure and ` +
-    `parts). Read the text-to-lottie skill's design-taste and motion-taste references first so the brief ` +
-    `matches house style (restraint, purposeful motion).\n\n` +
-    `Write ONE focused paragraph: what moves, how, the feel, and whether it reads as a seamless LOOP or a ` +
-    `settle-once ENTRY. Describe outcomes, not Lottie internals. Write ONLY the brief text (no preamble, ` +
-    `no headings) to assets/${slug}.brief.txt, then print the single final line: BRIEF_READY ${slug}`
+    `Study the source artwork and write a production animation brief for it — the kind a principal motion ` +
+    `designer hands to the studio.\n\n` +
+    manifest + '\n' +
+
+    `STEP 1 — READ THE ARTWORK. Do this before writing a word of the brief.\n` +
+    `- \`cat\` every file. Walk the group tree: ids, nesting, paint order, canvas size and viewBox.\n` +
+    `- Name what each part IS (the subject's anatomy), not just its id.\n` +
+    `- Hunt for what the artwork does NOT advertise. Each of these changes what can be animated:\n` +
+    `    • the same composition exported TWICE and stacked, the upper copy's opaque background hiding the\n` +
+    `      lower — animate the buried copy and the whole scene plays under a solid plate\n` +
+    `    • many glyphs welded into ONE compound path — block reveals only, no per-word stagger\n` +
+    `    • mask-based inner borders (Figma's inside-stroke export: a self-intersecting path under a mask)\n` +
+    `    • gradient strokes/fills and raster <pattern> fills — to be preserved, never flattened\n` +
+    `    • clip paths, especially the ones rounding a screen's corners\n` +
+    `    • elements byte-identical ACROSS assets — those are ONE element that persists, never a crossfade\n` +
+    `    • text as outlines vs live text; groups that are already positioned for a jump or a reveal\n` +
+    `- Report only what you actually found. If an asset is clean, say so in a line — never invent a hazard.\n` +
+    `- Read the text-to-lottie skill's design-taste and motion-taste references first` +
+    (multi ? `, plus the Grounded Handoffs section of references/chapterization-transition-grammar.md` : '') +
+    `.\n\n` +
+
+    `STEP 2 — WRITE THE BRIEF, in this shape:\n` +
+    `- An opening paragraph: the subject, and the story in one line. ` +
+    (multi
+      ? `Say explicitly what is SHARED between the artworks (same layers throughout — never crossfade two ` +
+        `screens) and what genuinely arrives. Attachment order is the suggested sequence; propose a ` +
+        `different one only if the artwork clearly reads better that way, and say which.\n`
+      : `\n`) +
+    `- BEATS: numbered, each with a rough timing (~seconds), what moves, what deliberately does NOT, and how\n` +
+    `  it should feel. Let beats overlap rather than queue — a settle can start while the next thing begins.\n` +
+    `- FIDELITY MUSTS: one line per thing step 1 turned up, written as an instruction, using the real ids,\n` +
+    `  filenames, colours and coordinates from the file.\n` +
+    `- How it ends: ENTRY settles exactly on the final artwork, LOOP's first frame equals its last. Say which,\n` +
+    `  and say how the motion resolves there — anything that travels must be described in whole laps if it\n` +
+    `  has to land back on its source position. The settle is a hard requirement, not a nicety.\n` +
+    `- A closing line naming the specific frames worth rendering and READING to check the result (seams,\n` +
+    `  the moment motion comes to rest, the first and last frame of each reveal).\n\n` +
+
+    `RULES\n` +
+    `- Outcomes, not Lottie internals: "the card exits through the check's draw-on", never "trim path 0→100".\n` +
+    `- Specific beats generic: real part names and real colours from the file, not "the shape" and "the accent".\n` +
+    `- House style: restraint, purposeful motion, one idea per beat; no bounce for its own sake.\n` +
+    `- Never propose animating something the artwork doesn't contain, and never redraw a supplied subject.\n\n` +
+
+    `OUTPUT — write ONLY the brief itself (opening, BEATS, FIDELITY MUSTS, how it ends, the check line) to ` +
+    `assets/${slug}.brief.txt. No preamble, no notes about your process, no summary of these instructions. ` +
+    `Then print the single final line: BRIEF_READY ${slug}`
   )
+}
+
+/** Per-request ceiling on source artworks. Exceeding it is an ERROR, never a
+ *  silent truncation — a run that quietly animates 12 of your 15 artworks
+ *  looks like an engine failure, not a limit. */
+const MAX_ASSETS = 12
+
+/** Write a request's source artworks to `assets/` and return the prompt
+ *  manifest. `svgs` (v1.2, additive) carries 2+ in story order — the first
+ *  lands at `<slug>.svg`, the rest at `<slug>-2.svg`…; plain `svg` is the
+ *  unchanged single-attachment contract. Returns `{error}` for the caller to
+ *  stream back, or `{assets}` (possibly empty — the caller owns that message).
+ *  Shared by /generate and /propose so both see the same artworks. */
+function writeSourceAssets(slug, body) {
+  const svgs = Array.isArray(body.svgs)
+    ? body.svgs.filter((e) => e && typeof e.svg === 'string' && e.svg.length > 0)
+    : null
+  if (svgs && svgs.length > MAX_ASSETS) {
+    return { error: `Too many artworks (${MAX_ASSETS} max, got ${svgs.length}).` }
+  }
+  // SVG writes happen per request, before job admission — cap them well below
+  // the body limit so looping distinct slugs can't fill the disk 20 MB at a
+  // time. Real source illustrations are tens of KB.
+  const tooBig = (s) => typeof s === 'string' && s.length > 5_000_000
+  if (tooBig(body.svg) || svgs?.some((e) => tooBig(e.svg))) {
+    return { error: 'SVG too large (5 MB max).' }
+  }
+  const list = svgs?.length
+    ? svgs
+    : typeof body.svg === 'string' && body.svg
+      ? [{ name: `${slug}.svg`, svg: body.svg }]
+      : []
+  if (!list.length) return { assets: [] }
+  mkdirSync(join(WORKBENCH, 'assets'), { recursive: true })
+  const assets = list.map((entry, i) => {
+    const file = i === 0 ? `${slug}.svg` : `${slug}-${i + 1}.svg`
+    writeFileSync(join(WORKBENCH, 'assets', file), String(entry.svg))
+    // Filenames appear only in the prompt manifest — strip newlines and quotes
+    // so a hostile name can't break the manifest's line format.
+    const name = String(entry.name ?? file).replace(/[\r\n"]+/g, ' ').trim().slice(0, 120) || file
+    return { file: `assets/${file}`, name }
+  })
+  return { assets }
 }
 
 /** Engine model. The app sends its Settings model per request; anything absent
@@ -758,7 +866,10 @@ const server = createServer(async (req, res) => {
         }
       }
       res.setHeader('content-type', 'application/json')
-      return res.end(JSON.stringify({ ok: Boolean(claudeVersion), claude: claudeVersion, jobs: jobs.counts() }))
+      // `features` is the additive capability handshake — the app gates UI
+      // affordances (e.g. multi-attach) on it instead of failing silently
+      // against an older engine.
+      return res.end(JSON.stringify({ ok: Boolean(claudeVersion), claude: claudeVersion, jobs: jobs.counts(), features: ['multi-svg'] }))
     }
 
     if (req.method === 'GET' && req.url?.startsWith('/scene/')) {
@@ -792,33 +903,33 @@ const server = createServer(async (req, res) => {
       res.setHeader('content-type', 'application/x-ndjson')
       res.setHeader('cache-control', 'no-cache')
 
-      // SVG writes happen per request, before job admission — cap them well
-      // below the body limit so looping distinct slugs can't fill the disk
-      // 20 MB at a time. Real source illustrations are tens of KB.
-      if (typeof body.svg === 'string' && body.svg.length > 5_000_000) {
-        res.write(JSON.stringify({ type: 'error', text: 'SVG too large (5 MB max).' }) + '\n')
-        return res.end()
+      // Both generating and proposing ground on the SAME artworks — one writer
+      // so a sequence brief can never reach one endpoint and not the other.
+      let assets = []
+      if (req.url === '/generate' || req.url === '/propose') {
+        const written = writeSourceAssets(slug, body)
+        if (written.error) {
+          res.write(JSON.stringify({ type: 'error', text: written.error }) + '\n')
+          return res.end()
+        }
+        assets = written.assets
       }
 
       if (req.url === '/propose') {
-        if (!body.svg) {
-          res.write(JSON.stringify({ type: 'error', text: 'propose needs {slug, svg}' }) + '\n')
+        if (!assets.length) {
+          res.write(JSON.stringify({ type: 'error', text: 'propose needs {slug, svg|svgs}' }) + '\n')
           return res.end()
         }
-        mkdirSync(join(WORKBENCH, 'assets'), { recursive: true })
-        writeFileSync(join(WORKBENCH, 'assets', `${slug}.svg`), String(body.svg))
-        submitJob({ res, req, slug, kind: 'propose', prompt: proposePrompt(slug), resumeId: null, model: body.model, effort: body.effort, runner: runProposeClaude })
+        submitJob({ res, req, slug, kind: 'propose', prompt: proposePrompt(slug, assets), resumeId: null, model: body.model, effort: body.effort, runner: runProposeClaude })
       } else if (req.url === '/generate') {
-        if (!body.svg || !body.brief) {
-          res.write(JSON.stringify({ type: 'error', text: 'generate needs {slug, svg, brief, kind}' }) + '\n')
+        if (!assets.length || !body.brief) {
+          res.write(JSON.stringify({ type: 'error', text: 'generate needs {slug, svg|svgs, brief, kind}' }) + '\n')
           return res.end()
         }
-        mkdirSync(join(WORKBENCH, 'assets'), { recursive: true })
-        writeFileSync(join(WORKBENCH, 'assets', `${slug}.svg`), String(body.svg))
         submitJob({
           res, req, slug,
           kind: 'generate',
-          prompt: generatePrompt(slug, String(body.brief), body.kind === 'loop' ? 'loop' : 'entry'),
+          prompt: generatePrompt(slug, String(body.brief), body.kind === 'loop' ? 'loop' : 'entry', assets),
           resumeId: null,
           model: body.model,
           effort: body.effort,

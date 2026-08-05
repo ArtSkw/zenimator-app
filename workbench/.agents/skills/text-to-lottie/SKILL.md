@@ -40,11 +40,13 @@ inline rules in this file.
 | Success, error, warning, completion, empty state | `references/recipe-loaders-icons.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | UI microinteraction | `references/recipe-ui-microinteractions.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | Generic "animate this SVG" or SVG-to-Lottie | `references/recipe-svg-animation.md`, `references/svg-compatibility.md`, `references/motion-taste.md` |
+| Character, figure, creature, avatar, or illustration animated as a moving body; walk cycle, idle, bob, bounce, jump, dance, celebration; character holding/carrying an object | `references/recipe-character-rig.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | Camera follow, pan, zoom, parallax, scene motion | `references/recipe-camera-scene-motion.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | Diagram, technical line animation, callout, flow trace | `references/recipe-diagram-technical.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | Data, stats, KPIs, charts, metrics, dashboard figures | `references/recipe-data-stats.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | Product launch, feature announcement, social promo | `references/recipe-product-promo.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | Long text, multiple ideas, list/features/steps, timeline, before/after, problem/solution, quote+proof, recap/story, product walkthrough, multi-language variations, chapters, multi-beat sequence, episode, jump/hard cuts, transition grammar | `references/chapterization-transition-grammar.md`, `references/motion-taste.md` |
+| Multiple source SVGs — connect two or more illustrations into one continuous story (sequence briefs) | `references/chapterization-transition-grammar.md` (Grounded Handoffs), `references/svg-compatibility.md`, `references/motion-taste.md` |
 | Glow, glass, metal, gradient, fill, bubble/burst effects | `references/recipe-visual-effects.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | SVG input inside logo/icon/UI/lower-third work | The task recipe plus `references/svg-compatibility.md` |
 | Starter brief or reusable project direction | `references/recipe-starter-projects.md`, `references/design-taste.md`, `references/motion-taste.md` |
@@ -118,7 +120,9 @@ These few defaults are non-negotiable and apply to every designed scene. Load
   behavior, focal element strongest); do not fall back to one uniform ease for
   every layer.
 - Use slots for important editable values and add `controls.json` labels/ranges
-  when they improve the properties panel.
+  when they improve the properties panel. For the scene's key layers, also
+  author 1–2 bespoke `layerControls` knobs (contextual names like "Bag sway",
+  never generic) — see the player-contract "Layer controls" section.
 - For SVG input, preserve the viewBox, normalize styling, watch fill rules and
   intersections, and verify the result in Skottie.
 - Native Lottie text/text slots (`ty:5`) render in this player when the scene
