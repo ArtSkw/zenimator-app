@@ -13,6 +13,7 @@ import { SkottiePlayer } from '@/components/player/SkottiePlayer'
 import { SkeletonSelectionOverlay } from '@/components/generate/SkeletonSelectionOverlay'
 import { StudioSelectionOverlay } from '@/components/generate/StudioSelectionOverlay'
 import { StudioFeed } from '@/components/generate/StudioFeed'
+import { AttachmentStrip } from '@/components/generate/AttachmentStrip'
 import { ZoomableStage } from '@/components/generate/StageZoom'
 import { useGenerateStore, useBakedLottieJson, type Subject, type Kind } from '@/store/generateStore'
 import { useGeneratePlayback } from '@/store/generatePlaybackStore'
@@ -20,17 +21,31 @@ import { useStudioFeed } from '@/store/studioFeedStore'
 import { useStudioEditBridge } from '@/store/studioEditBridge'
 import { useProjectsStore } from '@/store/projectsStore'
 import { castFromControls, reconcileCast } from '@/engine/controls/cast'
+import { sceneLayers } from '@/engine/lottie/sceneRoot'
 import { rasterizeSvg } from '@/engine/detector/rasterize'
 import { sanitizeSvg } from '@/engine/detector/sanitizeSvg'
 import { humanizeLlmError } from '@/engine/llm/errors'
 import { deriveControls, parseLayerControlSpecs, INTENSITY_FEEL_PREFIX } from '@/engine/controls/deriveControls'
-import { studioCancel, studioGenerate, studioPropose, studioEdit, studioRevert, studioSlugFor, labelsFromDoc, studioPreflight, studioTitle } from '@/engine/studio/studioClient'
+import { studioCancel, studioGenerate, studioPropose, studioEdit, studioRevert, studioSlugFor, labelsFromDoc, studioFeatures, studioPreflight, studioTitle } from '@/engine/studio/studioClient'
 import { useEngineConnect } from '@/store/engineConnectStore'
 import { HEARTBEAT_QUIET_MS, HEARTBEAT_TICK_MS, heartbeatLine } from '@/engine/studio/studioHeartbeat'
 
 /** Every generation runs through the STUDIO engine: headless Claude Code in
  *  the workbench (server/agent.mjs) — deep, minutes-long, verified against its
  *  own rendered frames. There is no second engine — settled by design. */
+
+/** Attachment ceilings, mirroring the engine (server/agent.mjs): MAX_ASSETS
+ *  artworks per request, and a total the 20 MB body reader won't sever the
+ *  connection over — the client has to catch that one, because a severed
+ *  request never gets an error event back. Enforced at attach time so the
+ *  limit lands while you're picking files, not minutes into a run. */
+const MAX_ATTACHMENTS = 12
+const MAX_ATTACHED_BYTES = 12_000_000
+
+/** One attach affordance in two widths — same icon, border, height and hover in
+ *  both, so the control doesn't appear to change identity once artwork lands. */
+const ATTACH_BTN =
+  'pressable flex h-8 shrink-0 cursor-pointer items-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
 
 const CHECKER_BG = {
   backgroundImage: 'repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%)',
@@ -39,9 +54,9 @@ const CHECKER_BG = {
 
 export function GenerateView() {
   const {
-    subject, kind, prompt, grounding, lottieJson, resultSignature, resultKind,
+    subject, kind, prompt, groundings, lottieJson, resultSignature, resultKind,
     status, stage, error, skeleton, selectedLayer, cast,
-    setSubject, setKind, setPrompt, setGrounding,
+    setSubject, setKind, setPrompt, setGroundings,
     startGenerating, setStage, setResult, setError, resetStatus, setSelectedLayer, setCast, setHistoryOpen,
   } = useGenerateStore()
   const { attach, detach, setPlaying, setProgress } = useGeneratePlayback()
@@ -63,8 +78,12 @@ export function GenerateView() {
   const [momentFrame, setMomentFrame] = useState<number | null>(null)
   // Auto-propose: the agent studies the attached SVG and writes a brief.
   const [proposing, setProposing] = useState(false)
+  /** True while SVG files are dragged over the composer (drop-to-attach). */
+  const [dropActive, setDropActive] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
+  /** One gentle many-attachments hint per session, never a cap. */
+  const attachWarnedRef = useRef(false)
   /** Slug of the job currently streaming — lets Stop send an explicit /cancel. */
   const activeSlugRef = useRef<string | null>(null)
   // Heartbeat: when the engine goes quiet on a long turn, the status line
@@ -185,15 +204,15 @@ export function GenerateView() {
   const showFullSetup = !lottieJson || editingSetup
 
   // The studio grounds every scene in real artwork: SVG + brief are both required.
-  const canGenerate = !!grounding && prompt.trim().length > 0 && !generating && !proposing
+  const canGenerate = groundings.length > 0 && prompt.trim().length > 0 && !generating && !proposing
 
   // A result becomes "stale" when the properties it was generated with change.
-  const signature = `${subject}|${kind}|${prompt.trim()}|${grounding?.name ?? ''}`
+  const signature = `${subject}|${kind}|${prompt.trim()}|${groundings.map((g) => g.name).join('+')}`
   // Only warn about unapplied setup changes when a regenerate is actually
   // possible (an SVG is attached). Without grounding the axes can't be applied
   // anyway, and a loaded scene has none — so "regenerate to apply" would be a
   // false alarm.
-  const stale = !!lottieJson && !!grounding && resultSignature !== null && resultSignature !== signature
+  const stale = !!lottieJson && groundings.length > 0 && resultSignature !== null && resultSignature !== signature
 
   // Conversational refinement resumes the scene's own studio session — only
   // studio-built projects have one. Legacy saves stay viewable, not chattable.
@@ -232,12 +251,33 @@ export function GenerateView() {
     if (slug) void studioCancel(slug)
   }
 
+  /** Sequence briefs need an engine that understands `svgs` — gate on the
+   *  /health features handshake with a clear message, never a silent failure
+   *  and never a quiet fall back to the first artwork alone. */
+  const multiSvgReady = async () => {
+    if (groundings.length < 2) return true
+    if ((await studioFeatures()).includes('multi-svg')) return true
+    toast.error('Engine update needed for multi-attach', {
+      description: 'Pull the latest engine and restart it (npm run agent), or attach a single SVG.',
+    })
+    return false
+  }
+
+  /** The attachments as a request carries them: 1 → the unchanged single-svg
+   *  contract, 2+ → a sequence in story order. Generate and Propose ground on
+   *  exactly the same artworks. */
+  const svgPayload = () =>
+    groundings.length >= 2
+      ? { svgs: groundings.map((g) => ({ name: g.name, svg: g.svgText })) }
+      : { svg: groundings[0].svgText }
+
   const handleGenerate = async () => {
-    if (!canGenerate || !grounding) return
+    if (!canGenerate || groundings.length === 0) return
     // Preflight the engine so a disconnected teammate gets the connect modal
     // immediately, not a multi-minute run against an unreachable/unauthorized engine.
     const status = await studioPreflight()
     if (status !== 'ok') { useEngineConnect.getState().show(status); return }
+    if (!(await multiSvgReady())) return
     const ac = new AbortController()
     abortRef.current = ac
     startGenerating()
@@ -250,7 +290,7 @@ export function GenerateView() {
       const studioSlug = studioSlugFor(deriveProjectName(intent) || 'scene')
       activeSlugRef.current = studioSlug
       const done = await studioGenerate(
-        { slug: studioSlug, svg: grounding.svgText, brief: intent, kind },
+        { slug: studioSlug, ...svgPayload(), brief: intent, kind },
         (e) => {
           lastEventAt.current = Date.now() // resets the heartbeat's quiet timer
           pushFeed(e)
@@ -320,9 +360,10 @@ export function GenerateView() {
   }
 
   const handlePropose = async () => {
-    if (!grounding || proposing || generating) return
+    if (groundings.length === 0 || proposing || generating) return
     const status = await studioPreflight()
     if (status !== 'ok') { useEngineConnect.getState().show(status); return }
+    if (!(await multiSvgReady())) return
     const ac = new AbortController()
     abortRef.current = ac
     setProposing(true)
@@ -334,7 +375,7 @@ export function GenerateView() {
       const slug = studioSlugFor('propose')
       activeSlugRef.current = slug
       const text = await studioPropose(
-        { slug, svg: grounding.svgText },
+        { slug, ...svgPayload() },
         (e) => {
           lastEventAt.current = Date.now()
           pushFeed(e)
@@ -377,19 +418,56 @@ export function GenerateView() {
     }
   }
 
-  const handleAttach = async (file: File) => {
-    const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')
-    if (!isSvg) {
-      toast.error('Attach an SVG file')
-      return
+  const handleAttach = async (files: FileList | null) => {
+    if (!files?.length) return
+    // Read from the store, not the render closure — a multi-file loop awaits
+    // between pushes and must not clobber a chip removed meanwhile.
+    const next = [...useGenerateStore.getState().groundings]
+    let bytes = next.reduce((n, g) => n + g.svgText.length, 0)
+    let overCount = 0
+    let overBytes = 0
+    for (const file of Array.from(files)) {
+      const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')
+      if (!isSvg) {
+        toast.error(`${file.name} is not an SVG`)
+        continue
+      }
+      if (next.length >= MAX_ATTACHMENTS) { overCount++; continue }
+      try {
+        // Sanitize before we rasterize, store, or ship to the workbench — never hold raw markup.
+        const svgText = sanitizeSvg(await file.text())
+        if (next.some((g) => g.name === file.name && g.svgText === svgText)) continue
+        if (bytes + svgText.length > MAX_ATTACHED_BYTES) { overBytes++; continue }
+        const pngDataUrl = await rasterizeSvg(svgText)
+        // randomUUID is secure-context only — a container served over plain
+        // http (v1.3 field tests) must still be able to attach.
+        const id = crypto.randomUUID?.() ?? `g${next.length}-${performance.now()}`
+        next.push({ id, name: file.name, svgText, pngDataUrl })
+        bytes += svgText.length
+      } catch {
+        toast.error(`Could not read ${file.name}`)
+      }
     }
-    try {
-      // Sanitize before we rasterize, store, or ship to the workbench — never hold raw markup.
-      const svgText = sanitizeSvg(await file.text())
-      const pngDataUrl = await rasterizeSvg(svgText)
-      setGrounding({ name: file.name, svgText, pngDataUrl })
-    } catch {
-      toast.error('Could not read that SVG')
+    setGroundings(next)
+    // Both ceilings report what they dropped. Silence here would read as an
+    // engine failure later: a run that animates 12 of the 15 artworks you
+    // attached, or a request the engine severs mid-upload.
+    if (overCount) {
+      toast.error(`${overCount} file${overCount > 1 ? 's' : ''} not attached`, {
+        description: `One animation takes up to ${MAX_ATTACHMENTS} artworks.`,
+      })
+    }
+    if (overBytes) {
+      toast.error(`${overBytes} file${overBytes > 1 ? 's' : ''} too heavy to add`, {
+        description: `The engine takes ${MAX_ATTACHED_BYTES / 1_000_000} MB of SVG per animation — flatten or split embedded rasters.`,
+      })
+    }
+    // Soft guidance, never a cap: long chains usually read better as scenes.
+    if (next.length > 4 && !attachWarnedRef.current) {
+      attachWarnedRef.current = true
+      toast('Long story — consider splitting into scenes', {
+        description: 'Many artworks in one animation can crowd the timeline.',
+      })
     }
   }
 
@@ -433,7 +511,7 @@ export function GenerateView() {
       // every override whose control still exists on the new result (ids are
       // layer-name-based, so untouched layers keep their exact values).
       const validIds = new Set(newControls.controls.map((c) => c.id))
-      const survivingNms = new Set(doc.layers.map((l: { nm: string }) => l.nm))
+      const survivingNms = new Set(sceneLayers<{ nm: string }>(doc).map((l) => l.nm))
       const keptOverrides = Object.fromEntries(
         Object.entries(useGenerateStore.getState().slotOverrides).filter(
           ([id]) =>
@@ -495,6 +573,45 @@ export function GenerateView() {
   }, [canChat])
   useEffect(() => { useStudioEditBridge.getState().setApplying(applying) }, [applying])
 
+  // Attachment entry points. Both variants wrap the SAME hidden input; only the
+  // affordance changes, so the action bar's width never depends on the count.
+  const canAttach = !generating && !proposing
+  const fileInput = (
+    <input
+      type="file"
+      multiple
+      accept=".svg,image/svg+xml"
+      className="hidden"
+      disabled={!canAttach}
+      onChange={(e) => {
+        void handleAttach(e.target.files)
+        e.target.value = '' // the same file can be re-attached after removal
+      }}
+    />
+  )
+  const attachInput = groundings.length ? (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <label
+            aria-label="Attach another SVG"
+            className={cn(ATTACH_BTN, 'w-8 justify-center', !canAttach && 'pointer-events-none opacity-50')}
+          >
+            <Paperclip size={12} />
+            {fileInput}
+          </label>
+        }
+      />
+      <TooltipContent side="top">Attach another SVG</TooltipContent>
+    </Tooltip>
+  ) : (
+    <label className={cn(ATTACH_BTN, 'gap-1.5 px-3 text-xs', !canAttach && 'pointer-events-none opacity-50')}>
+      <Paperclip size={12} />
+      Attach SVG (required)
+      {fileInput}
+    </label>
+  )
+
   return (
     <div className="h-full w-full overflow-auto">
       {/* NOTE: vertical centering via my-auto on the child, NOT justify-center
@@ -530,48 +647,74 @@ export function GenerateView() {
                 </div>
               )}
 
-              {/* Unified composer — prompt, then action bar with axes centered */}
-              <div className="rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
-                <div className="px-4 pt-4">
+              {/* Unified composer — attachments, prompt, then action bar with
+                  axes centered. The whole card is a drop target for SVGs. */}
+              <div
+                className={cn(
+                  'rounded-3xl border bg-card shadow-sm overflow-hidden transition-[border-color,box-shadow] duration-200',
+                  dropActive ? 'border-ring ring-3 ring-ring/50' : 'border-border',
+                )}
+                onDragOver={(e) => {
+                  // Only file drags from outside — an in-strip re-sequence carries
+                  // 'application/x-zen-attachment', never 'Files'.
+                  if (!e.dataTransfer.types.includes('Files')) return
+                  // preventDefault even mid-run: without it the browser treats the
+                  // drop as navigation and walks away from a streaming generation.
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = canAttach ? 'copy' : 'none'
+                  if (canAttach && !dropActive) setDropActive(true)
+                }}
+                onDragLeave={(e) => {
+                  // dragleave also fires crossing between children; ignore those.
+                  if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+                  setDropActive(false)
+                }}
+                onDrop={(e) => {
+                  if (!e.dataTransfer.types.includes('Files')) return
+                  e.preventDefault()
+                  setDropActive(false)
+                  if (canAttach) void handleAttach(e.dataTransfer.files)
+                }}
+              >
+                <AttachmentStrip
+                  items={groundings}
+                  onChange={setGroundings}
+                  disabled={generating || proposing}
+                />
+
+                {/* Tighter top padding under the strip — the thumbnails already
+                    carry their own breathing room. */}
+                <div className={cn('px-4', groundings.length ? 'pt-2' : 'pt-4')}>
                   <textarea
                     ref={promptRef}
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    placeholder={placeholderFor(subject, kind)}
+                    placeholder={
+                      groundings.length >= 2
+                        ? "Describe the journey — e.g. 'the card flies in, taps, and dissolves into the checkmark drawing on'"
+                        : placeholderFor(subject, kind)
+                    }
                     rows={1}
                     disabled={generating || proposing}
-                    className="w-full min-h-[4.5rem] resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
+                    /* The floor only has to clear a two-line placeholder — the
+                       field auto-grows with the brief up to MAX_PX. */
+                    className="w-full min-h-[3.25rem] resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
                   />
                 </div>
 
                 <TooltipProvider>
-                  <div className="flex items-center px-3 pb-3 pt-2">
-                    {grounding ? (
-                      <div className="flex items-center gap-1.5 rounded-full border border-border bg-background pl-3 pr-1.5 py-1 text-xs">
-                        <Paperclip size={11} className="text-muted-foreground" />
-                        <span className="font-mono truncate max-w-[140px]">{grounding.name}</span>
-                        <button
-                          onClick={() => setGrounding(null)}
-                          className="rounded-full hover:bg-muted p-0.5"
-                          aria-label="Remove SVG"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="flex items-center gap-1.5 rounded-full border border-foreground/40 px-3 py-1.5 text-xs text-foreground cursor-pointer transition-colors hover:bg-muted">
-                        <Paperclip size={11} />
-                        Attach SVG (required)
-                        <input
-                          type="file"
-                          accept=".svg,image/svg+xml"
-                          className="hidden"
-                          onChange={(e) => e.target.files?.[0] && handleAttach(e.target.files[0])}
-                        />
-                      </label>
-                    )}
+                  <div className="flex items-center gap-2 px-3 pb-3 pt-2">
+                    {/* Attach lives here at a FIXED width — the thumbnails
+                        themselves sit in the strip at the top of the composer,
+                        so no number of attachments can crowd the axes or push
+                        Generate around. Empty state keeps the full invitation;
+                        once artwork is attached it collapses to a round +. */}
+                    {attachInput}
 
-                    <div className={cn('flex-1 items-center justify-center gap-1.5', generating || proposing ? 'hidden' : 'flex')}>
+                    {/* The axes ride WITH Generate on the right edge (ml-auto),
+                        not centered in the row — centered, they shifted every
+                        time the attach control changed width. */}
+                    <div className={cn('ml-auto items-center gap-1.5', generating || proposing ? 'hidden' : 'flex')}>
                       <AxisGroup<Subject>
                         name="Subject" value={subject} onChange={setSubject}
                         options={[
@@ -600,13 +743,13 @@ export function GenerateView() {
                             key={stage ?? 'busy'}
                             className="truncate text-xs text-muted-foreground animate-in fade-in duration-300"
                           >
-                            {stage ?? (proposing ? 'Reading your artwork…' : 'Generating…')}
+                            {stage ?? (proposing ? (groundings.length >= 2 ? 'Reading your artworks…' : 'Reading your artwork…') : 'Generating…')}
                           </span>
                         </span>
                         <Button
                           variant="default"
                           size="sm"
-                          className="shrink-0 rounded-full gap-1.5 font-semibold"
+                          className="h-8 shrink-0 rounded-full gap-1.5 font-semibold"
                           onClick={handleStop}
                         >
                           <Square size={13} />
@@ -617,7 +760,8 @@ export function GenerateView() {
                       <Button
                         variant="default"
                         size="sm"
-                        className="rounded-full gap-1.5 font-semibold"
+                        /* h-8 matches the 32px axis switches beside it. */
+                        className="h-8 rounded-full gap-1.5 px-3.5 font-semibold"
                         disabled={!canGenerate}
                         onClick={handleGenerate}
                         title="The studio engine builds the scene, renders its own frames, and verifies them before delivering"
@@ -634,12 +778,15 @@ export function GenerateView() {
                   let the studio study the artwork and draft the brief. While
                   it runs, progress + Stop live in the composer's busy cluster
                   above (same as generation). */}
-              {grounding && !prompt.trim() && !generating && !proposing && (
+              {groundings.length > 0 && !prompt.trim() && !generating && !proposing && (
                 <button
                   onClick={handlePropose}
                   className="pressable mx-auto flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
-                  <Sparkles size={13} /> Let the studio propose a brief from your SVG
+                  <Sparkles size={13} />
+                  {groundings.length >= 2
+                    ? 'Let the studio propose a story across your artworks'
+                    : 'Let the studio propose a brief from your SVG'}
                 </button>
               )}
               {stale && !generating && !proposing && (
@@ -838,7 +985,10 @@ const KIND_LABEL: Record<Kind, string> = { entry: 'Entry', loop: 'Loop' }
  * first meaningful words after stripping leading stop words.
  */
 function deriveProjectName(prompt: string): string {
-  const raw = prompt.trim()
+  // Only the opening paragraph. A proposed brief is a structured document now,
+  // and scanning all of it for the first quoted string would name the project
+  // after a filename buried in its fidelity notes.
+  const raw = prompt.trim().split(/\n\s*\n/)[0].trim()
   // Use the first quoted string if present — often "Live better", 'logo', etc.
   const quoted = raw.match(/["'"‘’“”]([^"'"‘’“”]{2,30})["'"‘’“”]/)?.[1]?.trim()
   if (quoted) return quoted.slice(0, 25)
