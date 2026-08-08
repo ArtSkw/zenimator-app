@@ -1,0 +1,61 @@
+{
+  "controls": [
+    {
+      "sid": "bubble.text",
+      "label": "Bubble text"
+    },
+    {
+      "sid": "bubble.size",
+      "label": "Bubble size",
+      "autoFit": {
+        "text": "bubble.text",
+        "padding": [
+          16,
+          8
+        ],
+        "min": [
+          90,
+          35
+        ],
+        "max": [
+          225.6,
+          58
+        ],
+        "leading": 2
+      }
+    },
+    {
+      "sid": "bubble.textPos",
+      "label": "Bubble text position",
+      "internal": true
+    },
+    {
+      "sid": "bubble.anchor",
+      "label": "Bubble anchor",
+      "internal": true
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "arm-right-rig",
+      "kind": "amount",
+      "property": "position",
+      "label": "Bicep squeeze",
+      "description": "How far the arms pull up and in at the peak of the pump."
+    },
+    {
+      "target": "shadow-rig",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Shadow settle",
+      "description": "How much the ground shadow widens as the body settles."
+    },
+    {
+      "target": "bubble-anchor",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Bubble pop",
+      "description": "How much the speech bubble overshoots as it arrives."
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+[
+  {
+    "v": 1,
+    "at": 1785928702497,
+    "note": "Rework this scene to the UPDATED companion-bubble recipe (re-read references/recipe-companion-bubble.md — the intro-loop sequencing and typography contracts changed). Three fixes, all blocking:\n\n1. TH"
+  },
+  {
+    "v": 2,
+    "at": 1785932288507,
+    "note": "Refine the MOTION CRAFT of this scene per the NEW Fluidity section of references/motion-taste.md (re-read it — it was just added). The drink/paw move currently reads clunky and laggy. Keep the choreog"
+  },
+  {
+    "v": 3,
+    "at": 1785937255705,
+    "note": "Two upgrades to this scene: make the mascot idle a LIVING one, and make the stage safe for localized bubble text. Re-read references/motion-taste.md first — the Fluidity section has a new 'Living idle"
+  },
+  {
+    "v": 4,
+    "at": 1785945232382,
+    "note": "Surgical loop-seam fix, nothing else: the glint layer position track leaks the seam. At frame 90 it holds its FIRST keyframe value (no key at 90), but its key at t:270 ends on [126.133,143.088] — a di"
+  },
+  {
+    "v": 5,
+    "at": 1785946945994,
+    "note": "Two final contract items for this scene. Re-read references/motion-taste.md (Living idles gained a new rule: key exactly on the loop boundaries) and references/recipe-companion-bubble.md (new .textPos"
+  },
+  {
+    "v": 6,
+    "at": 1785963479892,
+    "note": "Port this scene forward to match its sibling live-onboarding-companion-mqmh, which is now the reference build: it gained source-true bubble-to-trail spacing (the SVG gap is law) and silhouette morphs "
+  },
+  {
+    "v": 7,
+    "at": 1785965769519,
+    "note": "Port this scene to match live-onboarding-companion-ire9, now the reference build after a mood retune (calm relax archetype: body y pinned, slow rotational sway about the seat, breath in the silhouette"
+  },
+  {
+    "v": 8,
+    "at": 1785997107125,
+    "note": "Port this scene to match live-onboarding-companion-ire9, the reference build after the smoothness fix: sway driven by a TRUE sine (no travel-balanced bezier for cyclic motion — it has a mid-segment ve"
+  },
+  {
+    "v": 9,
+    "at": 1786004371754,
+    "note": "Port this scene to match live-onboarding-companion-ire9, the reference build after the velocity-audit fix: the whole drink gesture (paw/glass rig + straw, umbrella, drink-fill followers) is now driven"
+  }
+]

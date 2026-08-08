@@ -1,0 +1,68 @@
+{
+  "controls": [
+    {
+      "sid": "bubble.text",
+      "label": "Bubble text"
+    },
+    {
+      "sid": "bubble.size",
+      "label": "Bubble size",
+      "autoFit": {
+        "text": "bubble.text",
+        "padding": [
+          16,
+          8
+        ],
+        "min": [
+          90,
+          35
+        ],
+        "max": [
+          221.6,
+          35
+        ],
+        "leading": 2
+      }
+    },
+    {
+      "sid": "bubble.textPos",
+      "label": "Bubble text position",
+      "internal": true
+    },
+    {
+      "sid": "bubble.anchor",
+      "label": "Bubble anchor",
+      "internal": true
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "body-rig",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Hug squeeze",
+      "description": "How deeply the mascot presses into the charity stone each breath."
+    },
+    {
+      "target": "hug-rig",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Arm tighten",
+      "description": "How firmly the arms (and the stone they hold) squeeze at the peak of the hug."
+    },
+    {
+      "target": "bubble-anchor",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Bubble pop",
+      "description": "How much the speech bubble overshoots as it arrives."
+    },
+    {
+      "target": "shadow-rig",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Shadow settle",
+      "description": "How much the ground shadow widens as the body settles into the charity stone."
+    }
+  ]
+}

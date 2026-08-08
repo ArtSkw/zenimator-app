@@ -1,0 +1,46 @@
+{
+  "controls": [
+    {
+      "sid": "bubble.text",
+      "label": "Bubble text"
+    },
+    {
+      "sid": "bubble.size",
+      "label": "Bubble size",
+      "autoFit": {
+        "text": "bubble.text",
+        "padding": [
+          16,
+          8
+        ],
+        "min": [
+          90,
+          35
+        ]
+      }
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "head-rig",
+      "kind": "amount",
+      "property": "position",
+      "label": "Recline depth",
+      "description": "How deeply the mascot sinks back into the chair each breath."
+    },
+    {
+      "target": "drink-rig",
+      "kind": "amount",
+      "property": "position",
+      "label": "Sip lift",
+      "description": "How far the drink rises toward the mascot each cycle."
+    },
+    {
+      "target": "bubble-anchor",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Bubble pop",
+      "description": "How much the speech bubble overshoots as it arrives."
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "controls": [
+    {
+      "sid": "bubble.text",
+      "label": "Bubble text"
+    },
+    {
+      "sid": "bubble.size",
+      "label": "Bubble size",
+      "autoFit": {
+        "text": "bubble.text",
+        "padding": [
+          17,
+          11
+        ],
+        "min": [
+          90,
+          40
+        ]
+      }
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "body-rig",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Hug squeeze",
+      "description": "How deeply the mascot presses into the pillow each breath."
+    },
+    {
+      "target": "bubble-anchor",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Bubble pop",
+      "description": "How much the speech bubble overshoots as it arrives."
+    }
+  ]
+}
