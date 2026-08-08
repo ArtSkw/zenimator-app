@@ -1,7 +1,7 @@
 import { useState, useLayoutEffect, useEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import {
-  Loader2, Wand2, X, Paperclip, CornerDownLeft, ChevronDown, ChevronUp, Info, IterationCw, AlertCircle,
+  Loader2, Wand2, X, Paperclip, CornerDownLeft, ChevronDown, ChevronUp, Info, IterationCw, AlertCircle, Play,
   Image as ImageIcon, Monitor, LogIn, Repeat, Square, Crosshair, Sparkles,
   type LucideIcon,
 } from 'lucide-react'
@@ -346,6 +346,21 @@ export function GenerateView() {
   // false alarm.
   const stale = !!lottieJson && groundings.length > 0 && resultSignature !== null && resultSignature !== signature
 
+  // A stopped run can be CONTINUED rather than restarted once it owned a
+  // workbench slug — the engine keys the interrupted session to it (and
+  // degrades to a fresh build if that session didn't survive, so this only has
+  // to be plausible, not certain).
+  //
+  // But only while the setup still matches what that run was given: the brief,
+  // kind and artwork it was working from live in the session's transcript, so
+  // resuming after an edit would quietly build the OLD instruction. Change the
+  // setup and the plain Generate button comes back — which is the honest
+  // answer, since that genuinely is a different scene.
+  const jobSignature = activeJob
+    ? `${activeJob.subject}|${activeJob.kind}|${activeJob.prompt}|${activeJob.groundings.map((g) => g.name).join('+')}`
+    : null
+  const canResume = stoppedDraft && !!activeJob?.studioSlug && jobSignature === signature
+
   // Conversational refinement resumes the scene's own studio session — only
   // studio-built projects have one. Legacy saves stay viewable, not chattable.
   const canChat = !!lottieJson && !!activeProject?.studioSlug
@@ -387,10 +402,11 @@ export function GenerateView() {
    *  handshake with a clear message, never a silent failure and never a quiet
    *  downgrade (an old engine would degrade intro-loop to a plain entry, or
    *  see only the first artwork of a sequence). */
-  const multiSvgReady = async () => {
+  const capabilitiesReady = async (opts?: { resume?: boolean }) => {
     const needed: Array<[feature: string, label: string]> = []
     if (groundings.length >= 2) needed.push(['multi-svg', 'multi-attach'])
     if (kind === 'intro-loop') needed.push(['intro-loop', 'Entry + Loop scenes'])
+    if (opts?.resume) needed.push(['resume-generate', 'resuming a stopped run'])
     if (!needed.length) return true
     const features = await studioFeatures()
     const missing = needed.find(([f]) => !features.includes(f))
@@ -409,22 +425,26 @@ export function GenerateView() {
       ? { svgs: groundings.map((g) => ({ name: g.name, svg: g.svgText })) }
       : { svg: groundings[0].svgText }
 
-  const handleGenerate = async () => {
+  const handleGenerate = async ({ resume = false }: { resume?: boolean } = {}) => {
     if (!canGenerate || groundings.length === 0) return
     // Preflight the engine so a disconnected teammate gets the connect modal
     // immediately, not a multi-minute run against an unreachable/unauthorized engine.
     const status = await studioPreflight()
     if (status !== 'ok') { useEngineConnect.getState().show(status); return }
-    if (!(await multiSvgReady())) return
     // Identity snapshot at CLICK time: regenerating an open project evolves
     // THAT project even if the user browses elsewhere during the run.
     const openId = useProjectsStore.getState().activeProjectId
     const evolving = useProjectsStore.getState().projects.find((p) => p.id === openId)
     // A draft left behind by Stop is still this project: re-running must fill
     // it in, not mint a second row beside it.
-    const stoppedDraftId = !evolving && openId && usePendingJobs.getState().jobs[openId]?.stopped
-      ? openId
-      : null
+    const priorJob = openId ? usePendingJobs.getState().jobs[openId] : undefined
+    const stoppedDraftId = !evolving && openId && priorJob?.stopped ? openId : null
+    // Resuming continues the interrupted run rather than starting a new one, so
+    // it must keep that run's WORKBENCH SLUG: the engine keys both the Claude
+    // Code session and the scene folder by it. A fresh slug would resume
+    // nothing — it would silently become a normal generation in a new folder.
+    const resuming = resume && !!priorJob?.stopped && !!priorJob.studioSlug
+    if (!(await capabilitiesReady({ resume: resuming }))) return
     const ac = new AbortController()
     abortRef.current = ac
     startGenerating()
@@ -435,7 +455,7 @@ export function GenerateView() {
     // only materialises if you stay on the screen. `projectId` is captured
     // HERE and everything below writes to it, whatever the user opens next.
     const projectId = evolving?.id ?? stoppedDraftId ?? crypto.randomUUID()
-    const studioSlug = studioSlugFor(deriveProjectName(intent) || 'scene')
+    const studioSlug = resuming ? priorJob!.studioSlug : studioSlugFor(deriveProjectName(intent) || 'scene')
     // The feed is this JOB's — it keeps streaming into the project's own
     // channel while the user reads another project, and is still whole when
     // they come back.
@@ -476,7 +496,9 @@ export function GenerateView() {
       const statusLine = createStudioStatusLine('generate')
       activeSlugRef.current = studioSlug
       const done = await studioGenerate(
-        { slug: studioSlug, ...svgPayload(), brief: intent, kind },
+        // `brief`/artwork travel even on a resume: the engine falls back to
+        // them if the session didn't survive, so the scene always gets built.
+        { slug: studioSlug, ...svgPayload(), brief: intent, kind, ...(resuming ? { resume: true } : {}) },
         (e) => {
           lastEventAt.current = Date.now() // resets the heartbeat's quiet timer
           // Always recorded, foreground or not — dropping background events is
@@ -576,7 +598,7 @@ export function GenerateView() {
     if (groundings.length === 0 || proposing || generating) return
     const status = await studioPreflight()
     if (status !== 'ok') { useEngineConnect.getState().show(status); return }
-    if (!(await multiSvgReady())) return
+    if (!(await capabilitiesReady())) return
     const ac = new AbortController()
     abortRef.current = ac
     setProposing(true)
@@ -1051,6 +1073,35 @@ export function GenerateView() {
                           Stop
                         </Button>
                       </div>
+                    ) : canResume ? (
+                      /* A run this user stopped: continuing it is the primary
+                         action, but starting clean stays one click away —
+                         people often stop precisely BECAUSE it was going wrong,
+                         and resuming that would just rebuild the wrong thing. */
+                      <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 rounded-full gap-1.5 px-3 text-muted-foreground"
+                          disabled={!canGenerate}
+                          onClick={() => handleGenerate()}
+                          title="Ignore the interrupted attempt and build this scene from scratch"
+                        >
+                          <Wand2 size={13} />
+                          Start over
+                        </Button>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="h-8 rounded-full gap-1.5 px-3.5 font-semibold"
+                          disabled={!canGenerate}
+                          onClick={() => handleGenerate({ resume: true })}
+                          title="Pick the studio back up where it stopped — it keeps everything it had already worked out"
+                        >
+                          <Play size={13} />
+                          Resume
+                        </Button>
+                      </div>
                     ) : (
                       <Button
                         variant="default"
@@ -1058,7 +1109,7 @@ export function GenerateView() {
                         /* h-8 matches the 32px axis switches beside it. */
                         className="h-8 rounded-full gap-1.5 px-3.5 font-semibold"
                         disabled={!canGenerate}
-                        onClick={handleGenerate}
+                        onClick={() => handleGenerate()}
                         title="The studio engine builds the scene, renders its own frames, and verifies them before delivering"
                       >
                         <Wand2 size={13} />
@@ -1098,7 +1149,9 @@ export function GenerateView() {
                   <StudioFeed channel={feedChannel} />
                   <CanvasPlaceholder
                     title="Generation stopped"
-                    note="Your brief and artwork are saved — press Generate to run it again."
+                    note={canResume
+                      ? 'Resume picks the studio back up where it left off — or start over for a clean take.'
+                      : 'Your brief and artwork are saved — press Generate to run it again.'}
                   />
                 </>
               )}
