@@ -9,8 +9,10 @@ and fields.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/health` | — | `{ok, claude, jobs:{running, queued}, features:["multi-svg", …]}` — `features` (v1.2, additive) advertises optional capabilities so clients can gate UI affordances |
+| GET | `/health` | — | `{ok, claude, jobs:{running, queued}, active:[{slug, kind, state}], features:["multi-svg", …]}` — `features` (v1.2, additive) advertises optional capabilities so clients can gate UI affordances; `active` (v1.2, additive, feature `job-visibility`) lists every queued/running job so clients can surface work on their scene EVEN when another client started it |
 | GET | `/scene/<slug>` | — | the scene's `lottie.json` (404 `{}` if absent) |
+| GET | `/assets/<slug>` | — | `{svgs:[{name, svg}]}` — the SOURCE artworks the scene was generated from (404 `{"svgs":[]}` if absent). Lets a client recover an attachment it lost so the project stays regenerable (v1.2, additive, feature `source-assets`) |
+| GET | `/controls/<slug>` | — | the scene's `controls.json` (404 `{}` if absent) — pairs with `/scene` for a full external refresh (v1.2, additive) |
 | GET | `/history/<slug>` | — | `{versions:[{v, at, note}]}` — edit snapshots, oldest first (v1.1) |
 | GET | `/dossier/<slug>` | — | `{doc, script, versions}` — learnings doc + build script + history (v1.1) |
 | POST | `/generate` | `{slug, svg, brief, kind, model?, effort?}` — or (v1.2, additive) `svgs: [{name, svg}, …]` in story order for sequence briefs; first file lands at `assets/<slug>.svg`, the rest at `<slug>-2.svg`…, and the prompt enumerates them | NDJSON event stream |
@@ -20,8 +22,17 @@ and fields.
 | POST | `/cancel` | `{slug}` | `{ok}` — `true` if a queued/running job was cancelled |
 | POST | `/title` | `{prompt, model?}` | `{title}` — a 3–5 word project name from the prompt, generated on the engine (no browser API key); `""` on failure |
 
-`kind` is `'loop' \| 'entry'`. Slugs are normalized server-side (lowercase,
-`[a-z0-9-]`, ≤48 chars).
+`kind` is `'loop' \| 'entry' \| 'intro-loop'` (v1.2 adds `intro-loop`: an
+entrance that settles into an endless idle — the scene carries top-level Lottie
+`markers` named `intro` and `loop`, players run the intro once then cycle the
+loop segment; unknown kinds degrade to `entry`). Slugs are normalized
+server-side (lowercase, `[a-z0-9-]`, ≤48 chars).
+
+**Fonts (v1.2, additive):** `GET /font/<family>` serves
+`workbench/assets/fonts/<family>.ttf` (404 if absent; family allowlisted to
+`[A-Za-z0-9 _-]`). Clients fetch every family a scene's `fonts.list` declares
+and pass the bytes to the renderer — a native text layer without its font
+renders blank.
 
 **Model & effort (additive):** the three job endpoints accept optional `model`
 (a Claude model id, e.g. `claude-sonnet-5`, passed as `--model`) and `effort`

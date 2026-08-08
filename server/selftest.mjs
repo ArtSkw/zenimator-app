@@ -10,7 +10,7 @@
  * Zero dependencies. Exits non-zero on any failed check.
  */
 import { spawn } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -163,7 +163,6 @@ try {
     check('generate: every event carries jobId', events.every((e) => typeof e.jobId === 'string' && e.jobId.length > 0))
     // Spawn flags: the request's model must reach the engine, and global MCP
     // servers must never be inherited (latency/token tax on every request).
-    const { readFileSync } = await import('node:fs')
     const spawnArgs = JSON.parse(readFileSync(join(wb, 'assets', 'selftest-a.args.json'), 'utf8'))
     check('generate: spawn passes the requested --model', spawnArgs[spawnArgs.indexOf('--model') + 1] === 'claude-sonnet-5')
     check('generate: spawn passes the requested --effort', spawnArgs[spawnArgs.indexOf('--effort') + 1] === 'medium')
@@ -177,7 +176,6 @@ try {
       svgs: [{ name: 'card.svg', svg: '<svg id="card"/>' }, { name: 'check.svg', svg: '<svg id="check"/>' }],
     })
     check('multi-svg: stream completes', events.at(-1)?.type === 'done')
-    const { readFileSync } = await import('node:fs')
     check('multi-svg: both asset files written',
       existsSync(join(wb, 'assets', 'selftest-m.svg')) && existsSync(join(wb, 'assets', 'selftest-m-2.svg')))
     const mPrompt = readFileSync(join(wb, 'assets', 'selftest-m.prompt.txt'), 'utf8')
@@ -192,14 +190,22 @@ try {
 
   // 2. Queueing under concurrency 1
   {
-    const [b, c] = await Promise.all([
+    const [b, c, mid] = await Promise.all([
       stream('/generate', { slug: 'selftest-b', svg: '<svg/>', brief: 'test', kind: 'loop' }),
       new Promise((r) => setTimeout(r, 150)).then(() =>
         stream('/generate', { slug: 'selftest-c', svg: '<svg/>', brief: 'test', kind: 'loop' })),
+      // Mid-flight health probe: both jobs must be VISIBLE as active work —
+      // this is what lets any client show "engine is working on this scene"
+      // for jobs it didn't start.
+      new Promise((r) => setTimeout(r, 400)).then(() => fetch(`${BASE}/health`).then((x) => x.json())),
     ])
     const queuedEvt = c.find((e) => e.type === 'queued')
     check('queue: second job streams {queued, position:1}', queuedEvt?.position === 1)
     check('queue: both jobs complete after the slot frees', b.at(-1)?.type === 'done' && c.at(-1)?.type === 'done')
+    const slugs = Array.isArray(mid.active) ? mid.active.map((j) => j.slug) : []
+    check('job-visibility: mid-flight health lists both jobs with state',
+      slugs.includes('selftest-b') && slugs.includes('selftest-c') &&
+      mid.active.every((j) => (j.state === 'running' || j.state === 'queued') && typeof j.kind === 'string'))
   }
 
   // 3+4. Duplicate-slug rejection, then explicit /cancel mid-run
@@ -231,6 +237,10 @@ try {
     const h = await fetch(`${BASE}/health`).then((r) => r.json())
     check('health reports job counts', h.jobs && typeof h.jobs.running === 'number' && typeof h.jobs.queued === 'number')
     check('health advertises multi-svg (v1.2 features handshake)', Array.isArray(h.features) && h.features.includes('multi-svg'))
+    check('health advertises intro-loop + text-slots (v1.2)',
+      h.features.includes('intro-loop') && h.features.includes('text-slots'))
+    check('health advertises job-visibility and an active array (idle = empty)',
+      h.features.includes('job-visibility') && Array.isArray(h.active) && h.active.length === 0)
   }
 
   // 7. Security posture: origin allowlist, content-type gate, host check
@@ -268,10 +278,15 @@ try {
   {
     await stream('/generate', { slug: 'selftest-f', svg: '<svg/>', brief: 'x', kind: 'loop' })
     await stream('/edit', { slug: 'selftest-f', instruction: 'nudge it', frame: 42, layer: 'bag-root' })
-    const { readFileSync } = await import('node:fs')
     const p = readFileSync(join(wb, 'assets', 'selftest-f.prompt.txt'), 'utf8')
     check('edit prompt renders the anchored frame first', /preview-scene\.mjs selftest-f scene-1 42 --zoom 3/.test(p))
     check('edit prompt names the anchored layer', /"bag-root"/.test(p))
+    // "Make the stone move" must produce motion that meets the bar, without
+    // licensing a rewrite of the whole scene.
+    check('edit prompt holds new motion to the Aliveness Contract',
+      p.includes('Aliveness Contract') && p.includes('secondary motion'))
+    check('edit prompt still scopes the change',
+      p.includes('do not re-animate the rest of the scene'))
   }
 
   // 9. Edit history + revert (v1.1)
@@ -291,6 +306,17 @@ try {
     const served = await fetch(`${BASE}/scene/selftest-g`).then((r) => r.json())
     const originalMarker = JSON.parse(original ?? '{}').marker
     check('reverted scene is what /scene now serves', served.marker === originalMarker)
+    const assets = await fetch(`${BASE}/assets/selftest-g`).then((r) => r.json())
+    check('/assets returns the scene\'s source artwork (recoverable attachment)',
+      Array.isArray(assets.svgs) && assets.svgs.length >= 1 &&
+      typeof assets.svgs[0].svg === 'string' && assets.svgs[0].svg.includes('<svg'))
+    const missingAssets = await fetch(`${BASE}/assets/selftest-nope`)
+    check('/assets is 404 with an empty list when the scene has none',
+      missingAssets.status === 404 && (await missingAssets.json()).svgs.length === 0)
+
+    const ctrls = await fetch(`${BASE}/controls/selftest-g`)
+    check('/controls serves the scene controls (404 {} when absent)',
+      ctrls.status === 404 || (ctrls.ok && typeof (await ctrls.json()) === 'object'))
     check('revert is itself revertible (snapshotted current first)', (rev.versions?.length ?? 0) === 3)
   }
 
@@ -304,7 +330,6 @@ try {
     // Multi-artwork propose (v1.2 §3.8): the brief must be asked to connect
     // ALL supplied artworks — briefing only the first would silently discard
     // half the input, and it would take a full run to notice.
-    const { readFileSync } = await import('node:fs')
     const mEvents = await stream('/propose', {
       slug: 'selftest-pm',
       svgs: [{ name: 'card.svg', svg: '<svg id="card"/>' }, { name: 'check.svg', svg: '<svg id="check"/>' }],
@@ -338,6 +363,101 @@ try {
         text.includes('.brief.txt') && text.includes('BRIEF_READY'))
     }
     check('propose single: carries no asset manifest', !pPrompt.includes('asset 1 of'))
+  }
+
+  // 1c. Intro + Loop kind (v1.2): an entrance that settles into an endless idle.
+  {
+    const events = await stream('/generate', {
+      slug: 'selftest-il', brief: 'bubble pops in, mascot idles forever', kind: 'intro-loop',
+      svg: '<svg id="mascot"/>',
+    })
+    check('intro-loop: stream completes', events.at(-1)?.type === 'done')
+    const ilPrompt = readFileSync(join(wb, 'assets', 'selftest-il.prompt.txt'), 'utf8')
+    check('intro-loop: prompt names the kind', ilPrompt.includes('INTRO + LOOP'))
+    check('intro-loop: prompt dictates the exact marker contract',
+      ilPrompt.includes('"markers":[{"cm":"intro","tm":0,"dr":T},{"cm":"loop","tm":T,"dr":op-T}]'))
+    check('intro-loop: prompt demands the seam be read',
+      ilPrompt.includes('frame T and frame op') && ilPrompt.includes('render and READ'))
+    check('intro-loop: idle must be alive from frame 0, never waiting for the entrance',
+      ilPrompt.includes('CONTINUOUSLY from frame 0') && ilPrompt.includes('never') &&
+      ilPrompt.includes('frozen waiting'))
+    check('intro-loop: routes to the companion-bubble recipe', ilPrompt.includes('recipe-companion-bubble.md'))
+    check('intro-loop: hard contract — Bold static font by name',
+      ilPrompt.includes('Bold static') && ilPrompt.includes('fName equals the shipped ttf basename'))
+    check('intro-loop: hard contract — autoFit max published',
+      ilPrompt.includes('autoFit {padding, min, max}'))
+    check('intro-loop: hard contract — textPos slot for wrapped translations',
+      ilPrompt.includes('.textPos slot') && ilPrompt.includes('internal: true'))
+    check('intro-loop: hard contract — Living-idles bar named',
+      ilPrompt.includes('Living-idles bar') && ilPrompt.includes('hundreds of keyframes'))
+    check('intro-loop: hard contract — boundary keys + pixel-diffed seam',
+      ilPrompt.includes('exactly AT T and AT op') && ilPrompt.includes('PIXEL-diff'))
+    check('intro-loop: hard contract — bubble entrance house constants in absolute time',
+      ilPrompt.includes('54f (900ms)') && ilPrompt.includes('112% overshoot') &&
+      ilPrompt.includes('size the intro marker T to'))
+    check('intro-loop: hard contract — porting is not authoring (stale constants guard)',
+      ilPrompt.includes('PORTING IS NOT AUTHORING') && ilPrompt.includes('re-derive every published value'))
+    // Unknown kinds degrade to entry — same posture as model/effort.
+    const kx = await stream('/generate', { slug: 'selftest-kx', brief: 'x', kind: 'wobble', svg: '<svg/>' })
+    check('intro-loop: unknown kind degrades to ENTRY', kx.at(-1)?.type === 'done' &&
+      readFileSync(join(wb, 'assets', 'selftest-kx.prompt.txt'), 'utf8').includes('ENTRY (plays once'))
+  }
+
+  // 1c-2. The Living Motion contract reaches EVERY kind (regression).
+  //
+  // The craft blockers used to sit inside the intro-loop branch alone, so an
+  // ENTRY or LOOP scene was asked for nothing beyond "settle on the source
+  // composition" — aliveness then depended on the agent reading far enough
+  // into motion-taste.md on its own. That gap is why static held objects and
+  // inert decorations kept shipping and kept being reported by hand. If these
+  // checks fail, the engine has silently gone back to needing a human reminder.
+  {
+    for (const [kind, slug] of [
+      ['entry', 'selftest-lm-entry'],
+      ['loop', 'selftest-lm-loop'],
+      ['intro-loop', 'selftest-lm-il'],
+    ]) {
+      const ev = await stream('/generate', {
+        slug, kind, brief: 'a mascot hugs a stone', svg: '<svg/>',
+      })
+      check(`living-motion (${kind}): stream completes`, ev.at(-1)?.type === 'done')
+      const p = readFileSync(join(wb, 'assets', `${slug}.prompt.txt`), 'utf8')
+      check(`living-motion (${kind}): contract present and points at the gate`,
+        p.includes('LIVING MOTION — completion blockers for EVERY scene') &&
+        p.includes('The Aliveness Contract'))
+      check(`living-motion (${kind}): held objects parented AND carrying secondary motion`,
+        p.includes('A held object is part of the body') &&
+        p.includes('PARENTED to the limb') && p.includes('own secondary motion'))
+      check(`living-motion (${kind}): nothing in frame is inert`,
+        p.includes('Nothing in frame is inert'))
+      check(`living-motion (${kind}): parts articulate, not just the rig`,
+        p.includes('Articulate the PARTS') && p.includes('cardboard test'))
+      check(`living-motion (${kind}): the body breathes`,
+        p.includes('The body always breathes'))
+      check(`living-motion (${kind}): amplitude measured, not assumed`,
+        p.includes('Measure AMPLITUDE, not keyframe count') &&
+        p.includes('max(vertex, control-handle)'))
+      check(`living-motion (${kind}): effort phase-locked, verified by render`,
+        p.includes('phase-locked') && p.includes('contraction, not on the release'))
+      check(`living-motion (${kind}): accents slow enough to resolve`,
+        p.includes('~4 frames at 60fps'))
+      check(`living-motion (${kind}): meaning drives behaviour`,
+        p.includes('what it MEANS'))
+      check(`living-motion (${kind}): mood governs the numbers`,
+        p.includes('Mood governs the system'))
+    }
+  }
+
+  // 1d. Font endpoint (v1.2): families resolve to assets/fonts, never to paths
+  {
+    mkdirSync(join(wb, 'assets/fonts'), { recursive: true })
+    writeFileSync(join(wb, 'assets/fonts', 'TestFam.ttf'), Buffer.from('not-a-real-font'))
+    const ok = await fetch(`${BASE}/font/TestFam`)
+    check('font: serves a declared family', ok.status === 200 && ok.headers.get('content-type') === 'font/ttf')
+    check('font: bytes round-trip', (await ok.text()) === 'not-a-real-font')
+    check('font: unknown family is 404', (await fetch(`${BASE}/font/NoSuchFam`)).status === 404)
+    check('font: traversal shapes are rejected (400)',
+      (await fetch(`${BASE}/font/..%2F..%2Fpackage`)).status === 400)
   }
 
   // 10b. Source-artwork ceilings answer with an error, never a silent truncation

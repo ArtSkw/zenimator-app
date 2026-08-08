@@ -40,6 +40,10 @@ export function createJobTable({ concurrency = 2, maxQueue = 16 } = {}) {
   return {
     get: (slug) => bySlug.get(slug),
     counts: () => ({ running, queued: queue.length }),
+    /** Every queued/running job as {slug, kind, state} — the app's
+     *  "engine is working on this scene" indicator reads this, so jobs
+     *  started OUTSIDE the app (scripts, agent sessions) stay visible. */
+    active: () => [...bySlug.values()].map((j) => ({ slug: j.slug, kind: j.kind, state: j.state })),
 
     /**
      * Register and schedule a job. Returns null when the slug already has a

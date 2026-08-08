@@ -5,10 +5,10 @@
   "description": "ZENimator UI + headless Claude Code engine (text-to-lottie workbench)",
   "type": "module",
   "scripts": {
-    "agent": "node server/agent.mjs",
+    "agent": "node --watch server/agent.mjs",
     "app": "npm --prefix app run dev",
     "workbench": "npm --prefix workbench run dev",
-    "dev": "node server/agent.mjs & npm --prefix app run dev",
+    "dev": "node --watch server/agent.mjs & npm --prefix app run dev",
     "doctor": "node server/doctor.mjs",
     "selftest": "node server/selftest.mjs",
     "install:all": "npm --prefix app install && npm --prefix workbench install",
