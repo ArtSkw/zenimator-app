@@ -23,7 +23,7 @@ export function SidebarSectionLabel({ title, count }: { title: string; count?: n
     <div className="flex items-baseline justify-between px-5 pt-4 pb-1.5 shrink-0">
       <span className="text-xs font-semibold tracking-wide text-foreground/70">{title}</span>
       {count != null && (
-        <span className="font-mono text-[11px] text-muted-foreground/70 tabular-nums">{count}</span>
+        <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{count}</span>
       )}
     </div>
   )
@@ -131,7 +131,7 @@ export function GenerateLayersPanel() {
               </button>
             ))
           ) : (
-            <p className="px-2.5 py-1.5 text-xs italic text-muted-foreground/80">
+            <p className="px-2.5 py-1.5 text-xs italic text-muted-foreground">
               Layers appear once a scene is generated.
             </p>
           )}

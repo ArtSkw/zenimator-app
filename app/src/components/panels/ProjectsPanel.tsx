@@ -98,13 +98,16 @@ export function ProjectsPanel() {
                 <WorkingDot />
               )}
               <span className="flex-1 truncate">{sentenceCase(job.name)}</span>
-              <span className="shrink-0 text-[10px] text-muted-foreground/70">
+              {/* No alpha on the token: these words are the row's STATE, and
+                  10px text dimmed further stops clearing AA in either theme.
+                  The size and the muted colour already carry the hierarchy. */}
+              <span className="shrink-0 text-[10px] text-muted-foreground">
                 {job.error ? 'failed' : job.stopped ? 'draft' : 'working'}
               </span>
             </button>
           ))}
           {projects.length === 0 && pending.length === 0 ? (
-            <p className="px-2.5 py-1.5 text-xs italic text-muted-foreground/80">
+            <p className="px-2.5 py-1.5 text-xs italic text-muted-foreground">
               No saved projects yet.
             </p>
           ) : (
@@ -133,7 +136,7 @@ export function ProjectsPanel() {
                 >
                   {running ? <WorkingDot /> : <Clapperboard size={14} className="shrink-0 text-muted-foreground" />}
                   <span className="flex-1 truncate">{sentenceCase(p.name)}</span>
-                  <span className="shrink-0 text-[10px] text-muted-foreground/70 tabular-nums">
+                  <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
                     {running ? 'working' : relativeTime(p.createdAt)}
                   </span>
                 </a>
