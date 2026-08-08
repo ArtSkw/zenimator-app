@@ -1,7 +1,7 @@
 import { useState, useLayoutEffect, useEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import {
-  Loader2, Wand2, X, Paperclip, CornerDownLeft, ChevronDown, ChevronUp, Info, IterationCw,
+  Loader2, Wand2, X, Paperclip, CornerDownLeft, ChevronDown, ChevronUp, Info, IterationCw, AlertCircle,
   Image as ImageIcon, Monitor, LogIn, Repeat, Square, Crosshair, Sparkles,
   type LucideIcon,
 } from 'lucide-react'
@@ -17,7 +17,7 @@ import { AttachmentStrip } from '@/components/generate/AttachmentStrip'
 import { ZoomableStage } from '@/components/generate/StageZoom'
 import { useGenerateStore, useBakedLottieJson, type Subject, type Kind } from '@/store/generateStore'
 import { useGeneratePlayback } from '@/store/generatePlaybackStore'
-import { useStudioFeed } from '@/store/studioFeedStore'
+import { useStudioFeed, DRAFT_CHANNEL } from '@/store/studioFeedStore'
 import { useStudioEditBridge } from '@/store/studioEditBridge'
 import { useProjectsStore } from '@/store/projectsStore'
 import { usePendingJobs } from '@/store/pendingJobsStore'
@@ -291,7 +291,13 @@ export function GenerateView() {
   // started it, so returning to a project mid-build shows its progress
   // instead of an empty composer.
   const activeJob = usePendingJobs((s) => (activeProjectId ? s.jobs[activeProjectId] : undefined))
-  const generating = status === 'generating' || (!!activeJob && !activeJob.error)
+  // A job row that is still WORKING. A stopped run keeps its row (as an
+  // editable draft) and a failed one keeps it (so the reason stays readable) —
+  // neither is in flight, so neither may drive the busy UI. Missing the
+  // `stopped` half here is what left Stop showing a spinner, a live counter
+  // and a disabled Generate button on a run that had already been cancelled.
+  const jobRunning = !!activeJob && !activeJob.error && !activeJob.stopped
+  const generating = status === 'generating' || jobRunning
   // When the view didn't start the run, its own store has no stage line —
   // fall back to the one the job itself is carrying.
   const stageLine = stage ?? activeJob?.stage ?? null
@@ -300,6 +306,12 @@ export function GenerateView() {
   // animation — there's a result on screen, so replacing it with a skeleton
   // would hide work the user still has.
   const inProgress = !!activeJob && !activeJob.stopped && !lottieJson
+  // A run the user stopped before it produced anything: the setup survives as
+  // an editable draft, so the composer comes back ready to re-run.
+  const stoppedDraft = !!activeJob?.stopped && !lottieJson
+  // Which run's activity this view is showing. Feeds live per project, so
+  // browsing away from a build and back replays that job's own history.
+  const feedChannel = activeProjectId ?? DRAFT_CHANNEL
 
   // Apply control overrides onto the base Lottie for live preview — each control
   // re-writes the keyframes it was derived from (duration, visibility…).
@@ -402,7 +414,6 @@ export function GenerateView() {
     const ac = new AbortController()
     abortRef.current = ac
     startGenerating()
-    beginFeed()
     markJobStart()
     const intent = prompt.trim()
     // The project exists from this moment — named, listed and openable — so a
@@ -411,6 +422,10 @@ export function GenerateView() {
     // HERE and everything below writes to it, whatever the user opens next.
     const projectId = evolving?.id ?? stoppedDraftId ?? crypto.randomUUID()
     const studioSlug = studioSlugFor(deriveProjectName(intent) || 'scene')
+    // The feed is this JOB's — it keeps streaming into the project's own
+    // channel while the user reads another project, and is still whole when
+    // they come back.
+    beginFeed(projectId)
     const pending = usePendingJobs.getState()
     pending.start({
       id: projectId,
@@ -450,7 +465,9 @@ export function GenerateView() {
         { slug: studioSlug, ...svgPayload(), brief: intent, kind },
         (e) => {
           lastEventAt.current = Date.now() // resets the heartbeat's quiet timer
-          if (isForeground()) pushFeed(e)
+          // Always recorded, foreground or not — dropping background events is
+          // what made a returning user see the feed start over.
+          pushFeed(projectId, e)
           if (e.type === 'queued' && e.position) {
             publishStage(`In line for a studio slot (position ${e.position})…`)
             return
@@ -537,7 +554,7 @@ export function GenerateView() {
     } finally {
       abortRef.current = null
       activeSlugRef.current = null
-      if (isForeground()) finishFeed()
+      finishFeed(projectId)
     }
   }
 
@@ -549,7 +566,10 @@ export function GenerateView() {
     const ac = new AbortController()
     abortRef.current = ac
     setProposing(true)
-    beginFeed()
+    // A propose runs against whatever is open — a saved project's channel, or
+    // the draft channel when the composer is still blank.
+    const channel = useProjectsStore.getState().activeProjectId ?? DRAFT_CHANNEL
+    beginFeed(channel)
     markJobStart()
     try {
       const { createStudioStatusLine } = await import('@/engine/studio/studioStatus')
@@ -560,7 +580,7 @@ export function GenerateView() {
         { slug, ...svgPayload() },
         (e) => {
           lastEventAt.current = Date.now()
-          pushFeed(e)
+          pushFeed(channel, e)
           const line = statusLine(e)
           if (line) setStage(line)
         },
@@ -576,7 +596,7 @@ export function GenerateView() {
       activeSlugRef.current = null
       setProposing(false)
       setStage('')
-      finishFeed()
+      finishFeed(channel)
     }
   }
 
@@ -664,7 +684,7 @@ export function GenerateView() {
     abortRef.current = ac
     activeSlugRef.current = proj.studioSlug
     setApplying(true)
-    beginFeed()
+    beginFeed(proj.id)
     markJobStart()
     try {
       // The change resumes the SAME Claude Code session that built the scene —
@@ -676,7 +696,7 @@ export function GenerateView() {
         { slug: proj.studioSlug, instruction, frame: editFrame, layer: editLayer },
         (e) => {
           lastEventAt.current = Date.now() // resets the heartbeat's quiet timer
-          pushFeed(e)
+          pushFeed(proj.id, e)
           if (e.type === 'queued' && e.position) {
             setStage(`In line for a studio slot (position ${e.position})…`)
             return
@@ -738,7 +758,7 @@ export function GenerateView() {
       activeSlugRef.current = null
       setApplying(false)
       setStage('')
-      finishFeed()
+      finishFeed(proj.id)
     }
   }
 
@@ -823,10 +843,19 @@ export function GenerateView() {
                 </div>
                 <div className="flex items-center gap-2.5 px-4 py-3">
                   <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                    <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
+                    {/* A failed run gets a still icon: a spinner beside an
+                        error message claims work is continuing when it stopped. */}
+                    {activeJob?.error ? (
+                      <AlertCircle size={13} className="shrink-0 text-destructive" />
+                    ) : (
+                      <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
+                    )}
                     <span
                       key={stageLine ?? 'busy'}
-                      className="truncate text-xs text-muted-foreground animate-in fade-in duration-300"
+                      className={cn(
+                        'truncate text-xs animate-in fade-in duration-300',
+                        activeJob?.error ? 'text-destructive' : 'text-muted-foreground',
+                      )}
                     >
                       {activeJob?.error ?? stageLine ?? 'Setting up the studio…'}
                     </span>
@@ -868,24 +897,13 @@ export function GenerateView() {
               {/* Activity sits between the brief and the canvas — the reading
                   order of the work: what was asked, what's happening, where it
                   will appear. */}
-              <StudioFeed />
+              <StudioFeed channel={feedChannel} />
 
-              {/* Where the animation will land. The shimmer is the only thing
-                  moving, so the eye rests here while the studio works. */}
-              <div
-                className="relative overflow-hidden rounded-2xl border border-border"
-                style={{ aspectRatio: '1 / 1', ...CHECKER_BG }}
-              >
-                <div className="absolute inset-0 animate-[skeleton-breathe_3.2s_ease-in-out_infinite] bg-card" />
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-8 text-center">
-                  <p className="text-sm text-muted-foreground">Your animation will appear here</p>
-                  {!activeJob?.error && (
-                    <p className="text-xs text-muted-foreground/70">
-                      This takes a few minutes — you can browse other projects meanwhile.
-                    </p>
-                  )}
-                </div>
-              </div>
+              <CanvasPlaceholder
+                busy={!activeJob?.error}
+                title="Your animation will appear here"
+                note={activeJob?.error ? undefined : 'This takes a few minutes — you can browse other projects meanwhile.'}
+              />
 
             </div>
           ) : showFullSetup ? (
@@ -1056,6 +1074,20 @@ export function GenerateView() {
                 <p className="flex items-center justify-center gap-1.5 text-xs text-foreground text-center"><Info size={13} className="shrink-0" />Properties changed — regenerate to apply.</p>
               )}
               {error && <p className="text-xs text-destructive leading-snug text-center">{error}</p>}
+
+              {/* Stopped before anything was produced: the composer above is
+                  live again (brief, artwork, Generate), and this says what
+                  happened without pretending work is still going on — so the
+                  activity from the partial run stays readable below it. */}
+              {stoppedDraft && (
+                <>
+                  <StudioFeed channel={feedChannel} />
+                  <CanvasPlaceholder
+                    title="Generation stopped"
+                    note="Your brief and artwork are saved — press Generate to run it again."
+                  />
+                </>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3 animate-in fade-in-0 duration-300">
@@ -1242,14 +1274,37 @@ export function GenerateView() {
 
           {/* Studio activity — narration, tool lines, and the agent's own
               verification frames; live during a job, reviewable after. The
-              building screen renders its own copy in reading order, so this
-              one stands down there to avoid two activity bars. */}
-          {!inProgress && (
+              building and stopped screens render their own copy in reading
+              order, so this one stands down to avoid two activity bars. */}
+          {!inProgress && !stoppedDraft && (
             <div className="mt-4">
-              <StudioFeed />
+              <StudioFeed channel={feedChannel} />
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** Where the animation will land. Breathing while the studio works; perfectly
+ *  still once it isn't — a stopped run must never keep a pulse going, since
+ *  motion in an idle state reads as work that's still happening. */
+function CanvasPlaceholder({ busy = false, title, note }: { busy?: boolean; title: string; note?: string }) {
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl border border-border"
+      style={{ aspectRatio: '1 / 1', ...CHECKER_BG }}
+    >
+      <div
+        className={cn(
+          'absolute inset-0 bg-card',
+          busy ? 'animate-[skeleton-breathe_3.2s_ease-in-out_infinite]' : 'opacity-50',
+        )}
+      />
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-8 text-center">
+        <p className="text-sm text-muted-foreground">{title}</p>
+        {note && <p className="text-xs text-muted-foreground/70">{note}</p>}
       </div>
     </div>
   )
