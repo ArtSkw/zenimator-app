@@ -68,7 +68,35 @@ activity feed shows you exactly what the agent is doing.
 
 ## Release notes
 
-### v1.1 — current
+### v1.2 — current
+
+Multi-artwork scenes, living companions, and exports that speak every language.
+
+- **Entry + Loop scenes.** A third kind beside Entry and Loop: a one-shot
+  entrance that settles into an endless idle, declared with standard Lottie
+  markers — the preview, every export, and every player runtime honor the
+  same intro/loop boundary.
+- **Attach several artworks.** Multi-SVG briefs in story order, with an
+  attachment strip (thumbnails, drag to re-sequence) and sequence-aware
+  generation.
+- **Real text, really editable.** Scenes can carry native text layers bound to
+  Lottie slots — edit the copy in the Content panel, watch the speech bubble
+  re-size to fit, and try locale strings live. Fonts travel with the scene.
+- **Localized web pack.** A new Web export ships `fitBubble()`: measure a
+  translated string in the scene's real font and hand any player the slot
+  overrides that make the bubble hug it — one animation file, every language.
+- **Generate in the background.** A run becomes a project the moment you press
+  Generate — browse other projects while it builds, come back to live
+  progress, stop it into an editable draft. Work started outside the app shows
+  up on the canvas too, and the fresh scene pulls in when it lands.
+- **Deeper export suite.** One dialog for Lottie JSON, HTML, dotLottie, MP4
+  (H.264), WebM, GIF, and mobile packs (React Native, iOS, Android, Flutter) —
+  intro/loop segments and scene fonts included everywhere.
+- **See inside precomps.** Controls reach nested compositions; retiming scales
+  the whole document — markers, authored cuts and all.
+- **Canvas zoom + pan** and a rounder, quieter control surface.
+
+### v1.1
 
 Richer, scene-aware controls and truer source fidelity.
 
