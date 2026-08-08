@@ -214,6 +214,59 @@ filler. 1–2 per key layer, only for motion that truly benefits from a handle.
   so a knob can never be dead.
 - A custom amplitude knob replaces the auto-derived one for that property —
   use it when your label/steps say it better than a generic "Rotation".
+- A `controls` slot entry may carry `autoFit` (companion-bubble scenes):
+  `{ "sid": "bubble.size", "label": "Bubble size", "autoFit": { "text":
+  "bubble.text", "padding": [24, 16], "min": [120, 52] } }` — the app then
+  measures the text slot's current string in the scene's font and keeps the
+  size slot at text extents + 2×padding (never below `min`), live, while a
+  teammate previews locale strings. See `recipe-companion-bubble.md`.
+
+## Intro + Loop (markers)
+
+An `intro-loop` scene is ONE composition with two segments declared by
+top-level Lottie markers — names are contract, lowercase:
+
+```json
+"markers": [
+  { "cm": "intro", "tm": 0, "dr": T },
+  { "cm": "loop",  "tm": T, "dr": op - T }
+]
+```
+
+- This player (and every export) runs `[0..T]` once, then cycles `[T..op]`
+  forever. Web/native runtimes do the same via `playSegments` /
+  `play(fromMarker:toMarker:)` / `setMinAndMaxFrame`.
+- The seam pair is frames `T` and `op`: every property animating inside the
+  loop must match exactly at both; everything that settled during the intro
+  must hold perfectly still from its settle through `op`.
+- Duration/speed controls in the app rescale marker times together with the
+  keyframes, so the boundary stays proportionally where it was authored.
+- **Verifying the seam: never diff `preview-scene.mjs`'s own PNG output for
+  frame `T` vs frame `op`.** The previewer clamps every requested frame to
+  `last = Math.ceil(op) - 1` before seeking (since `op` is exclusive and
+  never actually displayed), so asking it for frame `op` silently renders
+  `op - 1` instead — one frame before the authored rest keyframe, which can
+  show a few sub-pixel antialiasing differences from an easing curve that
+  hasn't fully flattened out yet. That looks like a broken seam but isn't.
+  Confirm a seam by calling `anim.seekFrame(T)` and `anim.seekFrame(op)`
+  **directly** in a small throwaway CanvasKit script (bypassing the
+  previewer's grid/clamp) and diffing the raw pixel buffers — that samples
+  the keyframe tracks at the literal authored times.
+- **A periodic idle track's FIRST authored point must equal the true rest
+  value, or the flat gap between cycles stops being flat.** The "echo"
+  technique (sampling one cycle's shape at `t - period` to fill `[0, T)`,
+  see the idle-from-frame-0 pattern) relies on there being a genuinely flat
+  `[rest] -> [rest]` hold between one cycle's settle and the next cycle's
+  first keyframe — that's what lets an arbitrary point in the middle (like
+  `T` itself) safely evaluate to the same rest value as `op`. Inserting an
+  anticipation dip (or any other non-zero lead-in beat) as that first point
+  turns the ENTIRE inter-cycle gap into a slow drift toward it, so `T` no
+  longer lands on the flat plateau and silently stops matching `op` — a seam
+  break with no visible symptom in a single-cycle preview, only caught by
+  the direct-seek pixel diff above. Fix: keep an explicit flat point at the
+  true rest value shortly before the anticipation begins, so only the last
+  few frames before it show motion — the long gap in between stays truly
+  flat regardless of how many cycles are echoed.
 
 ## Native Text
 
@@ -231,8 +284,19 @@ text layer by the font's **embedded family name** — so the contract is:
 
 The font's **filename is irrelevant** to resolution — Skottie matches on the
 embedded family name, not the asset key — but keep it unique within the folder so
-it does not collide with an image. If no matching font is present, the text layer
-renders transparent (the classic "blank text" failure).
+it does not collide with an image. If a font is present but doesn't match, the
+text layer renders transparent (the classic "blank text" failure). If **no
+assets are passed to `MakeManagedAnimation` at all** (a `null`/omitted second
+argument, as opposed to an assets dict that's merely missing this one font),
+the failure mode is different and easy to misdiagnose: a visible dark
+placeholder mark pinned at the composition's absolute origin `(0,0)` on every
+frame, unrelated to the text layer's own transform — it reads exactly like a
+stray shape bug in the rig, not a missing-font symptom. `scripts/preview-scene.mjs`
+(the headless verification tool) now builds this assets dict automatically —
+any `.ttf`/`.otf`/`.ttc` or image file sitting in the scene folder is read and
+passed in — so a scene built with a font in place should just work; if this
+mark ever reappears, suspect the previewer's asset loading before the layer
+transforms.
 
 - Text slots (editable text in the properties panel) work the same way — the slot
   still needs the font present. The slot value type for text is a string input.
@@ -240,6 +304,27 @@ renders transparent (the classic "blank text" failure).
   for text to render. Use it only when you deliberately want path-level control
   (stroke-on reveals, glyph morphs, handwritten traces) — not as a font
   workaround.
+- **A parented text layer inherits the ancestor's animated position, but not
+  its scale** (confirmed in this player): if a text layer needs to visually
+  pop or grow together with a parent group (a speech-bubble entrance, a
+  badge lockup), give the text its own explicit scale keyframes — pivoting at
+  its own anchor point — rather than relying on the parent null's scale to
+  carry it. Position inheritance through `parent` is unaffected and still the
+  simplest way to place text relative to a moving group.
+- **Setting a layer's `a` (anchor) and `p` (position) to the SAME value is a
+  hidden zero, not a placeholder.** The transform is `screenPoint = S·(local
+  − a) + p`; when `a == p`, that reduces to `S·local + 0` — whatever value you
+  chose cancels out of the formula regardless of what it is. A text layer
+  built with `a: [0, baselineOffset, 0], p: [0, baselineOffset, 0]` (meant to
+  push the baseline below the layer's local origin) actually renders with the
+  baseline pinned at local `(0,0)` no matter what `baselineOffset` is — for a
+  string with no descenders this reads as "ink floating in the top half of
+  its container," a fidelity bug that survives changing the offset constant
+  because the constant was never live. Fix: anchor at the point that should
+  stay fixed under scale (often the layer's own local origin, `a: [0,0,0]`)
+  and let POSITION alone carry the actual placement offset, held constant
+  and independent of the anchor. Only set `a == p` when the intent really is
+  "no net translation at rest."
 
 ## Vector Text Vertical Placement
 

@@ -7,6 +7,8 @@ Use this reference when choosing pacing, easings, staging, or animation style.
 - Principles
 - Timing Defaults
 - Easing Anchors
+- Fluidity — The Character-Animation Bar (incl. Living idles: articulation,
+  held objects, breathing bodies, amplitude audits, phase-locked effort)
 - Choreography
 - Reveal Grammar
 - Chapterization And Transition Grammar
@@ -18,6 +20,7 @@ Use this reference when choosing pacing, easings, staging, or animation style.
 - Loop And Generative Motion
 - Style Presets
 - Render-Aware Motion
+- The Aliveness Contract ← the completion gate; run it before finishing
 - Final Motion Review
 - Checks
 
@@ -98,6 +101,379 @@ by what it is doing this beat. Bezier is `x1,y1,x2,y2`.
 - Also useful: anticipate (pull slightly opposite before a fast reveal),
   steps/holds (typewriter, counters, scans, technical beats), and continuous
   linear (rotations, scanners, progress loops, mechanical seams).
+- `travel-balanced`'s asymmetric control points (`1.00,.49,.00,.55`) are
+  tuned for longer travel — compressed into a short segment (under ~10
+  frames) genuinely bounded by a stop on BOTH ends (an overshoot extremum,
+  a hold, a settle), they front-load into a visible mid-segment speed spike
+  instead of a smooth single hump. For that specific case (short, stop-to-
+  stop), derive a symmetric slow-start/slow-end curve instead (e.g.
+  `.42,0,.58,1`) — verify with the spacing check below if in doubt.
+- **`travel-balanced` has a genuine, length-independent mid-segment velocity
+  singularity, not just a "short segment" risk.** Its time-component
+  control points (`x1=1.00, x2=.00`) give `dx/ds = 3(1-2s)²`, which is
+  exactly zero at `s=0.5`, while the value-component's derivative there is
+  non-zero (`dy/ds≈0.795` for its stock `y1=.49,y2=.55`) — an infinite
+  `dy/dx` at that single instant, wherever it lands in the segment,
+  independent of how many frames the segment spans (found by dense-sampling
+  a 45-frame `travel-balanced` segment and measuring a 4-9x per-frame delta
+  spike right at its temporal midpoint — a real property of the curve, not
+  a sampling artifact, so no amount of finer sampling removes it). Any two
+  keyframes using this ease where the motion must read as ONE continuous
+  sweep — a pendulum-style back-and-forth being the clearest case — will
+  bake in a hitch at the segment's own halfway point. For a genuine
+  back-and-forth SWAY/pendulum specifically, skip bezier-approximating it
+  altogether and drive the envelope with a real `sin`/`cos` call — a true
+  sine has no such singularity anywhere and is simpler to author besides.
+  Before trusting ANY named anchor for a primary, hero-visible cyclic
+  motion, hand-derive or numerically scan its `dx/ds` component (not just
+  eyeball a rendered grid) for a zero-crossing — that is what a hidden
+  spike looks like in the math, and a whole-scene frame grid at small
+  amplitude will not show it.
+
+## Fluidity — The Character-Animation Bar
+
+When anything reads as a being or a held object — mascots, limbs, paws,
+props, faces — the bar is feature-animation fluidity: motion that never
+stutters, pops, or detaches. Four rules make it mechanical, and one check
+makes it verifiable:
+
+- **Velocity is continuous through poses.** A keyframe an element passes
+  THROUGH must not zero its speed: ease-out into the pose plus ease-in out of
+  it makes motion die at every keyframe — the "keyframey" stutter. Shape the
+  handles so speed flows through intermediate keys (outgoing handle continues
+  the incoming direction), and reserve genuine stops for moments that ARE
+  stops. Prefer fewer, well-shaped keyframes over many nearly-flat ones.
+- **Organic motion travels in arcs.** A paw raising a glass, a head turning,
+  a prop being carried — none of these move in straight lines. Author
+  position with spatial tangents (`to`/`ti`) so the PATH curves; a straight
+  segment between two poses on a character reads robotic even with perfect
+  easing. Straight lines belong to UI panels and mechanical slides.
+- **Overlap is drag, never delay.** The single most common clunk: giving a
+  follower (straw, umbrella, ear, held object) the parent's keyframes shifted
+  a few frames later. That is a copy lagging behind — it reads as detached,
+  laggy, broken. A follower shares the parent's PHASE of motion but with its
+  own softened curve: it starts moving while the parent is still moving,
+  bends further at the peak (more amplitude at the tip, less at the root),
+  and settles a beat later with its own overshoot. Drive it as reduced-and-
+  rotated amplitude on the same timing, or its own curve overlapping the
+  parent's — never a time-shifted duplicate.
+- **Anticipation and settle bracket every accent.** A snappy action (sip,
+  squeeze, glint, blink) gets a small counter-move before (2–4 frames, a few
+  px opposite) and never lands on its final value dead — it overshoots
+  slightly and eases back. Mass never starts or stops instantly.
+
+**The spacing check (blocking for hero moves):** render a moving element at
+every 2–3 frames across its move and READ the trail like an animator flipping
+pages. The positions must form a smooth arc whose spacing grows and shrinks
+gradually — spacing IS speed. Equal spacing means linear (dead) motion;
+spacing that collapses to zero at an intermediate pose means the motion
+stalls there; a sudden spacing jump is a velocity pop. Fix the curves until
+the trail itself looks drawn by hand.
+
+### Living idles — the Rive-grade bar
+
+A character idle that reads as ALIVE (the way Rive rigs do) is not sparse
+pose-to-pose keyframes with nice easing — it is a small **motion system**.
+Four properties separate a living idle from a placed one:
+
+- **Motion is a function; keyframes are its samples.** Author each element's
+  cycle as an eased point track — `[{t, v, ease}, …]` closing back on its
+  start value — and TILE that cycle across the timeline. Coupled and derived
+  motion then comes from *evaluating the track at arbitrary t* (through real
+  cubic-bezier easing), not from copying keyframes. A generator makes dense
+  keyframes free: a living loop lands in the hundreds of keyframes where a
+  placed one has a few dozen, and that density is exactly the hand-drawn
+  texture the eye reads as fluid.
+- **A few shared clocks, non-trivial ratios.** Give the scene 3–5 periods
+  whose ratios aren't 1:2:4 (e.g. 132/216/297 frames), each dividing the
+  loop length exactly. Every element binds to a clock; details peak at
+  different beats, so the loop never reads as one metronome.
+- **Key exactly on the loop boundaries — never span them.** Every animated
+  track must carry an explicit keyframe AT the loop start T and AT op, with
+  equal values. A segment that merely CROSSES T (e.g. an intro-echo junction
+  running 84→96) makes the value at T an interpolation that almost never
+  equals the key at op — a seam leak invisible to endpoint checks and to
+  eyeballs, caught only by pixel-diffing rendered frames T and op. Tile
+  cycles FROM T, land the echo's last point ON T, and verify the seam by
+  comparing pixels, not keyframes.
+- **The world responds.** For every primary motion, at least one OTHER
+  element visibly answers it, derived from the same track: the shadow
+  widens and lightens as the body floats up; the seat compresses on the
+  down-beat; liquid sloshes when the glass moves; paper rocks when the pen
+  taps. Response is what makes motion read as weight in a world instead of
+  layers wiggling independently.
+  - **A derived response's rest value must equal the source pose, the same
+    "rest == source" discipline the primary track already follows.** The
+    tempting shortcut is to write the response as `amplitude * (1 -
+    primaryDriver(t))` when the response should be strongest while the
+    primary is idle/relaxed (a counter-phase read) — but if `primaryDriver`
+    is itself 0 at true rest (as an idle-from-frame-0 track should be, per
+    "key exactly on the loop boundaries"), that formula evaluates to
+    `amplitude * 1`, not 0, at rest: frame 0 (and every flat inter-cycle
+    gap) silently renders the response shape ALREADY offset from the
+    unmodified source silhouette, not matching it as the neutral pose
+    should (character-rig recipe's "the neutral pose matches the source"
+    check). Caught by comparing a rendered frame 0 against the source SVG
+    pixel-by-pixel, not by eyeballing — the offset is often too small to
+    spot by eye but is a real, keyed value, not a rendering glitch. Fix:
+    write the response as `amplitude * primaryDriver(t)` (or `-amplitude *
+    primaryDriver(t)` for the opposite sign), so it is exactly 0 whenever
+    the driver is 0, and flip which extreme of the driver's range gets the
+    positive/negative sign instead of wrapping the whole driver in `1 -`.
+- **Amplitude that reads at arm's length.** A primary idle motion moves at
+  least ~1.5% of the composition's min dimension (≈8px at 512) or ~3% of
+  scale; a secondary at least half that. Motion below ~0.5% is invisible —
+  either raise it until it reads or cut it; imperceptible keyframes are dead
+  weight, not subtlety. Restraint means few THINGS moving, never movements
+  too small to see.
+- **Mood governs the system.** The clock periods, amplitudes, easing
+  sharpness and accent count are FUNCTIONS of the scene's emotional register,
+  read from the prompt AND the artwork's posture — never one house default.
+  Calm/contemplative scenes (relaxing, lounging, floating, sleeping —
+  a reclined or seated pose is itself a mood signal): long periods (4–6s+),
+  amplitudes AT the aliveness floor rather than above it, and motion shaped
+  as DRIFT and SWAY — slow rotation about the support point, breath carried
+  by the silhouette morph — with ONE soft accent per loop. Energetic scenes
+  (victory, dancing, working out): short periods, amplitudes well above the
+  floor, snappy accents. The classic mood violation, named so it never ships
+  again: a VERTICAL position oscillation on a seated or reclined character
+  reads as squats / sit-ups / exercise regardless of easing — restfulness
+  lives in rotational sway and chest-breath morphing, and the body's y
+  stays within ~1–2px. If a viewer could describe the motion with a gym
+  verb, the mood is wrong.
+- **Bake smooth, not stepped — and keep a calm spectrum clean.** Two ways a
+  correct motion system still ships robotic motion, both measured in the
+  field: (1) SAMPLING — baking a cycle as linear segments every ~6 frames
+  turns a slow sine into a polyline; velocity jumps at every sample and the
+  character moves like a robot. Emit the authored cycle points with their
+  TRUE easing handles (the evalTrack/tileCycle way), or bake at 1–2-frame
+  steps where the polyline is indistinguishable from the curve at 60fps —
+  never coarse linear resampling. (2) SPECTRUM — summing two near-equal
+  frequencies makes the composite beat: it plateaus and micro-reverses
+  mid-swing, which reads as hesitant, elderly sway-stop-sway. A calm
+  primary is ONE clean low-frequency sine; secondaries sit at ≤⅓ its
+  amplitude and a clearly different period. Verify on the rendered trail:
+  between apexes the spacing must swell and shrink MONOTONICALLY — a
+  mid-swing spacing collapse or direction flicker is this defect. An apex
+  hesitation is natural for at most a frame or two; anything longer is a
+  stop.
+- **The velocity audit — run it on EVERY hero track, not just the cycles.**
+  Fixing the primary cycle and leaving the accents (a sip, a wave, a
+  reach — one-shot moves that still repeat every loop) on sparse
+  pose-to-pose keys with mixed named anchors is how a scene keeps its
+  robotic feel after the "smoothness fix": measured in the field, a sway
+  rebuilt as a dense sine sat next to a 14-key drink move whose per-frame
+  speed spiked **10.8×** over its own median — the hand lurched, then
+  crawled, and the whole scene still read as laggy. The audit is
+  mechanical, so do it every time: dense-sample each hero track at
+  1-frame steps, compute per-frame speed, and take `max / median-while-
+  moving`. A move that should read as one continuous gesture stays under
+  ~3×; anything past that is a lurch a viewer WILL feel, no matter how
+  correct the poses are. **Scope the threshold to CONTINUOUS motion** —
+  idles, sways, breathing, carried props, travel. A one-shot ENTRANCE or a
+  deliberate snap accent (a bubble popping in, a glint sweeping, a
+  bounce landing) is *supposed* to spike: high peak-over-median is what
+  "snappy" means, and flattening those to satisfy the number is a
+  regression that drains the scene of life. Audit every track, then judge
+  each flagged one by its job: continuous → fix it; entrance/accent →
+  confirm the snap is intended and move on. Fix by driving the gesture from a continuous
+  envelope (sine/smoothstep over its own duration) baked at 1–2-frame
+  steps — one coherent acceleration profile — instead of stitching named
+  anchors between sparse poses. Never leave `travel-balanced` on a track
+  that must read as a single sweep (see its singularity note above), and
+  never leave a raw linear segment (`0,0,1,1`) inside an organic gesture.
+- **The silhouette breathes — morphs, not just transforms.** Rigid
+  transforms (position/rotation/scale) MOVE a character; they never make it
+  read alive the way a rigged Rive mesh does, because the OUTLINE never
+  changes. The missing layer is shape-path keyframes: animate the actual
+  bezier vertices (`{a:1}` on a shape's `ks`, same vertex count and order on
+  every key) so the body squashes wide-and-low into the down-beat and draws
+  tall-and-narrow at the top with area roughly conserved (±2%); a face patch
+  deforms WITH the mass it sits on instead of sliding over it; props flex
+  along their length (a straw bows, it doesn't hinge); eyes blink by
+  morphing closed at an off-beat. Author morphs PARAMETRICALLY — a deform
+  function applied to the base path's vertices (scale about the planted
+  edge + bulge proportional to distance from it), evaluated on the same
+  clocks as everything else — never hand-edited frames. Morph tracks obey
+  every other rule here: dense samples, boundary keys at T and op, seam
+  verified in pixels. Self-test: render the two extreme beats and compare
+  silhouettes — if the outline is identical, the character is a puppet
+  being moved, not a body that's alive.
+- **Articulate the PARTS — a limb that only travels is a stick.** The
+  silhouette rule covers the body's outer form; this one covers everything
+  inside it. Every sub-part the artwork names — forearm, bicep, fist, paw,
+  ear, tail, jaw, prop — is a part a real body moves *relative to its
+  parent*, and it must get its own track. The failure mode, measured in the
+  field on a flexing-mascot scene: 30 layers, 12 of them arm pieces, and the
+  ONLY animated tracks were two `arm-*-rig` parents carrying position and
+  rotation. The arms rose, fell and spread — but every bicep, fist, knuckle
+  and highlight rode along rigidly, so the arms never actually FLEXED. A
+  double-bicep flex where the forearm never approaches the bicep is not a
+  flex; it is two boards being lifted.
+  - **Joints bend.** Where the artwork separates the pieces, nest the pivots
+    and rotate the child about the joint (forearm about the elbow, hand
+    about the wrist) so the limb's ANGLE changes, not just its placement.
+    Where the artwork is one merged shape, bend it with a path morph — same
+    parametric approach as the silhouette rule, hinged at the joint.
+  - **Extremities lead or lag their root**, never move in lockstep with it:
+    the fist arrives after the bicep, the fingertip after the wrist. Rigid
+    parenting alone gives lockstep, which is what reads as "stick".
+  - **A lag-null's PIVOT choice decides whether it lags position or only
+    spins in place.** The natural instinct is to put the delayed child null
+    at the extremity's own center (e.g. a "wrist" null anchored at the
+    fist's bbox center, carrying the fist). That is wrong: when a null's
+    anchor and position both equal the exact point where its child already
+    sits, the child's local offset from that anchor is `(0,0)` — so
+    `R(rotation)·(0,0) = (0,0)` regardless of how much the null rotates, and
+    the child never actually MOVES, it only spins in place around its own
+    center (a subtle wobble, not a lag). To get genuine positional drag,
+    pivot the lag-null at the SAME joint as its parent (e.g. the elbow), not
+    at the child's own center — then the delayed rotation swings the child
+    through a real arc around that shared joint, arriving on its own timing.
+    Caught by animating the extremity's own accent (a scale pulse, say) with
+    the same lag and finding it visually convincing while the position
+    itself was silently frozen — verify a lag-null's effect by computing the
+    child's WORLD position at two extremes, not just eyeballing the rotation
+    value.
+  - **Coverage, not decoration.** Count the artwork's identifiable moving
+    parts; on a hero character at least HALF should carry motion of their
+    own relative to their parent, and every part that a viewer would expect
+    to move for the action being performed MUST. Applies to every scene
+    where it makes sense contextually — limbs, wings, hair, cloth, held
+    objects — not only to characters.
+  - **The cardboard test (blocking).** Ask: could this exact animation be
+    reproduced by cutting each limb out of card and moving the pieces
+    rigidly? If yes, it is under-articulated — go back and bend something.
+    Verify by rendering the action's extremes and comparing the limb's own
+    shape, not just its position.
+- **Verify the loop seam in the DATA; pixel-diff is corroboration, not proof.**
+  Rendering frame `op` samples the very end of the timeline, where Skottie can
+  land fractionally short of the authored state — so a perfectly closed loop
+  can still show a pixel difference at `op`, and the artefact scales with how
+  fast things move at the seam (measured: a scene whose every track matched
+  exactly at T and op, with identical velocity across the wrap, still showed
+  333 differing pixels at `op` because its trail circles were moving ~600px
+  worth of change per frame there; slower scenes showed 0 and hid the same
+  artefact). The authoritative check is numeric and has two halves: every
+  animated track must have a keyframe AT T and AT op with equal INTERPOLATED
+  values, and the velocity entering the wrap (`op-1 → op`) must equal the
+  velocity leaving it (`T → T+1`). Value equality alone permits a visible
+  kink. Keep the pixel-diff — it catches things the numbers don't, like a
+  layer culled at `op` — but when it disagrees with a clean numeric check,
+  trust the numbers and say so.
+- **A held object is part of the body.** Anything a character holds, hugs,
+  carries or wears — a cup, a pillow, a stone, a bag, a hat — must be
+  PARENTED to the limb or rig that holds it, so it inherits every bit of the
+  hold's motion, and must then carry its own secondary motion on top:
+  compressing into the squeeze, settling a beat after the arms, riding the
+  breath. Measured failure: a mascot hugging a stone where the stone, its
+  surface detail and the heart on it were all UNPARENTED and completely
+  static — the character breathed and hugged around an object pinned to the
+  composition, which reads as a prop glued to the background rather than
+  something being held. The test: if the holder moves and the held thing's
+  pixels don't, it isn't being held.
+- **Never animate the same property twice down a parent chain.** Transforms
+  compound: a child scaling 112% under a parent scaling 112% renders at
+  125%, so a pop authored once "by the book" on both the anchor and its text
+  overshoots by half again and the child visibly outgrows the plate it sits
+  in (measured: intended 112%, composite 125.4%). Decide which single node
+  in the chain owns each property — the anchor owns the entrance pop, the
+  children inherit — and check the COMPOSITE value by multiplying down the
+  chain, never the per-layer number in isolation.
+- **Nothing in frame is inert — decorative satellites live too.** Every
+  element the artwork puts on stage carries at least a subtle life motion
+  during the idle, not only the hero. The usual offenders are the small
+  decorative companions — thought-trail circles, sparkles, stars, motes,
+  bubbles — which get an entrance and then FREEZE for the rest of the loop,
+  turning into stickers pinned next to a living character (measured: a
+  companion scene whose trail circles had two idle keyframes with 0.00
+  amplitude, beside another whose trails floated 2px and read alive). Give
+  them a slow independent float on their own clock — different period from
+  the hero, tiny amplitude, offset from each other so they never bob in
+  unison. A satellite that only appears is decoration; one that drifts is
+  part of the world.
+- **The body always breathes.** Whatever the limbs are doing, the torso/mass
+  keeps its own slow breath — a silhouette morph or a small scale swell —
+  running independently of the action's beats. A character whose arms are
+  beautifully articulated while the body holds perfectly still reads as a
+  head-and-limbs puppet bolted to a board. The breath is the baseline life
+  signal: it never stops, it never syncs exactly to the action, and it stays
+  at the aliveness floor rather than below it.
+- **Dead tracks don't count — measure AMPLITUDE, not keyframes.** A property
+  with a hundred keyframes whose value never changes is not motion; it is
+  the appearance of motion, and it passes a naive coverage audit while the
+  picture sits still. Found in the field: a mascot body carrying 73 morph
+  keyframes with a maximum vertex travel of 0.00px. Any coverage claim
+  ("half the parts move") must be counted from measured amplitude over the
+  loop — per-track min-to-max, or max vertex travel for morphs — and every
+  track that scores zero either gets real amplitude or gets deleted.
+  Measure over the track's OWN active span, not just the idle: an entrance
+  track that moves 100 during `[0..T]` and then reads zero across the loop
+  is CORRECT — the bubble and its trail must hold still once they arrive.
+  The defect is a track that measures zero EVERYWHERE. Report the audit as a
+  table with each track's amplitude and its active span, so contract-holds
+  and dead tracks can't be confused for one another.
+  **For shape morphs, measure the HANDLES too, not just the vertices.** A
+  bezier arc deepens by scaling its `i`/`o` tangents with `v` untouched —
+  the correct way to bend a 2-point stroked curve — so a vertex-only audit
+  reports 0.00px and condemns a perfectly good track. Measured case: two eye
+  arcs read 0.00px of vertex travel, 1.49px of handle travel, and isolating
+  those layers and pixel-diffing rest against peak contraction showed 3,177
+  changed pixels — a real squeeze the metric could not see. Amplitude for a
+  morph is `max(vertex travel, handle travel)`, and when a track is about to
+  be called dead, ISOLATE it and pixel-diff two beats before deleting
+  anything.
+- **Phase-lock effort to the moment it physically happens.** Smooth curves
+  and rich articulation still read as WRONG if a motion fires at the wrong
+  instant in the action — that is a logic error, not a craft one, and no
+  amount of easing rescues it. Measured failure: a double-bicep flex whose
+  isometric tremble peaked while the arms were EXTENDING, so the mascot
+  shook when it relaxed and held perfectly still at peak contraction — the
+  exact inverse of how a strained muscle behaves. Before shipping any
+  limb/body motion, say in one sentence what the body is doing, then check
+  each accent and secondary motion lands where physics puts it:
+  - an isometric tremble/strain belongs at PEAK CONTRACTION (holding
+    hardest), never during extension or release;
+  - impact squash lands at ground contact, not mid-air;
+  - a chest expands on the inhale, not the exhale;
+  - a blink or a glance goes at a REST beat, not at the peak of effort;
+  - follow-through lags its driver and anticipation precedes it — a
+    follower that leads is the same class of error.
+  **Verify the phase by RENDERING the extremes, never by the sign of the
+  number.** A rig's rotation track can run negative toward the OPEN pose, so
+  a phase check done on raw values will happily confirm a tremble sits at
+  "most bent" while the picture shows the arms wide open (measured: elbow
+  −14° was the extended pose, +1.4° the flexed one). Identify the peak-effort
+  FRAME from a render, then confirm the accent's own peak lands within a few
+  frames of it.
+  **A geometrically rigorous metric can ALSO mislead if it isn't the one the
+  brief actually specifies — re-derive from the literal wording, don't
+  substitute a plausible-sounding proxy.** Chasing the SAME defect with a
+  rotation/translation-invariant "elbow fold angle" (the angle between the
+  bicep and forearm axes, computed through the full nested transform chain)
+  said the rig was already correct — fold angle DID minimize at the
+  intended hold, because the joint genuinely bends tightest there. But the
+  brief's own words were "fists tightest, CLOSEST TO THE HEAD" — a distance,
+  not a joint angle — and measuring that literal quantity (fist world
+  position vs. head-center, same transform chain) showed the opposite: the
+  whole arm also rises and swings outward as the elbow bends, so the fist
+  ends up FARTHER from the head at the tightest fold, and closer to the head
+  during a shallower-angled but higher/tucked pose. Both metrics were
+  computed correctly; only one answered the question the brief was actually
+  asking. When a metric's answer contradicts a rendered read, suspect the
+  metric before suspecting the render — and re-check that the metric
+  operationalizes the brief's own criterion, not a nearby-sounding one.
+- **Accents must be readable — slow enough to resolve.** A signature micro-
+  motion (an isometric tremble, a shiver, a vibration, a rapid blink) only
+  works if the eye can actually see the oscillation. Measured failure: a
+  flex tremble authored with a 2-frame half-cycle — 15 Hz at 60fps — which
+  reads as a buzz or a rendering glitch rather than a held muscle. Give a
+  readable oscillation a half-cycle of **at least ~4 frames at 60fps**
+  (≤~8 Hz), 5–8 frames when the motion is meant to be *felt* rather than
+  merely noticed, and let the whole accent occupy at least ~0.4 s so it
+  registers as an event with a beginning and an end. Amplitude does not
+  rescue frequency: a tremble too fast to resolve just looks broken,
+  however far it moves.
 
 ## Choreography
 
@@ -252,6 +628,16 @@ by what it is doing this beat. Bezier is `x1,y1,x2,y2`.
 
 ## Render-Aware Motion
 
+- **The stage is a stage, not a crop.** Every animated EXTREME — overshoot
+  apex, squash spread, drag follower at maximum bend, and any slot-driven
+  growth (a text plate at its autoFit `max`, not its default) — must stay
+  inside `[0..w]×[0..h]` with at least ~3% of the min dimension to spare
+  (≈16px at 512). Author the headroom into the composition (recenter the
+  element or widen the stage); never rely on the default state fitting.
+  Verify by RENDERING the extremes: ink kissing or crossing an edge is a
+  blocking defect. Growable text is verified at a realistically long
+  localized string, never only at the design string.
+
 - Bake counters, particle offsets, orbit math, physics, and expression-like
   systems to keyframes before relying on Skottie.
 - Fake velocity with offset duplicate layers instead of motion blur.
@@ -262,6 +648,52 @@ by what it is doing this beat. Bezier is `x1,y1,x2,y2`.
   replacements, or crossfades.
 - Cap dense fields and verify performance. Repeater-based fields cannot assume
   independent per-instance animation.
+
+## The Aliveness Contract
+
+The blocking bar for "is this thing actually alive?", gathered in one place.
+Every rule below is stated in full elsewhere in this file — this is the gate to
+RUN before finishing, not a summary to read instead of the rules. The engine's
+generation prompt names this section directly, so a scene that skips it is
+incomplete rather than merely unpolished.
+
+Report the result as a table: track · amplitude · active span · verdict. Prose
+claims like "everything moves" are exactly what these checks exist to falsify —
+several of the rules below were written after a claim like that turned out to
+be false the moment anyone measured it.
+
+**Every scene, whatever the subject:**
+
+| # | Gate | Threshold | How to prove it |
+|---|---|---|---|
+| 1 | Nothing in frame is inert | every element either moves, or its stillness is named and justified | list the artwork's elements; any without a track is called out with its reason |
+| 2 | Amplitude, not keyframe count | no track measuring ~0 across its own whole active span | per-track min→max over that track's OWN span; morphs use `max(vertex, handle)` travel |
+| 3 | Meaning drives behaviour | the motion is one only THIS element would have | name the element's meaning and the behaviour it earned; a generic bob fails |
+| 4 | Mood governs the system | periods, amplitudes and easing derived from the brief's mood | the gym-verb test — swap the mood word and the numbers must change |
+| 5 | Fluidity | `max / median-while-moving` under ~3× on every hero track | the velocity audit; entrances and deliberate accents exempt |
+| 6 | Accents resolve | half-cycle ≥ ~4 frames at 60fps, whole accent ≥ ~0.4 s | count frames per half-cycle in the data, not by eye |
+| 7 | Loop seam | equal values keyed AT the boundary on every animated track | read interpolated values in the DATA; pixel-diff only corroborates |
+
+**Additionally, any scene with a character, figure, creature or mascot:**
+
+| # | Gate | Threshold | How to prove it |
+|---|---|---|---|
+| 8 | Parts articulate | joints bend; ≥ half the nameable parts move by measured amplitude | the cardboard test — flat card swung on pins is not a rig |
+| 9 | Held objects live | parented to the holder AND carrying their own secondary motion | if the holder moves and the held thing's pixels don't, it isn't held |
+| 10 | The body breathes | continuous low-amplitude torso/mass cycle under whatever the limbs do | amplitude on the body track across the loop |
+| 11 | Effort is phase-locked | strain on the contraction, never on the release | RENDER the extreme frames and look; never reason about the sign convention |
+| 12 | No double-driven property | each property animated once down any parent chain | trace every animated property up through its parents |
+
+Two failure modes this gate exists to catch, both observed in shipped scenes:
+
+- **Inherited constants.** Porting a build script from a visually similar scene
+  carries that script's frozen numbers past every contract change made since.
+  Re-derive published values against the current references, and state which
+  ones you verified rather than assumed.
+- **A metric that lies in the safe direction.** A vertex-only amplitude audit
+  called two hand-authored eye morphs dead; isolating those layers and
+  pixel-diffing rest against peak showed 3,177 changed pixels. When a track is
+  about to be called dead, isolate it and pixel-diff before deleting anything.
 
 ## Final Motion Review
 
@@ -281,6 +713,9 @@ by what it is doing this beat. Bezier is `x1,y1,x2,y2`.
   parseable at the moments they matter.
 - If motion feels busy or hides weak layout, simplify the visual structure or
   reduce animated properties before adding more choreography.
+- For character/held-object moves, run the Fluidity spacing check: a rendered
+  2–3-frame trail must read as a smooth hand-drawn arc — no stalls at
+  intermediate poses, no velocity pops, no time-shifted-copy followers.
 
 ## Checks
 

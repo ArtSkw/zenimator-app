@@ -22,11 +22,18 @@ below.
 - Transparent background unless the character sits in a full-frame scene.
 - Preserve the source composition and viewBox; the neutral pose matches the
   source illustration.
-- Move the character as one rigged body driven by parent nulls, not by animating
-  each body-part shape independently.
+- Drive the GROSS motion from parent nulls so the body travels as one coherent
+  mass — then articulate the parts ON TOP of it. The null carries the bounce,
+  lean and squash; joints still bend, extremities still lead or lag, and the
+  silhouette still changes. A rig where every part rides the null and nothing
+  deforms is a cardboard cutout on pins, which is the single most common way a
+  character scene fails. (Rule: *Articulate the PARTS*, `motion-taste.md`.)
 - Loop seamlessly by default for idle/walk/dance.
-- Keep amplitudes small and let easing carry the weight. Physicality comes from
-  the easing profile, not the size of the move.
+- Keep amplitudes restrained but READABLE: physicality comes from the easing
+  profile, not the size of the move — yet a motion too small to see at arm's
+  length is not restraint, it is a dead track. Measure it (`motion-taste.md`,
+  *Amplitude that reads* and *Dead tracks don't count*) rather than trusting
+  that a keyframe implies a movement.
 
 ## Presets
 
@@ -58,15 +65,23 @@ below.
 
 - Ask the performance (idle / walk / jump / dance / celebrate) only if the brief
   just says "animate this character".
-- Ask whether a held object should sway with the body or stay steady if the brief
-  implies one but not the other.
+- Do NOT ask whether a held object should move: it always does. Anything held,
+  hugged, carried or worn is parented to the limb that holds it and carries its
+  own secondary motion on top (compressing into a squeeze, settling a beat after
+  the arms, riding the breath). Ask only about its CHARACTER — a taut carry
+  versus a loose swing — when the brief genuinely leaves that open.
 - Ask loop vs one-shot only if ambiguous; character performances usually loop.
 
 ## Construction Notes
 
 - Rig with parent nulls: put the primary motion (bounce/lean/squash) on one
   invisible null (`ty: 3`) and parent the body-part layers to it via
-  `parent: <null ind>`. Move the character as one rig, not part by part.
+  `parent: <null ind>`. The null exists so gross motion is authored ONCE
+  instead of hand-keyed into every part in world space — it does not mean the
+  parts hold still. Layer per-part articulation on top of the inherited
+  transform, and never re-animate a property the parent already drives
+  (`motion-taste.md`, *Never animate the same property twice down a parent
+  chain*).
 - Three confirmed player facts the rig relies on: `parent` resolves by `ind`
   independent of array order (nulls can sit anywhere; push them last since they
   are invisible); paint order is array order (`layers[0]` frontmost, `ind` never
@@ -134,14 +149,23 @@ below.
 
 ## Common Failure Modes
 
-- Body parts animated individually drift out of register instead of moving as one
-  rigged body.
+- Body parts hand-keyed in world space, UNPARENTED from the rig, drift out of
+  register instead of inheriting the body's motion. (The fix is to parent them
+  and articulate on top — not to stop articulating.)
+- The opposite and more common failure: every part rides the parent null and
+  nothing deforms, so the character travels as one rigid cutout. Run the
+  cardboard test.
+- A held or hugged object is left unparented and static while the character
+  moves around it, reading as a prop glued to the background.
 - Squash pivots at the center, so the character looks compressed by an outside
   force instead of absorbing its own weight.
 - Symmetric up/down easing makes a walk read as a hover; a one-way object swing
   reads as a twitch.
-- A "steady" element is counter-animated and jitters instead of being excluded
-  from the rig.
+- An element that genuinely must stay put (a ground shadow's contact point, a
+  logo lockup) is counter-animated and jitters instead of being excluded from
+  the rig. Such elements are rare and must be named with a reason — "steady"
+  is a deliberate exception, never the default for anything the character
+  touches.
 - Amplitude is cranked up to fake weight instead of fixing the easing.
 - A staggered accent silently stalls because its generated keyframes ended out of
   order.
@@ -154,8 +178,15 @@ below.
 - The character moves as one coherent body around a base pivot; the side-to-side
   arc comes from rotation, not hand-keyed position.
 - Squash and stretch preserve volume and are anchored at the base.
-- Any held object either swings as a nested pendulum or is provably steady
-  (pixel-identical across extremes), per the brief.
+- The parts articulate, not just the rig: joints bend, extremities lead or lag
+  the mass they hang from, and at least half the nameable parts move by MEASURED
+  amplitude. The torso/mass carries a continuous breath under whatever the limbs
+  are doing.
+- Any held object is parented to its holder AND measurably alive on top of the
+  inherited motion. "Provably steady" is NOT a passing state — an object whose
+  pixels are identical across the extremes while the holder moves reads as a prop
+  glued to the background, which is exactly the defect this check exists to
+  catch. Verify by isolating the object's layers and pixel-diffing two beats.
 - Blink and accent pops pivot on their own centers and sit clear of the loop seam.
 - Every animated property's first and last keyframe match; the loop is seamless
   with no special loop logic.
@@ -163,3 +194,6 @@ below.
   in sync.
 - The neutral pose matches the source; motion reads intentional and weighted at
   60 fps.
+- The Aliveness Contract in `motion-taste.md` passes, reported as a table
+  (track · amplitude · active span · verdict). It is the completion gate for
+  every character scene, not an optional extra pass.

@@ -121,11 +121,33 @@ SVG-like path behavior.
     by the badge. Match the source tile's spacing/angle and the pattern's
     `fill-opacity`.
   - **Fallback — rasterize the filled shape to an image layer + matte.** If the
-    motif is too intricate to revectorize faithfully AND the piece is static,
-    render the pattern-filled shape to a PNG, add it as an image asset, and clip
-    it with a shape matte. Acceptable, but the texture is now a rigid bitmap —
-    it can only move as one piece, so never use this for anything that must
-    rotate or scale independently.
+    motif is too intricate to revectorize faithfully AND the piece only ever
+    moves/scales as ONE rigid piece (static is the simplest case, but a
+    shared uniform width/height scale on the whole assembly is fine too),
+    render the pattern-filled shape to a PNG, add it as an image asset, and
+    clip it with a shape matte or a per-layer mask. Acceptable, but the
+    texture is now a rigid bitmap — never use this for anything that must
+    rotate, or scale non-uniformly/independently of its clip.
+    - Tiling a repeat that's narrower than the shape (`patternContentUnits=
+      "objectBoundingBox"` with a tile fraction < 1): derive the tile's
+      absolute px size as `fraction * shapeBboxDimension` (from the
+      pattern's own authored `width`/`height`, never guessed) and repeat
+      `Math.ceil(shapeWidth / tileWidth)` image layers/copies across the
+      bbox — one row is enough whenever the tile's height fraction already
+      exceeds 1 (no vertical repeat needed).
+    - **Confirmed gotcha (Skottie): a layer mask's `pt` path is defined in
+      that layer's own LOCAL, PRE-`ks` coordinate space** — the same box the
+      image itself is drawn into (its native asset `w`×`h`), not the
+      post-transform stage space the layer ends up occupying. Translating a
+      clip shape's absolute stage coordinates into the tile's local origin
+      is not enough by itself: you also need the INVERSE of the layer's own
+      `ks.s` (native `w`/`tileW`, native `h`/`tileH`) applied to every vertex
+      AND every `i`/`o` handle delta. Skipping the inverse-scale step (only
+      translating) leaves the mask sized in stage px inside a much larger
+      native-px local space — it still "renders" with no error, but only
+      clips a thin sliver of the tile instead of its full silhouette, which
+      reads as the pattern rendering as scattered slivers/dashes instead of
+      a filled shape. Verify by rendering, not just by the JSON validating.
   - **Never** flatten the pattern to a solid fill and drop the texture — that is
     a regression of the artwork, same severity as flattening a gradient. Verify
     against the source: if the source has a hatch/texture and your render is

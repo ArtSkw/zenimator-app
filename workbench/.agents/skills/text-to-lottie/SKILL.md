@@ -41,6 +41,7 @@ inline rules in this file.
 | UI microinteraction | `references/recipe-ui-microinteractions.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | Generic "animate this SVG" or SVG-to-Lottie | `references/recipe-svg-animation.md`, `references/svg-compatibility.md`, `references/motion-taste.md` |
 | Character, figure, creature, avatar, or illustration animated as a moving body; walk cycle, idle, bob, bounce, jump, dance, celebration; character holding/carrying an object | `references/recipe-character-rig.md`, `references/design-taste.md`, `references/motion-taste.md` |
+| Mascot/companion with a speech bubble or tooltip; intro entrance settling into an endless idle (`intro-loop` kind, markers); localizable/editable text, text slots, multi-language strings | `references/recipe-companion-bubble.md`, `references/recipe-character-rig.md`, `references/motion-taste.md` |
 | Camera follow, pan, zoom, parallax, scene motion | `references/recipe-camera-scene-motion.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | Diagram, technical line animation, callout, flow trace | `references/recipe-diagram-technical.md`, `references/design-taste.md`, `references/motion-taste.md` |
 | Data, stats, KPIs, charts, metrics, dashboard figures | `references/recipe-data-stats.md`, `references/design-taste.md`, `references/motion-taste.md` |
@@ -153,7 +154,14 @@ Before finishing:
 6. Check for blank canvas, missing assets, unstyled shapes, wrong layer order,
    bad easing, awkward timing, cropped content, text overflow, and visible SVG
    artifacts.
-7. Finish only when the animation renders cleanly and feels intentional.
+7. **Run the Aliveness Contract** in `references/motion-taste.md` — the
+   completion gate for whether the scene is actually alive: nothing inert,
+   amplitude measured rather than assumed, held objects parented and carrying
+   their own secondary motion, bodies breathing, parts articulating, effort
+   phase-locked, accents slow enough to resolve. Report it as a table (track ·
+   amplitude · active span · verdict), not as prose. A scene that renders
+   cleanly but fails this gate is not finished.
+8. Finish only when the animation renders cleanly and feels intentional.
 
 ## Maintenance Evals
 
