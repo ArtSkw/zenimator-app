@@ -111,6 +111,19 @@ const LIVING_MOTION_CONTRACT =
   `held props, decorative satellites, background marks — either moves or gets a stated ` +
   `reason why stillness is the right call. A static decorative circle beside a moving ` +
   `subject reads as a bug, not as restraint.\n` +
+  `  - Partition the artwork into ASSEMBLIES before assigning motion. Anything worn or ` +
+  `built-on — a suit, helmet, visor, armor, backpack, badge, outfit panel — is the same ` +
+  `body as its wearer: parent the whole ensemble to ONE rig so it travels as one mass, ` +
+  `and rigid parts keep a CONSTANT offset to each other (verify by rendering two idle ` +
+  `frames and measuring the gear-to-body offset — identical, or a named joint/soft part ` +
+  `explains why not). Independent drift belongs ONLY to genuinely free elements; "nothing ` +
+  `inert" is satisfied by riding the parent, never by giving fixed parts their own ` +
+  `wander, which reads as the character coming apart.\n` +
+  `  - Distant backdrops hold still. Celestial and far-background elements — moon, sun, ` +
+  `stars, a skyline — never self-translate; their life is opacity/glow (twinkle, in ` +
+  `whole cycles) in place, or a parallax counter-drift explicitly DERIVED from the ` +
+  `subject's own motion: opposite in direction, far slower, smaller. A moon wandering ` +
+  `on its own clock reads as a bug, not as depth.\n` +
   `  - Measure AMPLITUDE, not keyframe count. A track with 200 keyframes spanning 0.2px ` +
   `is dead. Audit peak-to-peak travel per animated track — for path morphs, ` +
   `max(vertex, control-handle) travel — and name any track that fails to read.\n` +
@@ -259,7 +272,8 @@ function editPrompt(slug, instruction, anchor = {}) {
     // is spent asking for the secondary motion that should have come with it.
     `Any motion this change adds or reworks must meet the Aliveness Contract in ` +
     `references/motion-taste.md — held objects parented to their holder AND carrying their ` +
-    `own secondary motion, nothing left inert beside something that moves, amplitude that ` +
+    `own secondary motion, worn gear riding its wearer as ONE assembly (fixed parts never ` +
+    `drift apart), nothing left inert beside something that moves, amplitude that ` +
     `actually reads, effort phase-locked to the moment it happens. Meet it within the scope ` +
     `asked for; do not re-animate the rest of the scene.\n\n` +
     `Finish with the line: SCENE_READY ${slug}/scene-1`
