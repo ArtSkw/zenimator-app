@@ -431,6 +431,15 @@ try {
       check(`living-motion (${kind}): contract present and points at the gate`,
         p.includes('LIVING MOTION — completion blockers for EVERY scene') &&
         p.includes('The Aliveness Contract'))
+      // The porting counter is UNIVERSAL (a run sed-copied its own prior
+      // script and inherited a stale rig topology + gate report): prior
+      // scripts are geometry only, and the gate list must be re-read fresh.
+      check(`living-motion (${kind}): prior scripts are geometry only (anti-porting, every kind)`,
+        p.includes('source of GEOMETRY only') && p.includes('never of rig topology') &&
+        p.includes('including one you wrote yourself minutes ago'))
+      check(`living-motion (${kind}): gate list re-read fresh, every number reported measured`,
+        p.includes('Re-read that section IN THIS RUN') &&
+        p.includes('EVERY numbered gate') && p.includes('MEASURED value'))
       check(`living-motion (${kind}): held objects parented AND carrying secondary motion`,
         p.includes('A held object is part of the body') &&
         p.includes('PARENTED to the limb') && p.includes('own secondary motion'))
@@ -450,8 +459,17 @@ try {
       check(`living-motion (${kind}): contact welds — occlusion is contact`,
         p.includes('Contact welds') && p.includes('occlusion is contact') &&
         p.includes('does not license breaking a visible contact'))
-      check(`living-motion (${kind}): occupant floats INSIDE its shell`,
-        p.includes('occupant may float INSIDE its shell') && p.includes('nested, slower'))
+      // Round 3 (same scene, third report): parenting with an own clock still
+      // slid, decal details wiggled, and an eyes-only 1.3px occupant was
+      // invisible. Welded = same phase; details = decals; occupant = the
+      // interior mass, readable and matte-clipped.
+      check(`living-motion (${kind}): welded means no own clock (phase counts)`,
+        p.includes('Parenting alone is NOT a weld') && p.includes('different PHASE'))
+      check(`living-motion (${kind}): shell surface details are decals`,
+        p.includes('DECALS') && p.includes('FREE END'))
+      check(`living-motion (${kind}): occupant is the interior mass, readable + clipped`,
+        p.includes('occupant may float INSIDE its shell') && p.includes('INTERIOR MASS') &&
+        p.includes('~3px') && p.includes('track matte') && p.includes('CARVE'))
       check(`living-motion (${kind}): parallax is the SAME driver negated and scaled`,
         p.includes('SAME driver, negated and scaled') && p.includes('NOT parallax'))
       check(`living-motion (${kind}): parts articulate, not just the rig`,
