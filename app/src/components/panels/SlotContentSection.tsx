@@ -39,6 +39,11 @@ function ensureFont(family: string): Promise<boolean> {
       document.fonts.add(face)
       return true
     })().catch(() => false)
+    p.then((ok) => {
+      // A failure (engine down, family missing) stays retryable — the next
+      // edit re-probes instead of measuring a fallback face all session.
+      if (!ok) fontLoads.delete(family)
+    })
     fontLoads.set(family, p)
   }
   return p
