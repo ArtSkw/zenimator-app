@@ -7,7 +7,7 @@ import { labelsFromDoc } from '@/engine/studio/studioClient'
 import { sceneLayers } from '@/engine/lottie/sceneRoot'
 import { applySlotOverride, SLOT_OVERRIDE_PREFIX } from '@/engine/lottie/slots'
 import type { Skeleton } from '@/engine/legacy/skeleton'
-import { useStudioFeed } from '@/store/studioFeedStore'
+import { useStudioFeed, DRAFT_CHANNEL } from '@/store/studioFeedStore'
 
 export type GenStatus = 'idle' | 'generating' | 'done' | 'error'
 
@@ -112,6 +112,8 @@ type GenerateState = {
     groundings?: Grounding[]
     stage: string | null
     error: string | null
+    /** The user stopped this run — it reopens as an editable draft. */
+    stopped?: boolean
   }) => void
   /** Restore a saved project into the active generate lane. */
   loadProject: (data: {
@@ -228,10 +230,10 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   setError: (error) => set({ status: 'error', stage: null, error }),
   resetStatus: () => set({ status: 'idle', stage: null, error: null }),
   clearResult: () => {
-    // Leaving the current work (home, Clear, deleting the open project) also
-    // dismisses its studio activity feed — it belongs to that generation, not
-    // the next empty canvas.
-    useStudioFeed.getState().clear()
+    // Home is a fresh start, so the DRAFT channel's activity (a propose run
+    // against a blank composer) goes with it. Project feeds are untouched —
+    // they belong to their run and are still there when that project reopens.
+    useStudioFeed.getState().clear(DRAFT_CHANNEL)
     set({
       prompt: '',
       // A fresh start returns the composer axes to their defaults too —
@@ -247,7 +249,6 @@ export const useGenerateStore = create<GenerateState>((set) => ({
     })
   },
   openPendingJob: (job) => {
-    useStudioFeed.getState().clear()
     set({
       prompt: job.prompt,
       subject: job.subject,
@@ -256,16 +257,18 @@ export const useGenerateStore = create<GenerateState>((set) => ({
       // Everything scene-shaped is cleared: a build in progress has no result,
       // and showing the previous project's would be a lie.
       ...SCENE_RESET,
-      status: job.error ? 'error' : 'generating',
-      stage: job.stage,
+      // A stopped run is an idle DRAFT, not a build — reopening it must show a
+      // composer ready to re-run, never a spinner for a job that isn't there.
+      status: job.error ? 'error' : job.stopped ? 'idle' : 'generating',
+      stage: job.stopped ? null : job.stage,
       error: job.error,
     })
   },
 
   loadProject: (data) => {
-    // Opening a saved project shows no live feed — drop any residual activity
-    // from an earlier in-session generation.
-    useStudioFeed.getState().clear()
+    // Nothing to clear: feeds are per project, so opening this one shows ITS
+    // activity (a run still streaming, or an earlier edit's history) and
+    // leaves every other project's intact.
     // Program-param knobs belonged to the retired in-browser engine; the
     // program can no longer re-run, so those controls must not render on
     // legacy loads (no dead knobs) and their overrides are dropped.

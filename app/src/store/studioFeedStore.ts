@@ -4,7 +4,15 @@ import type { StudioEvent } from '@/engine/studio/studioClient'
 /**
  * The studio activity feed — the agent's narration, de-noised tool activity,
  * and its OWN verification frames, streamed live while a job runs (plan
- * Phase 1.3). One feed per app: a new job clears the previous run.
+ * Phase 1.3).
+ *
+ * Feeds are keyed by CHANNEL — the project the run belongs to — never global.
+ * A run streams into its own channel whether or not the user is looking at it,
+ * and navigating between projects only changes which channel is displayed. A
+ * single shared feed had two failure modes that read as one bug: opening
+ * another project cleared the entries, and events that arrived while the job
+ * was in the background were dropped on the floor — so coming back to a
+ * running job showed a feed that appeared to restart from step 1.
  */
 
 export type FeedEntry =
@@ -17,6 +25,21 @@ type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : n
 
 const MAX_ENTRIES = 300
 
+export type FeedChannel = {
+  entries: FeedEntry[]
+  /** A job is currently streaming into this channel. */
+  live: boolean
+  expanded: boolean
+  queuedPosition: number | null
+}
+
+/** Returned by reference for channels that have no run, so a selector never
+ *  mints a new object per render (which would re-render on every store tick). */
+export const EMPTY_CHANNEL: FeedChannel = { entries: [], live: false, expanded: false, queuedPosition: null }
+
+/** Runs that don't belong to a project yet — Propose from a blank composer. */
+export const DRAFT_CHANNEL = 'draft'
+
 /** Tool lines worth showing; bare tool names and stderr chatter stay out. */
 function denoise(text: string): string | null {
   const t = text.trim()
@@ -26,53 +49,68 @@ function denoise(text: string): string | null {
 }
 
 type StudioFeedState = {
-  entries: FeedEntry[]
-  /** A job is currently streaming into the feed. */
-  live: boolean
-  expanded: boolean
-  queuedPosition: number | null
-  begin: () => void
-  push: (e: StudioEvent) => void
-  finish: () => void
-  setExpanded: (v: boolean) => void
-  clear: () => void
+  channels: Record<string, FeedChannel>
+  begin: (channel: string) => void
+  push: (channel: string, e: StudioEvent) => void
+  finish: (channel: string) => void
+  setExpanded: (channel: string, v: boolean) => void
+  /** Drop a channel entirely — its project was deleted, or the draft channel
+   *  is being reset for a fresh start. */
+  clear: (channel: string) => void
 }
 
 let nextId = 1
 
-export const useStudioFeed = create<StudioFeedState>((set, get) => ({
-  entries: [],
-  live: false,
-  expanded: false,
-  queuedPosition: null,
+export const useStudioFeed = create<StudioFeedState>((set, get) => {
+  const patch = (channel: string, p: Partial<FeedChannel>) =>
+    set((s) => ({ channels: { ...s.channels, [channel]: { ...(s.channels[channel] ?? EMPTY_CHANNEL), ...p } } }))
 
-  // Starts collapsed — the header's live pulse says work is happening; the
-  // detail stream stays one click away so the initial screen keeps its calm.
-  begin: () => set({ entries: [], live: true, expanded: false, queuedPosition: null }),
+  return {
+    channels: {},
 
-  push: (e) => {
-    const { entries } = get()
-    const append = (entry: DistributiveOmit<FeedEntry, 'id'>) =>
-      set({ entries: [...entries.slice(-MAX_ENTRIES + 1), { id: nextId++, ...entry }] })
+    // Starts collapsed — the header's live pulse says work is happening; the
+    // detail stream stays one click away so the initial screen keeps its calm.
+    begin: (channel) => patch(channel, { entries: [], live: true, expanded: false, queuedPosition: null }),
 
-    if (e.type === 'narration' && e.text?.trim()) {
-      append({ kind: 'narration', text: e.text.trim() })
-    } else if (e.type === 'status' && e.text) {
-      const t = denoise(e.text)
-      const last = entries.at(-1)
-      if (t && !(last?.kind === 'status' && last.text === t)) append({ kind: 'status', text: t })
-    } else if (e.type === 'preview' && e.dataUrl) {
-      const last = entries.at(-1)
-      if (!(last?.kind === 'preview' && last.dataUrl === e.dataUrl)) {
-        append({ kind: 'preview', dataUrl: e.dataUrl, file: e.file })
+    push: (channel, e) => {
+      const current = get().channels[channel] ?? EMPTY_CHANNEL
+      const { entries } = current
+      const append = (entry: DistributiveOmit<FeedEntry, 'id'>) =>
+        patch(channel, { entries: [...entries.slice(-MAX_ENTRIES + 1), { id: nextId++, ...entry }] })
+
+      if (e.type === 'queued') {
+        patch(channel, { queuedPosition: e.position ?? null })
+        return
       }
-    } else if (e.type === 'queued') {
-      set({ queuedPosition: e.position ?? null })
-    }
-    if (e.type !== 'queued' && get().queuedPosition !== null) set({ queuedPosition: null })
-  },
+      if (e.type === 'narration' && e.text?.trim()) {
+        append({ kind: 'narration', text: e.text.trim() })
+      } else if (e.type === 'status' && e.text) {
+        const t = denoise(e.text)
+        const last = entries.at(-1)
+        if (t && !(last?.kind === 'status' && last.text === t)) append({ kind: 'status', text: t })
+      } else if (e.type === 'preview' && e.dataUrl) {
+        const last = entries.at(-1)
+        if (!(last?.kind === 'preview' && last.dataUrl === e.dataUrl)) {
+          append({ kind: 'preview', dataUrl: e.dataUrl, file: e.file })
+        }
+      }
+      // Any non-queued event means the job left the queue.
+      if (current.queuedPosition !== null) patch(channel, { queuedPosition: null })
+    },
 
-  finish: () => set({ live: false, expanded: false }),
-  setExpanded: (expanded) => set({ expanded }),
-  clear: () => set({ entries: [], live: false, expanded: false, queuedPosition: null }),
-}))
+    finish: (channel) => patch(channel, { live: false, expanded: false }),
+    setExpanded: (channel, expanded) => patch(channel, { expanded }),
+
+    clear: (channel) =>
+      set((s) => {
+        if (!s.channels[channel]) return s
+        const { [channel]: _gone, ...rest } = s.channels
+        return { channels: rest }
+      }),
+  }
+})
+
+/** The feed for one channel — a stable empty channel when it has no run. */
+export function useFeedChannel(channel: string | null | undefined): FeedChannel {
+  return useStudioFeed((s) => (channel ? s.channels[channel] ?? EMPTY_CHANNEL : EMPTY_CHANNEL))
+}

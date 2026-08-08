@@ -5,6 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useProjectsStore, type SavedProject } from '@/store/projectsStore'
 import { useGenerateStore } from '@/store/generateStore'
 import { usePendingJobs, pendingList } from '@/store/pendingJobsStore'
+import { useStudioFeed } from '@/store/studioFeedStore'
 import { projectHref } from '@/lib/projectUrl'
 import {
   SidebarSectionLabel, SIDEBAR_ITEM, SIDEBAR_ITEM_IDLE, SIDEBAR_ITEM_ACTIVE,
@@ -157,6 +158,9 @@ export function ProjectsPanel() {
               // the placeholder rather than calling deleteProject on an id
               // that was never saved.
               const job = usePendingJobs.getState().jobs[ctx.id]
+              // The run's activity goes with the row it belonged to — feeds
+              // are per project and would otherwise outlive their project.
+              useStudioFeed.getState().clear(ctx.id)
               if (job) {
                 if (!job.stopped && !job.error) job.abort()
                 usePendingJobs.getState().finish(ctx.id)

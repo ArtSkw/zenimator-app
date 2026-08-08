@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Activity, ChevronDown, ChevronUp } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { useStudioFeed, type FeedEntry } from '@/store/studioFeedStore'
+import { useStudioFeed, useFeedChannel, type FeedEntry } from '@/store/studioFeedStore'
 
 /**
  * The studio activity feed (plan Phase 1.3): the agent's narration, de-noised
@@ -10,9 +10,13 @@ import { useStudioFeed, type FeedEntry } from '@/store/studioFeedStore'
  * clickable thumbnails, streaming while it works. Collapsed by default (the
  * pulsing header signals progress); expandable at any time to watch the
  * stream or review how the scene was made.
+ *
+ * `channel` is the run this feed belongs to (the project id), so a job keeps
+ * its own history while the user browses elsewhere.
  */
-export function StudioFeed() {
-  const { entries, live, expanded, queuedPosition, setExpanded } = useStudioFeed()
+export function StudioFeed({ channel }: { channel: string }) {
+  const { entries, live, expanded, queuedPosition } = useFeedChannel(channel)
+  const setExpanded = useStudioFeed((s) => s.setExpanded)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -37,7 +41,7 @@ export function StudioFeed() {
     <div className="rounded-2xl border border-border bg-card/60 overflow-hidden animate-in fade-in-0 duration-300">
       <button
         type="button"
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => setExpanded(channel, !expanded)}
         className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
         aria-expanded={expanded}
       >
