@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import {
+  Braces,
   Download,
   FileCode,
   Film,
@@ -26,9 +27,12 @@ import { cn } from '@/lib/utils'
 import { makeDotLottie } from '@/export/exportDotLottie'
 import { downloadLottieHtml } from '@/export/exportLottieHtml'
 import { buildMobilePack } from '@/export/mobile/buildPack'
+import { parseSlotSpecs } from '@/engine/lottie/slots'
+import { sceneFontAssets } from '@/engine/studio/studioClient'
+import { loopStartFromJson } from '@/engine/lottie/markers'
 import { frameworkById } from '@/export/mobile/frameworks'
 import type { FrameworkId } from '@/export/mobile/types'
-import { bakeLottieJson } from '@/store/generateStore'
+import { bakeLottieJson, useGenerateStore } from '@/store/generateStore'
 
 /** True when an export rejected because the user hit Cancel (AbortError),
  *  distinguishing a deliberate stop from a genuine failure. */
@@ -77,6 +81,7 @@ const CATEGORIES: { id: CategoryId; label: string; formats: FormatDef[] }[] = [
       { id: 'json', label: 'Lottie JSON', desc: '.json for web, iOS & Android players', icon: Sparkles, action: 'Download' },
       { id: 'html', label: 'HTML embed', desc: 'Self-contained page, opens in browser', icon: FileCode, action: 'Download' },
       { id: 'dotlottie', label: 'dotLottie (.lottie)', desc: 'One compact file for dotLottie players', icon: Package, action: 'Download' },
+      { id: 'web-pack', label: 'Web pack (localized)', desc: 'fitBubble() sizes the bubble for any language', icon: Braces, action: 'Download pack' },
     ],
   },
   {
@@ -110,6 +115,11 @@ const CATEGORIES: { id: CategoryId; label: string; formats: FormatDef[] }[] = [
 ]
 
 const MOBILE_IDS = new Set(CATEGORIES.find((c) => c.id === 'mobile')!.formats.map((f) => f.id))
+
+/** Picker format id → pack framework id. Mobile ids map to themselves; the
+ *  web pack lives in the Web category under its own picker id. */
+const PACK_FRAMEWORK = (id: string): FrameworkId | null =>
+  id === 'web-pack' ? 'web' : MOBILE_IDS.has(id) ? (id as FrameworkId) : null
 const CHOICE_KEY = 'zenimator.export-choice'
 
 function loadChoice(): { category: CategoryId; format: string } {
@@ -136,21 +146,29 @@ function readFacts(json: string): Facts {
   }
 }
 
-/** Instant formats: download + success toast, synchronous. Throws on failure. */
-function runInstantExport(id: string, json: string, loop: boolean): void {
+/** Instant formats: download + success toast. Mobile packs fetch the scene's
+ *  fonts first (cached after the preview loaded them), so "instant" stays
+ *  honest. Throws on failure. */
+async function runInstantExport(id: string, json: string, loop: boolean): Promise<void> {
   if (id === 'json') {
     triggerDownload(new Blob([json], { type: 'application/json' }), `zenimator-${Date.now()}.json`)
     toast.success('Lottie JSON downloaded', { description: 'Plays in any Lottie player — web, iOS & Android.' })
   } else if (id === 'html') {
-    downloadLottieHtml(json, { loop })
+    await downloadLottieHtml(json, { loop })
     toast.success('HTML exported — open in any browser')
   } else if (id === 'dotlottie') {
     triggerDownload(makeDotLottie(json, { loop }), `zenimator-${Date.now()}.lottie`)
     toast.success('dotLottie downloaded', { description: 'One compact file for any dotLottie player.' })
-  } else if (MOBILE_IDS.has(id)) {
-    const pack = buildMobilePack(id as FrameworkId, { lottieJson: json, loop })
+  } else if (PACK_FRAMEWORK(id)) {
+    const framework = PACK_FRAMEWORK(id)!
+    const assets = await sceneFontAssets(json)
+    const fonts = Object.entries(assets).map(([family, bytes]) => ({ file: `${family}.ttf`, bytes: new Uint8Array(bytes) }))
+    // The agent's controls.json carries the autoFit slot specs the web
+    // helper is generated from; mobile packs ignore them.
+    const slotSpecs = parseSlotSpecs(useGenerateStore.getState().agentControlsJson)
+    const pack = buildMobilePack(framework, { lottieJson: json, loop, fonts, slotSpecs })
     triggerDownload(pack.blob, pack.filename)
-    if (pack.fontsMissing) toast.warning('Pack downloaded — the scene uses native text; fonts aren’t included yet (see README)')
+    if (pack.fontsMissing) toast.warning('Pack downloaded — the scene uses native text but its font wasn’t reachable (see README)')
     else toast.success('Pack downloaded', { description: 'Unzip and follow README.md.' })
   }
 }
@@ -163,21 +181,26 @@ async function runEncodeExport(id: string, label: string, json: string, loop: bo
   const verb = id === 'gif' ? 'Encoding GIF' : id === 'webm' ? 'Rendering video' : id === 'mp4' ? 'Encoding MP4' : 'Baking splash videos'
   const toastId = toast.loading(`${verb}…`, { cancel })
   const progress = (p: number) => toast.loading(`${verb}… ${Math.round(p * 100)}%`, { id: toastId, cancel })
+  const loopStart = loopStartFromJson(json) ?? 0
   try {
     if (id === 'gif') {
       const { exportLottieGif } = await import('@/export/exportLottieGif')
-      const { blob, oversized, sizeKb } = await exportLottieGif(json, { loop, signal: controller.signal }, progress)
+      const { blob, oversized, sizeKb } = await exportLottieGif(
+        json, { loop, loopStart, signal: controller.signal }, progress,
+      )
       triggerDownload(blob, `zenimator-${Date.now()}.gif`)
       if (oversized) toast.warning(`GIF exported (${sizeKb} KB) — over 5 MB, consider shortening the animation`, { id: toastId })
       else toast.success(`GIF exported (${sizeKb} KB)`, { id: toastId })
     } else if (id === 'webm') {
       const { exportLottieWebm } = await import('@/export/exportLottieWebm')
-      const blob = await exportLottieWebm(json, { loop, signal: controller.signal }, progress)
+      const blob = await exportLottieWebm(
+        json, { loop, loopStart, signal: controller.signal }, progress,
+      )
       triggerDownload(blob, `zenimator-${Date.now()}.webm`)
       toast.success('Video exported!', { id: toastId })
     } else if (id === 'mp4') {
       const { exportLottieMp4 } = await import('@/export/exportLottieMp4')
-      const blob = await exportLottieMp4(json, { loop, signal: controller.signal }, progress)
+      const blob = await exportLottieMp4(json, { loop, loopStart, signal: controller.signal }, progress)
       triggerDownload(blob, `zenimator-${Date.now()}.mp4`)
       toast.success('MP4 exported!', { id: toastId })
     } else {
@@ -253,7 +276,7 @@ export function GenerateExport({ loop }: { loop: boolean }) {
       return
     }
     try {
-      runInstantExport(format.id, baked, loop)
+      await runInstantExport(format.id, baked, loop)
       setOpen(false)
     } catch (err) {
       console.error(`[zenimator] ${format.id} export error:`, err)
@@ -360,6 +383,11 @@ export function GenerateExport({ loop }: { loop: boolean }) {
                     <p className="text-[11px] text-muted-foreground">
                       animation.lottie · animation.json ·{' '}
                       {frameworkById((isActive ? format.id : 'react-native') as FrameworkId).componentPath} · README.md
+                    </p>
+                  )}
+                  {c.id === 'web' && isActive && format.id === 'web-pack' && (
+                    <p className="text-[11px] text-muted-foreground">
+                      animation.json · animation.lottie · zenimator-bubble.js · fonts/ · README.md
                     </p>
                   )}
                 </div>

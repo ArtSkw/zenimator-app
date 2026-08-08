@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { SlidersHorizontal, MousePointerClick, X, RotateCcw, Layers, Film, type LucideIcon } from 'lucide-react'
+import { SlidersHorizontal, MousePointerClick, X, RotateCcw, Layers, Film, Type, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
@@ -8,6 +8,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Switch } from '@/components/ui/switch'
 import { Check } from 'lucide-react'
 import { sceneLayers } from '@/engine/lottie/sceneRoot'
+import { SlotContentSection } from '@/components/panels/SlotContentSection'
+import { useSlotMetas } from '@/store/useSlotMetas'
 import { SlotControlsPanel } from '@/components/generate/SlotControlsPanel'
 import { SceneDossier } from '@/components/generate/SceneDossier'
 import { useGenerateStore } from '@/store/generateStore'
@@ -61,6 +63,10 @@ export function ControlsPanel() {
   }, [lottieJson, selNm])
 
   const general = all.filter((c) => !c.layerNm)
+  // Content slots (companion pattern) — editable strings/geometry, shown above
+  // the motion knobs. Counted into the empty check so a scene with only slots
+  // still populates the panel.
+  const slotMetas = useSlotMetas()
   const selName = selNm
     ? (layerLabels[selNm] ?? cast.find((m) => m.nm === selNm)?.label ?? selNm)
     : undefined
@@ -114,7 +120,7 @@ export function ControlsPanel() {
       </div>
 
       <ScrollArea className="flex-1 min-h-0">
-        {all.length === 0 ? (
+        {all.length === 0 && slotMetas.length === 0 ? (
           <Empty className="py-10 border-none">
             <EmptyHeader>
               <EmptyMedia variant="icon"><SlidersHorizontal /></EmptyMedia>
@@ -138,9 +144,20 @@ export function ControlsPanel() {
               </Section>
             )}
 
+            {/* Content (editable strings/geometry) sits under Animation, in the
+                same section voice, separated so it reads as its own concern. */}
+            {slotMetas.length > 0 && (
+              <>
+                {general.length > 0 && <div className="border-t border-border" />}
+                <Section title="Content" icon={Type}>
+                  <SlotContentSection metas={slotMetas} />
+                </Section>
+              </>
+            )}
+
             {/* Divider makes it unambiguous which controls are scene-wide vs.
                 scoped to the selected layer. */}
-            {general.length > 0 && <div className="border-t border-border" />}
+            {(general.length > 0 || slotMetas.length > 0) && <div className="border-t border-border" />}
 
             {selNm ? (
               <Section title={selName ?? 'Layer'} icon={Layers}>

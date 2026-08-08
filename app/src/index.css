@@ -173,3 +173,12 @@
   from { width: 0% }
   to   { width: 100% }
 }
+
+/* Skeleton breathe for a scene that is still being authored. An opacity swell
+   rather than a sweeping gradient: a sweep has to reset its position every
+   cycle, and that reset reads as a flash. 0% and 100% are identical, so this
+   loops seamlessly however long it runs. */
+@keyframes skeleton-breathe {
+  0%, 100% { opacity: 0.30 }
+  50%      { opacity: 0.70 }
+}

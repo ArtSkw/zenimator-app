@@ -1,5 +1,6 @@
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
 import { createLottieFrameSource } from './lottieFrames'
+import { loopFramePlan } from '@/engine/lottie/markers'
 
 const SCALE = 2          // render at 2× for crisp video (matches WebM)
 const MAX_DIM = 1440
@@ -18,6 +19,10 @@ export class Mp4UnsupportedError extends Error {
 
 export type Mp4Options = {
   loop?: boolean
+  /** Loop-segment start (intro-loop marker contract): the intro renders once,
+   *  then the extra passes cycle [loopStart..total] — mirroring how every
+   *  player runs the file, instead of replaying the entrance each cycle. */
+  loopStart?: number
   /** Solid matte painted behind each frame; H.264 has no alpha, so opaque
    *  white is the default (same rationale as the WebM export). */
   background?: string
@@ -88,9 +93,12 @@ export async function exportLottieMp4(
     })
 
     // Loop kind: two passes so the file plays a couple of cycles (same rule
-    // as WebM). Entry kind: a single pass that holds.
+    // as WebM). Entry kind: a single pass that holds. Intro-loop: the first
+    // pass covers intro + one idle cycle; extra passes replay ONLY the idle
+    // segment, exactly as a marker-aware player would.
+    const { loopSpan, frameAt } = loopFramePlan(totalFrames, opts)
     const passes = opts.loop ? 2 : 1
-    const total = passes * totalFrames
+    const total = totalFrames + (passes - 1) * loopSpan
     const usPerFrame = 1e6 / fps
     const keyEvery = Math.max(1, Math.round(2 * fps))
 
@@ -98,7 +106,7 @@ export async function exportLottieMp4(
       if (opts.signal?.aborted) throw new DOMException('Export cancelled', 'AbortError')
       if (encodeError) throw encodeError
 
-      renderFrame(i % totalFrames)
+      renderFrame(frameAt(i))
       ctx.fillStyle = background
       ctx.fillRect(0, 0, w, h)
       ctx.drawImage(glCanvas, 0, 0, w, h)

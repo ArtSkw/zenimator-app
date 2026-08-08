@@ -1,5 +1,6 @@
 import { GIFEncoder, quantize, applyPalette } from 'gifenc'
 import { createLottieFrameSource } from './lottieFrames'
+import { loopFramePlan } from '@/engine/lottie/markers'
 
 const MAX_DIM = 512 // cap dimension — 256-colour GIFs balloon fast at large sizes
 const WARN_SIZE_BYTES = 5 * 1024 * 1024
@@ -17,7 +18,7 @@ export type GifResult = {
  */
 export async function exportLottieGif(
   lottieJson: string,
-  opts: { loop?: boolean; signal?: AbortSignal } = {},
+  opts: { loop?: boolean; loopStart?: number; signal?: AbortSignal } = {},
   onProgress?: (progress: number) => void,
 ): Promise<GifResult> {
   const src = await createLottieFrameSource(lottieJson, { maxDim: MAX_DIM })
@@ -33,10 +34,18 @@ export async function exportLottieGif(
 
     const gif = GIFEncoder()
 
-    for (let frame = 0; frame < totalFrames; frame++) {
+    // Intro-loop scenes: the entrance belongs at the head of the file once, and
+    // everything after it is idle. A GIF loops its WHOLE frame list, so encode
+    // intro + several idle cycles — the entrance then reads as the opening
+    // beat instead of interrupting the idle on every repeat.
+    const { loopStart, loopSpan, frameAt } = loopFramePlan(totalFrames, opts)
+    const extraCycles = loopStart > 0 ? 2 : 0
+    const encodedFrames = totalFrames + extraCycles * loopSpan
+
+    for (let frame = 0; frame < encodedFrames; frame++) {
       // Bail cleanly if the user cancelled — src.dispose() runs in finally.
       if (opts.signal?.aborted) throw new DOMException('Export cancelled', 'AbortError')
-      renderFrame(frame)
+      renderFrame(frameAt(frame))
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, w, h)
       ctx.drawImage(glCanvas, 0, 0)
@@ -53,7 +62,7 @@ export async function exportLottieGif(
         ...(frame === 0 ? { repeat: opts.loop ? 0 : -1 } : {}),
       })
 
-      onProgress?.((frame + 1) / totalFrames)
+      onProgress?.((frame + 1) / encodedFrames)
       // Yield periodically so the progress toast paints and the tab stays responsive.
       if (frame % 8 === 0) await new Promise((r) => setTimeout(r))
     }

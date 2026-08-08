@@ -4,7 +4,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Play, Pause, RotateCcw, Repeat } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useGeneratePlayback } from '@/store/generatePlaybackStore'
-import { useGenerateStore } from '@/store/generateStore'
+import { useGenerateStore, useBakedLottieJson } from '@/store/generateStore'
+import { loopStartFromJson } from '@/engine/lottie/markers'
 import { TRACK_KEYS } from '@/engine/lottie/project'
 
 /**
@@ -35,6 +36,12 @@ export function GenerateTransport() {
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+
+  // The intro→loop boundary (companion scenes): a distinct tick on the
+  // timeline where the entrance ends and the endless idle begins. Derived
+  // from the BAKED doc so a Duration retime moves the tick with the marker.
+  const bakedJson = useBakedLottieJson()
+  const loopStart = useMemo(() => loopStartFromJson(bakedJson), [bakedJson])
 
   // Keyframe times of the selected layer (deduped, sorted) — timeline markers.
   const markers = useMemo(() => {
@@ -122,6 +129,7 @@ export function GenerateTransport() {
       <Timeline
         op={op}
         markers={markers}
+        loopStart={loopStart}
         disabled={disabled}
         onScrubStart={beginScrub}
         onSeek={seekTo}
@@ -196,10 +204,12 @@ function PlayheadHandle({ op }: { op: number }) {
  *  The moving parts (fill, handle) live in leaf components so the timeline track
  *  and markers don't re-render on every frame. */
 function Timeline({
-  op, markers, disabled, onScrubStart, onSeek,
+  op, markers, loopStart, disabled, onScrubStart, onSeek,
 }: {
   op: number
   markers: number[]
+  /** Intro→loop boundary frame (intro-loop scenes), or null. */
+  loopStart: number | null
   disabled: boolean
   onScrubStart: () => void
   onSeek: (frame: number) => void
@@ -251,6 +261,18 @@ function Timeline({
     >
       <div className="relative w-full h-1.5 rounded-full bg-muted">
         <ProgressFill op={op} />
+
+        {/* Intro→loop boundary — where the entrance hands off to the endless
+            idle. Taller than keyframe ticks and always visible, since it's a
+            property of the SCENE rather than of a selected layer. */}
+        {loopStart != null && op > 0 && (
+          <span
+            aria-hidden
+            title="Loop starts here"
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-0.5 h-3.5 rounded-full bg-foreground/60"
+            style={{ left: `${(loopStart / op) * 100}%` }}
+          />
+        )}
 
         {/* Keyframe markers */}
         {markers.map((m, i) => (

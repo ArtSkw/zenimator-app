@@ -13,6 +13,10 @@
  * this lottie-web page gets the translated approximation.
  */
 
+import { sceneFontAssets } from '@/engine/studio/studioClient'
+import { loopSegment } from '@/engine/lottie/markers'
+import { bytesToBase64 } from '@/engine/lottie/render'
+
 const LOTTIE_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js'
 // SRI hash for the exact file at the pinned version above (computed from the
 // live CDN response) — these exported HTML files get redistributed by users,
@@ -143,19 +147,130 @@ function makeLottieWebSafe(json: string): string {
 
 // ── HTML page builder ─────────────────────────────────────────────────────────
 
-export function buildLottieHtml(lottieJson: string, opts: { loop?: boolean } = {}): string {
-  // Aspect ratio from the composition so the container matches the artwork.
-  let aspect = '1 / 1'
+/** CSS weight for a Lottie `fStyle`, mirroring lottie-web's own
+ *  `getFontProperties` parse ("Bold" → 700). The page must declare the face at
+ *  the SAME weight lottie-web asks for, or the browser either misses the face
+ *  or synthesises bold on top of an already-bold file. */
+function cssFontStyle(fStyle: string | undefined): { weight: string; style: string } {
+  let weight = '400'
+  let style = 'normal'
+  for (const word of (fStyle ?? '').split(' ')) {
+    switch (word.toLowerCase()) {
+      case 'italic': style = 'italic'; break
+      case 'thin': case 'light': weight = '200'; break
+      case 'regular': case 'normal': weight = '400'; break
+      case 'medium': weight = '500'; break
+      case 'bold': weight = '700'; break
+      case 'black': weight = '900'; break
+    }
+  }
+  return { weight, style }
+}
+
+/** Scene-derived strings land in a hand-built HTML page, so `fFamily` must be
+ *  a plain font name before it may touch a sink — the same charset the
+ *  engine's `/font` route enforces. Anything else (quotes, braces, `</`) could
+ *  close the `<style>`/`<script>` element it's interpolated into and run
+ *  attacker markup in whoever the file is shared with. */
+const SAFE_FAMILY_RE = /^[A-Za-z0-9 _-]{1,64}$/
+
+/** `@font-face` rules embedding every scene font as a data URI. lottie-web
+ *  renders `ty:5` text with `font-family: <fFamily>` plus the weight parsed
+ *  from `fStyle`, so the family/weight pair here has to match exactly —
+ *  otherwise the page falls back to a system face (the brand font "reverting
+ *  to default" in an export that looked right in the app). */
+function embeddedFonts(
+  list: Array<{ fName?: string; fFamily?: string; fStyle?: string }>,
+  assets: Record<string, ArrayBuffer>,
+): { css: string; specs: Array<{ family: string; weight: string; style: string }> } {
+  const rules: string[] = []
+  const specs: Array<{ family: string; weight: string; style: string }> = []
+  for (const font of list) {
+    const bytes = font.fName ? assets[font.fName] : undefined
+    if (!bytes || !font.fFamily || !SAFE_FAMILY_RE.test(font.fFamily)) continue
+    const { weight, style } = cssFontStyle(font.fStyle)
+    rules.push(
+      `    @font-face {\n` +
+      `      font-family: '${font.fFamily}';\n` +
+      `      font-weight: ${weight};\n` +
+      `      font-style: ${style};\n` +
+      `      src: url(data:font/ttf;base64,${bytesToBase64(new Uint8Array(bytes))}) format('truetype');\n` +
+      `    }`,
+    )
+    specs.push({ family: font.fFamily, weight, style })
+  }
+  return { css: rules.join('\n'), specs }
+}
+
+export function buildLottieHtml(
+  lottieJson: string,
+  opts: { loop?: boolean; fonts?: Record<string, ArrayBuffer> } = {},
+): string {
+  // One parse serves the aspect ratio, the font list, and the loop segment.
+  let doc: { w?: number; h?: number; fonts?: { list?: Array<{ fName?: string; fFamily?: string; fStyle?: string }> } } = {}
   try {
-    const { w, h } = JSON.parse(lottieJson)
-    if (w > 0 && h > 0) aspect = `${w} / ${h}`
-  } catch { /* fall back to square */ }
+    doc = JSON.parse(lottieJson)
+  } catch { /* fall back to defaults below */ }
+
+  // Aspect ratio from the composition so the container matches the artwork.
+  const aspect = doc.w && doc.h && doc.w > 0 && doc.h > 0 ? `${doc.w} / ${doc.h}` : '1 / 1'
 
   const safeSource = makeLottieWebSafe(lottieJson)
   // Inlining JSON inside <script>: neutralise any "</" so a stray sequence
   // can't close the script tag early.
   const safeJson = safeSource.replace(/<\//g, '<\\/')
-  const loop = opts.loop ? 'true' : 'false'
+  const { css: faces, specs } = embeddedFonts(doc.fonts?.list ?? [], opts.fonts ?? {})
+  const segment = loopSegment(doc)
+
+  // An intro-loop scene must behave here exactly as it does in the app: the
+  // entrance plays once, then the idle cycles forever. lottie-web can only do
+  // that through playSegments, so the page drives it instead of using the
+  // blunt `loop` flag (which would replay the entrance every cycle).
+  const playback = segment
+    ? `        loop: false,
+        autoplay: false,
+        animationData: animationData,
+      });
+      var LOOP_START = ${segment.start};
+      var LOOP_END = ${segment.end};
+      anim.addEventListener('DOMLoaded', function () {
+        anim.playSegments([0, LOOP_START], true);
+        var onIntroDone = function () {
+          anim.removeEventListener('complete', onIntroDone);
+          anim.loop = true;
+          anim.playSegments([LOOP_START, LOOP_END], true);
+        };
+        anim.addEventListener('complete', onIntroDone);
+      });`
+    : `        loop: ${opts.loop ? 'true' : 'false'},
+        autoplay: true,
+        animationData: animationData,
+      });`
+
+  // Fonts must be LIVE before lottie-web builds the animation. It positions
+  // every glyph from its own measureText() and caches those advances, so a
+  // measurement taken while the face is still loading bakes FALLBACK metrics
+  // into the layout — letters then sit at wrong offsets and the words show
+  // ragged gaps (lottie-web only polls for the font, it never re-measures).
+  // Families are already allowlisted, but neutralise "</" anyway — same
+  // defense-in-depth the scene JSON gets, so no future field addition can
+  // reopen the script-breakout.
+  const fontGate = specs.length === 0
+    ? '    start();'
+    : `    var FONTS = ${JSON.stringify(specs).replace(/<\//g, '<\\/')};
+    if (document.fonts && document.fonts.load) {
+      Promise.all(FONTS.map(function (f) {
+        // 100px: the size lottie-web measures at. Loading any size activates
+        // the face; matching it keeps the request identical.
+        return document.fonts.load(f.style + ' ' + f.weight + ' 100px "' + f.family + '"');
+      }))
+        .catch(function () { /* keep going — fallback metrics beat no animation */ })
+        .then(function () { return document.fonts.ready; })
+        .catch(function () {})
+        .then(start);
+    } else {
+      start();
+    }`
 
   return `<!doctype html>
 <html lang="en">
@@ -164,7 +279,7 @@ export function buildLottieHtml(lottieJson: string, opts: { loop?: boolean } = {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ZENimator animation</title>
   <style>
-    html, body { margin: 0; height: 100%; }
+${faces ? faces + '\n' : ''}    html, body { margin: 0; height: 100%; }
     body { display: grid; place-items: center; background: #f5f5f5; }
     #animation {
       width: min(80vmin, 512px);
@@ -177,21 +292,28 @@ export function buildLottieHtml(lottieJson: string, opts: { loop?: boolean } = {
   <script src="${LOTTIE_CDN}" integrity="${LOTTIE_CDN_INTEGRITY}" crossorigin="anonymous"></script>
   <script>
     var animationData = ${safeJson};
-    lottie.loadAnimation({
-      container: document.getElementById('animation'),
-      renderer: 'svg',
-      loop: ${loop},
-      autoplay: true,
-      animationData: animationData,
-    });
+    var anim;
+    function start() {
+      anim = lottie.loadAnimation({
+        container: document.getElementById('animation'),
+        renderer: 'svg',
+${playback}
+    }
+${fontGate}
   </script>
 </body>
 </html>
 `
 }
 
-export function downloadLottieHtml(lottieJson: string, opts: { loop?: boolean } = {}): void {
-  const html = buildLottieHtml(lottieJson, opts)
+export async function downloadLottieHtml(
+  lottieJson: string,
+  opts: { loop?: boolean } = {},
+): Promise<void> {
+  // Fetch the scene's fonts so the page is truly self-contained — a shared
+  // HTML must not depend on the viewer having the brand font installed.
+  const fonts = await sceneFontAssets(lottieJson).catch(() => ({}))
+  const html = buildLottieHtml(lottieJson, { ...opts, fonts })
   const blob = new Blob([html], { type: 'text/html' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

@@ -1,4 +1,5 @@
 import { loadCanvasKit } from '@/lib/skottie'
+import { sceneFontAssets } from '@/engine/studio/studioClient'
 
 /**
  * A headless Skottie frame source for raster export. Loads CanvasKit, parses the
@@ -26,7 +27,14 @@ export async function createLottieFrameSource(
   opts: { scale?: number; maxDim?: number } = {},
 ): Promise<LottieFrameSource> {
   const ck = await loadCanvasKit()
-  const animation = ck.MakeManagedAnimation(lottieJson)
+  // Fonts are resolved HERE, not by the callers, so no raster export can ship
+  // text in a fallback face: a `ty:5` layer without its font renders in
+  // whatever CanvasKit falls back to, which silently loses the brand type in
+  // GIF/WebM/MP4 while the preview (which does load them) looks right.
+  const assets = await sceneFontAssets(lottieJson)
+  const animation = Object.keys(assets).length
+    ? ck.MakeManagedAnimation(lottieJson, assets)
+    : ck.MakeManagedAnimation(lottieJson)
   if (!animation) throw new Error('CanvasKit could not parse the Lottie file.')
 
   const [nativeW, nativeH] = animation.size()

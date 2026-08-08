@@ -240,7 +240,7 @@ export function studioGenerate(
      *  `studioFeatures()` including 'multi-svg' before sending. */
     svgs?: { name: string; svg: string }[]
     brief: string
-    kind: 'entry' | 'loop'
+    kind: 'entry' | 'loop' | 'intro-loop'
   },
   onEvent: (e: StudioEvent) => void,
   signal?: AbortSignal,
@@ -252,6 +252,70 @@ export function studioGenerate(
  *  additive; empty on older engines). Uncached: the engine can be upgraded
  *  and restarted mid-session, and one extra health fetch per gated action
  *  is nothing. */
+export type EngineJob = { slug: string; kind: string; state: 'queued' | 'running' }
+
+/** One fetch of /health as parsed JSON, or null on any failure — the shape
+ *  every capability probe (`features`, `active`) destructures. Uncached by
+ *  design: the engine can be upgraded and restarted mid-session. */
+async function healthPayload(): Promise<{ features?: string[]; active?: EngineJob[] } | null> {
+  try {
+    const r = await fetch(`${baseUrl()}/health`, { headers: authHeaders() })
+    return (await r.json()) as { features?: string[]; active?: EngineJob[] }
+  } catch {
+    return null
+  }
+}
+
+/** Engine jobs currently queued or running — INCLUDING jobs this app didn't
+ *  start (another client, a script, an agent session). Powers the "engine is
+ *  working on this scene" indicator so external edits are never invisible.
+ *  Empty on older engines (no `active` field) or any failure. */
+export async function studioActivity(): Promise<EngineJob[]> {
+  const j = await healthPayload()
+  return Array.isArray(j?.active) ? j.active : []
+}
+
+/** Fetch the engine's CURRENT scene + controls for a slug — used to refresh
+ *  the open project after an external job completes. controlsJson is null on
+ *  engines that predate GET /controls. */
+export async function studioScene(
+  slug: string,
+): Promise<{ lottieJson: string; controlsJson: string | null } | null> {
+  try {
+    // Independent fetches — issue them together.
+    const [r, c] = await Promise.all([
+      fetch(`${baseUrl()}/scene/${encodeURIComponent(slug)}`, { headers: authHeaders() }),
+      fetch(`${baseUrl()}/controls/${encodeURIComponent(slug)}`, { headers: authHeaders() })
+        .catch(() => null), // older engine — controls stay null
+    ])
+    if (!r.ok) return null
+    const lottieJson = await r.text()
+    const controlsJson = c?.ok ? await c.text() : null
+    return { lottieJson, controlsJson }
+  } catch {
+    return null
+  }
+}
+
+/** The SOURCE artworks a scene was generated from, recovered from the engine.
+ *  Lets a project whose local copy was lost become regenerable again instead
+ *  of being stuck with a disabled button. Empty on older engines or if the
+ *  assets are gone. */
+export async function studioSourceAssets(
+  slug: string,
+): Promise<Array<{ name: string; svg: string }>> {
+  try {
+    const r = await fetch(`${baseUrl()}/assets/${encodeURIComponent(slug)}`, { headers: authHeaders() })
+    if (!r.ok) return []
+    const j = (await r.json()) as { svgs?: Array<{ name?: string; svg?: string }> }
+    return (j.svgs ?? [])
+      .filter((e): e is { name: string; svg: string } => typeof e?.svg === 'string' && !!e.svg)
+      .map((e) => ({ name: e.name || `${slug}.svg`, svg: e.svg }))
+  } catch {
+    return []
+  }
+}
+
 export async function studioFeatures(): Promise<string[]> {
   try {
     const r = await fetch(`${baseUrl()}/health`, { headers: authHeaders() })
@@ -328,6 +392,50 @@ export function studioEdit(
   signal?: AbortSignal,
 ): Promise<StudioDone> {
   return streamRequest('/edit', params, onEvent, signal)
+}
+
+/** Font bytes by family, from the engine's /font endpoint — cached for the
+ *  session (fonts don't change under a running app; a miss is also cached so
+ *  a legacy scene doesn't re-probe every reparse). */
+const fontCache = new Map<string, Promise<ArrayBuffer | null>>()
+export function studioFontBytes(family: string): Promise<ArrayBuffer | null> {
+  let hit = fontCache.get(family)
+  if (!hit) {
+    hit = fetch(`${baseUrl()}/font/${encodeURIComponent(family)}`, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.arrayBuffer() : null))
+      .catch(() => null)
+    fontCache.set(family, hit)
+  }
+  return hit
+}
+
+/** The distinct font families a parsed scene declares (`fonts.list` fNames). */
+export function sceneFontFamilies(doc: unknown): string[] {
+  const list = (doc as { fonts?: { list?: Array<{ fName?: string }> } } | null)?.fonts?.list ?? []
+  return [...new Set(list.map((f) => f.fName).filter((n): n is string => !!n))]
+}
+
+/** Fonts for a list of families, keyed by family name — the shape Skottie's
+ *  asset resolver expects. Families the engine doesn't carry are simply
+ *  absent (their text renders in the fallback face rather than blocking the
+ *  whole scene). Callers already holding a parsed doc pair this with
+ *  `sceneFontFamilies` to skip a redundant parse. */
+export async function fontAssetsFor(families: string[]): Promise<Record<string, ArrayBuffer>> {
+  const assets: Record<string, ArrayBuffer> = {}
+  await Promise.all(families.map(async (fam) => {
+    const bytes = await studioFontBytes(fam)
+    if (bytes) assets[fam] = bytes
+  }))
+  return assets
+}
+
+/** Every font a scene declares, from the raw JSON string. */
+export async function sceneFontAssets(lottieJson: string): Promise<Record<string, ArrayBuffer>> {
+  try {
+    return await fontAssetsFor(sceneFontFamilies(JSON.parse(lottieJson)))
+  } catch {
+    return {}
+  }
 }
 
 /** Human labels straight from the build script's own layer names —

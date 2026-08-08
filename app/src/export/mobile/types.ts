@@ -2,7 +2,39 @@
  *  baked animation in both formats plus a paste-ready component and a README
  *  that teaches both runtime lanes (dotlottie players / airbnb lineage). */
 
-export type FrameworkId = 'react-native' | 'ios' | 'android' | 'flutter'
+export type FrameworkId = 'react-native' | 'ios' | 'android' | 'flutter' | 'web'
+
+/** Everything the web helper needs to size a bubble for a localized string —
+ *  extracted from the scene's slots + the agent's autoFit spec, baked into
+ *  the generated `zenimator-bubble.js` as constants. */
+export type SlotFit = {
+  textSid: string
+  sizeSid: string
+  fontFamily: string
+  /** Filename inside the pack's `fonts/` dir. */
+  fontFile: string
+  fontSize: number
+  lineHeight: number
+  /** Lottie `tr`: thousandths of an em per character. */
+  tracking: number
+  /** The authored text document (t, f, s, lh, fc, j, ls…) — the helper
+   *  rebuilds slot values from it so nothing but the string changes. */
+  baseDoc: Record<string, unknown>
+  sizeDefault: [number, number]
+  padding: [number, number]
+  min: [number, number]
+  /** Wrap threshold; null when the scene predates the stage-safety spec. */
+  max: [number, number] | null
+  /** The `.textPos` plumbing slot (sid + authored position) when the scene
+   *  carries one — wrapped text recenters by shifting its y. Skottie ignores
+   *  text-doc `ls`, so this slot IS the centering mechanism. */
+  textPos: { sid: string; value: number[] } | null
+  /** The `.anchor` plumbing slot — y = plate height / 2 pins the bottom edge
+   *  so the bubble grows upward, away from whatever sits beneath it. */
+  anchor: { sid: string; value: number[] } | null
+  /** Extra px added to the line height when the string wraps. */
+  leading: number
+}
 
 export type PackFile = { path: string; content: string | Uint8Array }
 
@@ -16,6 +48,10 @@ export type PackMeta = {
   aspectRatio: number
   /** True when the scene uses native Lottie text (`fonts.list` present). */
   hasNativeText: boolean
+  /** Intro→loop boundary frame (intro-loop marker contract), or null. */
+  loopStart: number | null
+  /** Content slot ids (companion pattern) — the scene's localization surface. */
+  slotIds: string[]
 }
 
 export type PackContext = {
@@ -29,6 +65,9 @@ export type PackContext = {
    *  pipeline lands — the README carries a warning when text is present
    *  but fonts aren't. */
   fonts: { file: string; bytes: Uint8Array }[]
+  /** Localizable bubble fits (companion pattern) — powers the web pack's
+   *  fitBubble helper. Empty when the scene has no autoFit-paired slots. */
+  slotFits: SlotFit[]
 }
 
 export type FrameworkDef = {

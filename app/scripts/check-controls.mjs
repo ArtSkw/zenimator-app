@@ -205,6 +205,20 @@ for (const slug of scenes) {
       else if (isDuration && countKeys(out, out.op) < baseKeys) {
         broken.push(`${c.id}=${v} → dropped ${baseKeys - countKeys(out, out.op)} playable keyframe(s)`)
       }
+      // Markers (intro-loop scenes) are doc-level time anchors: a Duration
+      // retime must scale them with the keyframes, or the player loops from
+      // the OLD frame number and the verified seam lands mid-intro.
+      else if (isDuration && Array.isArray(base.markers) && base.markers.length) {
+        const f = base.op > 0 ? v / base.op : 1
+        const ms = Array.isArray(out.markers) ? out.markers : []
+        const desynced =
+          ms.length !== base.markers.length ||
+          ms.some((m, i) => {
+            const want = Math.min(base.markers[i].tm * f, out.op)
+            return Math.abs(m.tm - want) > 0.51 || m.tm < -1e-6 || m.tm > out.op + 1e-6
+          })
+        if (desynced) broken.push(`${c.id}=${v} → markers desynced from the retime`)
+      }
     }
   }
   const ok = broken.length === 0

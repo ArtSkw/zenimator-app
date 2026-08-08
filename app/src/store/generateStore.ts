@@ -5,6 +5,7 @@ import { applyControlValues, deriveControls, type ControlManifest } from '@/engi
 import { castFromControls, type CastMember } from '@/engine/controls/cast'
 import { labelsFromDoc } from '@/engine/studio/studioClient'
 import { sceneLayers } from '@/engine/lottie/sceneRoot'
+import { applySlotOverride, SLOT_OVERRIDE_PREFIX } from '@/engine/lottie/slots'
 import type { Skeleton } from '@/engine/legacy/skeleton'
 import { useStudioFeed } from '@/store/studioFeedStore'
 
@@ -17,7 +18,10 @@ export type Grounding = { id: string; name: string; svgText: string; pngDataUrl:
 
 /** The property axes that configure a generation. */
 export type Subject = 'illustration' | 'screen'
-export type Kind = 'entry' | 'loop'
+/** intro-loop (v1.2, the companion pattern): an entrance that settles into an
+ *  endless idle — the scene carries `intro`/`loop` markers; players run the
+ *  intro once, then cycle the loop segment. */
+export type Kind = 'entry' | 'loop' | 'intro-loop'
 
 type GenerateState = {
   /** Whether the generate lane is the active surface (the default landing). */
@@ -48,6 +52,11 @@ type GenerateState = {
   skeleton: Skeleton | null
   /** Derived controls manifest (duration, per-layer visibility…). */
   controls: ControlManifest | null
+  /** The agent's RAW controls.json for the scene — the slot specs (labels,
+   *  autoFit padding/min/max) live here and can't be re-derived from the doc.
+   *  Feeds slot metas and the localized web pack. */
+  agentControlsJson: string | null
+  setAgentControlsJson: (json: string | null) => void
   /** The creative CAST — the curated layer list shown in the Layers panel and
    *  addressed by controls/quick-edits. Derived ONCE at generation and then
    *  kept stable: control tweaks (incl. "hold still") never mutate it; only a
@@ -93,12 +102,27 @@ type GenerateState = {
   /** Reset status to idle without clearing the existing result (e.g. after abort). */
   resetStatus: () => void
   clearResult: () => void
+  /** Open a project whose scene is still being authored: adopt its setup and
+   *  clear any previously-loaded result, so the canvas can't keep showing the
+   *  LAST project's animation while this one is still building. */
+  openPendingJob: (job: {
+    prompt: string
+    subject: Subject
+    kind: Kind
+    groundings?: Grounding[]
+    stage: string | null
+    error: string | null
+  }) => void
   /** Restore a saved project into the active generate lane. */
   loadProject: (data: {
     prompt: string
     subject?: Subject
+    /** The project's own source artworks — restored into the composer so Edit
+     *  setup and Regenerate operate on THIS project's files. */
+    groundings?: Grounding[]
     lottieJson: string
     controls: ControlManifest | null
+    agentControlsJson?: string | null
     skeleton: Skeleton | null
     cast: CastMember[]
     layerLabels: Record<string, string>
@@ -110,6 +134,16 @@ type GenerateState = {
 /**
  * State for the generate lane — the single studio-driven surface.
  */
+/** Everything scene-shaped, reset to empty. One list, spread wherever a view
+ *  leaves the current scene behind (clear, open-pending, load) — a new scene
+ *  field lands here once instead of being hand-threaded into each literal. */
+const SCENE_RESET = {
+  lottieJson: null, resultSignature: null, resultKind: null,
+  project: null, skeleton: null, controls: null, agentControlsJson: null,
+  cast: [], historyOpen: false, layerLabels: {}, slotOverrides: {},
+  selectedLayer: null,
+} satisfies Partial<GenerateState>
+
 export const useGenerateStore = create<GenerateState>((set) => ({
   active: true,
   subject: 'illustration',
@@ -123,6 +157,8 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   selectedLayer: null,
   skeleton: null,
   controls: null,
+  agentControlsJson: null,
+  setAgentControlsJson: (agentControlsJson) => set({ agentControlsJson }),
   cast: [],
   historyOpen: false,
   layerLabels: {},
@@ -206,11 +242,26 @@ export const useGenerateStore = create<GenerateState>((set) => ({
       // The attachment belongs to the work being cleared — a fresh start
       // (home, Clear, deleting the open project) must not keep it around.
       groundings: [],
-      lottieJson: null, resultSignature: null, resultKind: null,
-      project: null, skeleton: null, controls: null, cast: [], historyOpen: false, layerLabels: {}, slotOverrides: {},
-      selectedLayer: null, status: 'idle', stage: null, error: null,
+      ...SCENE_RESET,
+      status: 'idle', stage: null, error: null,
     })
   },
+  openPendingJob: (job) => {
+    useStudioFeed.getState().clear()
+    set({
+      prompt: job.prompt,
+      subject: job.subject,
+      kind: job.kind,
+      groundings: job.groundings ?? [],
+      // Everything scene-shaped is cleared: a build in progress has no result,
+      // and showing the previous project's would be a lie.
+      ...SCENE_RESET,
+      status: job.error ? 'error' : 'generating',
+      stage: job.stage,
+      error: job.error,
+    })
+  },
+
   loadProject: (data) => {
     // Opening a saved project shows no live feed — drop any residual activity
     // from an earlier in-session generation.
@@ -258,8 +309,13 @@ export const useGenerateStore = create<GenerateState>((set) => ({
       // Kind follows the result's kind (a Loop stays Loop), not the default.
       subject: data.subject ?? 'illustration',
       kind: data.resultKind ?? 'entry',
+      // THIS project's artworks, never the session's leftovers — a stale
+      // attachment here wouldn't just mislabel Edit setup, Regenerate would
+      // silently build from the wrong file. Legacy saves carry none.
+      groundings: data.groundings ?? [],
       lottieJson: data.lottieJson,
       controls,
+      agentControlsJson: data.agentControlsJson ?? null,
       skeleton: data.skeleton,
       cast,
       historyOpen: false,
@@ -281,17 +337,44 @@ export const useGenerateStore = create<GenerateState>((set) => ({
  *  was derived from. Shared by the live-preview hook and the imperative export
  *  getter. Returns the raw doc untouched when nothing is overridden. */
 function bakeFrom(lottieJson: string | null, controls: ControlManifest | null, slotOverrides: Record<string, unknown>): string | null {
-  if (!lottieJson || !controls || !Object.keys(slotOverrides).length) return lottieJson
+  if (!lottieJson || !Object.keys(slotOverrides).length) return lottieJson
+  // Single-entry memo on input identity: the store replaces these objects on
+  // every change, so identity equality is exact — and one memo makes a second
+  // mounted useBakedLottieJson (the transport's loop tick needs one) free
+  // instead of doubling a parse+rewrite+stringify of a hundreds-of-KB doc.
+  const hit = bakeMemo
+  if (hit && hit.lottieJson === lottieJson && hit.controls === controls && hit.slotOverrides === slotOverrides) {
+    return hit.result
+  }
+  let result: string | null
   try {
     const values: Record<string, number> = {}
     for (const [id, v] of Object.entries(slotOverrides)) {
       if (typeof v === 'number') values[id] = v
     }
-    return JSON.stringify(applyControlValues(JSON.parse(lottieJson), controls, values))
+    const doc = controls
+      ? applyControlValues(JSON.parse(lottieJson), controls, values)
+      : (JSON.parse(lottieJson) as ReturnType<typeof JSON.parse>)
+    // Content slots (companion pattern): overrides under `slot:` REWRITE the
+    // slot's default in the document itself, so the same bake feeds the
+    // preview, every export, and the saved project — what a teammate sees
+    // trying a locale string is exactly what ships.
+    for (const [id, v] of Object.entries(slotOverrides)) {
+      if (id.startsWith(SLOT_OVERRIDE_PREFIX)) applySlotOverride(doc, id.slice(SLOT_OVERRIDE_PREFIX.length), v)
+    }
+    result = JSON.stringify(doc)
   } catch {
-    return lottieJson
+    result = lottieJson
   }
+  bakeMemo = { lottieJson, controls, slotOverrides, result }
+  return result
 }
+let bakeMemo: {
+  lottieJson: string
+  controls: ControlManifest | null
+  slotOverrides: Record<string, unknown>
+  result: string | null
+} | null = null
 
 /** Reactive baked doc for the live preview — recomputes only when the doc,
  *  controls, or overrides change. */

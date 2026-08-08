@@ -1,4 +1,5 @@
 import { createLottieFrameSource } from './lottieFrames'
+import { loopFramePlan } from '@/engine/lottie/markers'
 
 const SCALE = 2          // render at 2× for crisp video
 const MAX_DIM = 1440     // but cap the long edge so big screens don't explode
@@ -15,6 +16,9 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 export type WebmOptions = {
   loop?: boolean
+  /** Loop-segment start (intro-loop marker contract): the intro records once,
+   *  then the extra passes cycle [loopStart..total]. */
+  loopStart?: number
   /** Solid matte painted behind each frame. Defaults to white (WebM alpha is
    *  unreliable across browsers, so opaque is the safe default). Pass a CSS
    *  color to match a specific surface — e.g. the splash background per theme.
@@ -63,8 +67,12 @@ export async function exportLottieWebm(
 
     // Loop kind: record two passes so the WebM plays a couple of cycles before
     // the player's own loop kicks in. Entry kind: a single pass that holds.
+    // Intro-loop: the first pass carries intro + one idle cycle, the extra
+    // passes replay ONLY the idle segment — otherwise the entrance repeats
+    // mid-file and the mascot stops being continuously alive.
+    const { loopSpan, frameAt } = loopFramePlan(totalFrames, opts)
     const passes = opts.loop ? 2 : 1
-    const totalPaced = passes * totalFrames
+    const totalPaced = totalFrames + (passes - 1) * loopSpan
     // Pace against an absolute start-time deadline (not a per-frame remainder)
     // so per-iteration overhead (render, sleep/timer slop) doesn't accumulate —
     // a few ms of drift per frame otherwise stretches the recorded duration
@@ -72,30 +80,28 @@ export async function exportLottieWebm(
     const recordingStart = performance.now()
     recorder.start()
 
-    for (let pass = 0; pass < passes; pass++) {
-      for (let frame = 0; frame < totalFrames; frame++) {
-        // User cancelled: stop the recorder and bail (src disposed in finally).
-        if (opts.signal?.aborted) {
-          try { recorder.stop() } catch { /* already inactive */ }
-          throw new DOMException('Export cancelled', 'AbortError')
-        }
-        renderFrame(frame)
-        if (background) {
-          ctx.fillStyle = background
-          ctx.fillRect(0, 0, w, h)
-        } else {
-          ctx.clearRect(0, 0, w, h)
-        }
-        ctx.drawImage(glCanvas, 0, 0)
-        track.requestFrame()
-
-        const paced = pass * totalFrames + frame + 1
-        onProgress?.(paced / totalPaced)
-
-        const deadline = recordingStart + paced * frameInterval
-        const remaining = deadline - performance.now()
-        if (remaining > 1) await sleep(remaining)
+    for (let i = 0; i < totalPaced; i++) {
+      // User cancelled: stop the recorder and bail (src disposed in finally).
+      if (opts.signal?.aborted) {
+        try { recorder.stop() } catch { /* already inactive */ }
+        throw new DOMException('Export cancelled', 'AbortError')
       }
+      renderFrame(frameAt(i))
+      if (background) {
+        ctx.fillStyle = background
+        ctx.fillRect(0, 0, w, h)
+      } else {
+        ctx.clearRect(0, 0, w, h)
+      }
+      ctx.drawImage(glCanvas, 0, 0)
+      track.requestFrame()
+
+      const paced = i + 1
+      onProgress?.(paced / totalPaced)
+
+      const deadline = recordingStart + paced * frameInterval
+      const remaining = deadline - performance.now()
+      if (remaining > 1) await sleep(remaining)
     }
 
     return await new Promise<Blob>((resolve, reject) => {

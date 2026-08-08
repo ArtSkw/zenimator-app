@@ -87,6 +87,11 @@ export type AnyLayer = ImageLayer | ShapeLayer | NullLayer
 export type LottieDoc = {
   v: string; fr: number; ip: 0; op: number; w: number; h: number
   assets: ImageAsset[]; layers: AnyLayer[]
+  /** Segment anchors (intro-loop kind): `intro`/`loop` per the marker contract. */
+  markers?: { tm: number; cm?: string; dr?: number }[]
+  /** Content slots (companion pattern) — named values properties reference via
+   *  `sid`; the default is the design value, overrides are localization. */
+  slots?: Record<string, { p?: unknown }>
 }
 
 // ── Easing: named keys → cubic-bezier control points ─────────────────────────
