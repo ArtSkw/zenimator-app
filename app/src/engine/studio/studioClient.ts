@@ -395,15 +395,20 @@ export function studioEdit(
 }
 
 /** Font bytes by family, from the engine's /font endpoint — cached for the
- *  session (fonts don't change under a running app; a miss is also cached so
- *  a legacy scene doesn't re-probe every reparse). */
+ *  session (fonts don't change under a running app). A 404 is cached too, so
+ *  a legacy scene doesn't re-probe every reparse — but a NETWORK failure is
+ *  not: an engine that was down when the app loaded must not blank every
+ *  text layer for the rest of the session once it comes back. */
 const fontCache = new Map<string, Promise<ArrayBuffer | null>>()
 export function studioFontBytes(family: string): Promise<ArrayBuffer | null> {
   let hit = fontCache.get(family)
   if (!hit) {
     hit = fetch(`${baseUrl()}/font/${encodeURIComponent(family)}`, { headers: authHeaders() })
       .then((r) => (r.ok ? r.arrayBuffer() : null))
-      .catch(() => null)
+      .catch(() => {
+        fontCache.delete(family) // unreachable engine — retry on next use
+        return null
+      })
     fontCache.set(family, hit)
   }
   return hit
