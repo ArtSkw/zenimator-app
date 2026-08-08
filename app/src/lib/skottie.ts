@@ -67,6 +67,11 @@ export class SkottiePlayer {
   private dirty = true
   /** When false the animation plays once and holds the last frame (entry kind). */
   private loop = true
+  /** Loop-segment start (intro-loop kind): after the first full pass the
+   *  playhead cycles [loopStart..total] instead of [0..total], so the intro
+   *  plays once and the idle repeats — the marker contract every other
+   *  runtime honors via playSegments/markers. 0 = whole-comp loop. */
+  private loopStart = 0
   private readonly fps: number
   private readonly totalFrames: number
 
@@ -102,13 +107,25 @@ export class SkottiePlayer {
     canvas: HTMLCanvasElement,
     lottieJson: string,
     callbacks?: SkottieCallbacks,
-    opts?: { loop?: boolean },
+    opts?: {
+      loop?: boolean
+      /** Frame where the loop segment begins (intro-loop marker contract). */
+      loopStart?: number
+      /** Font bytes keyed by family name — Skottie resolves each `ty:5` text
+       *  layer against these; without its font a text layer renders blank. */
+      assets?: Record<string, ArrayBuffer>
+    },
   ): Promise<SkottiePlayer> {
     const ck = await loadCanvasKit()
-    const animation = ck.MakeManagedAnimation(lottieJson)
+    const animation = opts?.assets && Object.keys(opts.assets).length
+      ? ck.MakeManagedAnimation(lottieJson, opts.assets)
+      : ck.MakeManagedAnimation(lottieJson)
     if (!animation) throw new Error('CanvasKit could not parse the Lottie file.')
     const player = new SkottiePlayer(ck, canvas, animation, callbacks)
     if (opts?.loop === false) player.loop = false
+    if (opts?.loopStart && opts.loopStart > 0 && opts.loopStart < player.totalFrames) {
+      player.loopStart = opts.loopStart
+    }
     return player
   }
 
@@ -273,7 +290,10 @@ export class SkottiePlayer {
         this.currentFrame += dt * this.fps
         if (this.currentFrame >= this.totalFrames) {
           if (this.loop) {
-            this.currentFrame %= this.totalFrames
+            // Wrap into the loop segment — [loopStart..total] once an intro
+            // has played; loopStart 0 is the whole-comp loop.
+            const span = this.totalFrames - this.loopStart
+            this.currentFrame = this.loopStart + ((this.currentFrame - this.loopStart) % span)
           } else {
             // Entry kind: hold the final frame and stop advancing.
             this.currentFrame = this.totalFrames

@@ -32,6 +32,45 @@ provider APIs vary per player) — the family name inside \`animation.json\`
 > the fonts update, or ask the design team for a vector-text variant.
 `
 
+  const segmentSection = meta.loopStart == null
+    ? ''
+    : `
+## Intro + Loop playback
+
+This scene is an ENTRANCE that settles into an ENDLESS IDLE. The boundary is
+declared with standard Lottie markers (\`intro\`, \`loop\`; the idle begins at
+frame ${meta.loopStart}). Play the intro once, then cycle the loop segment:
+
+- **lottie-web**: \`anim.playSegments([[0, ${meta.loopStart}], [${meta.loopStart}, ${meta.frames}]], true)\`
+- **dotlottie players**: play segment \`"intro"\` once, then loop segment \`"loop"\`
+- **iOS (lottie-ios)**: \`play(fromMarker: "intro", toMarker: "loop")\` then \`play(marker: "loop", loopMode: .loop)\`
+- **Android**: \`setMinAndMaxFrame(0, ${meta.loopStart})\` for the first pass, then \`setMinAndMaxFrame(${meta.loopStart}, ${meta.frames})\` with \`repeatCount = INFINITE\`
+
+Letting the whole file loop instead replays the entrance every cycle — it
+works, but it isn't the design.
+`
+
+  const localizationSection = meta.slotIds.length === 0
+    ? ''
+    : `
+## Localization (editable text)
+
+The scene's strings are REAL text layers bound to Lottie slots
+(${meta.slotIds.map((s) => `\`${s}\``).join(', ')}) — re-word them in code, don't re-export
+per language:
+
+- **dotlottie players**: theming/slots API — override the slot by id.
+- **lottie-web (≥5.12)**: pass \`slots\` in the animation config, or
+  \`anim.updateDocumentData\` on the text layer.
+- **iOS**: \`AnimationTextProvider\` keyed by the text layer's name.
+- **Android**: \`TextDelegate\` keyed by the text layer's name.
+
+If the scene declares a size slot with \`autoFit\` (see \`controls.json\` in
+ZENimator), size the bubble plate from the localized string: measure the text
+in the scene's font, add 2×padding, and write the result to the size slot —
+three lines in any runtime. Fonts for measuring ship in \`fonts/\`.
+`
+
   return `# ZENimator animation — ${def.label} pack
 
 Authored by the ZENimator studio engine and verified frame-by-frame on Skia
@@ -55,7 +94,7 @@ ${def.quickStart(ctx)}
 ## Alternative: ${def.alternativeLabel}
 
 ${def.alternative(ctx)}
-${fontsSection}
+${segmentSection}${localizationSection}${fontsSection}
 ## Rendering parity
 
 The animation was authored and verified on Skia. All dotlottie runtimes (web,

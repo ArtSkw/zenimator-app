@@ -585,6 +585,18 @@ export function applyControlValues(
   })
   doc.op = opFinal
 
+  // Markers are doc-level time anchors — the intro→loop boundary of a
+  // companion scene. They must ride every global retime, or the player keeps
+  // looping from the OLD frame number: the seam the agent verified lands
+  // mid-intro and the idle visibly pops every cycle.
+  if (globalF !== 1 && Array.isArray(doc.markers)) {
+    doc.markers = doc.markers.map((m) => ({
+      ...m,
+      tm: clamp(subFrame(m.tm * globalF), 0, opFinal),
+      ...(typeof m.dr === 'number' ? { dr: subFrame(m.dr * globalF) } : {}),
+    }))
+  }
+
   // Duration is a property of the WHOLE document, not just the layers the
   // controls address. Two lists get missed otherwise: the inert top level of a
   // nested scene (whose ip/op still gate playback — leave them and a longer

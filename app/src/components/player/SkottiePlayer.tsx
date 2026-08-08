@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { SkottiePlayer as SkottieEngine } from '@/lib/skottie'
+import { loopStartFrame } from '@/engine/lottie/markers'
+import { fontAssetsFor, sceneFontFamilies } from '@/engine/studio/studioClient'
 import type { SkottieControls } from '@/store/generatePlaybackStore'
 
 type Props = {
@@ -74,16 +76,30 @@ export function SkottiePlayer({
       engineRef.current?.resize(d.w, d.h)
     }
 
-    SkottieEngine.create(
-      canvas,
-      lottieJson,
-      {
-        onPlayStateChange: (p) => onPlayRef.current?.(p),
-        onFrame: (f, t) => onFrameRef.current?.(f, t),
-      },
-      { loop },
-    )
+    // Fonts before engine: a `ty:5` layer without its font renders blank, so
+    // the (cached) fetch is part of scene load, not an upgrade. Scenes with no
+    // fonts.list resolve to {} instantly. loopStart implements the intro-loop
+    // marker contract — intro plays once, the idle segment cycles. One parse
+    // feeds both — this effect re-runs on every baked-JSON change, so the
+    // redundant parses of a large doc were per-control-commit costs.
+    let doc: unknown = null
+    try {
+      doc = JSON.parse(lottieJson)
+    } catch { /* CanvasKit reports the malformed doc below */ }
+    fontAssetsFor(sceneFontFamilies(doc)).then((assets) => {
+      if (disposed) return null
+      return SkottieEngine.create(
+        canvas,
+        lottieJson,
+        {
+          onPlayStateChange: (p) => onPlayRef.current?.(p),
+          onFrame: (f, t) => onFrameRef.current?.(f, t),
+        },
+        { loop, loopStart: loopStartFrame(doc) ?? 0, assets },
+      )
+    })
       .then((engine) => {
+        if (!engine) return
         if (disposed) {
           engine.dispose()
           return

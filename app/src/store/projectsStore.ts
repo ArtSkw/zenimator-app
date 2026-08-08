@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware'
 import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval'
-import type { Kind, Subject } from './generateStore'
+import type { Kind, Subject, Grounding } from './generateStore'
 
 /**
  * IndexedDB-backed storage for the projects store. localStorage caps around
@@ -41,8 +41,16 @@ export type SavedProject = {
   /** The composer axes the scene was made with — restored so the setup
    *  reflects the project (e.g. a Loop stays Loop) instead of resetting. */
   subject?: Subject
+  /** The source artworks this project was generated FROM, in story order —
+   *  restored into the composer on load so Edit setup shows (and Regenerate
+   *  uses) THIS project's files, never whatever the session last attached.
+   *  Absent on legacy saves → the composer shows none. */
+  groundings?: Grounding[]
   lottieJson: string
   controls: ControlManifest | null
+  /** The agent's raw controls.json — slot autoFit specs (padding/min/max)
+   *  exist only here. Absent on legacy saves. */
+  agentControlsJson?: string | null
   /** LEGACY loads only — new studio saves write null. */
   skeleton: Skeleton | null
   /** The curated layer list, frozen at generation and kept stable across edits
@@ -68,8 +76,11 @@ export type SavedProject = {
 type ProjectsState = {
   projects: SavedProject[]
   activeProjectId: string | null
-  saveProject: (p: SavedProject) => void
-  updateProject: (id: string, patch: Partial<Pick<SavedProject, 'name' | 'lottieJson' | 'slotOverrides'>>) => void
+  /** `activate: false` saves WITHOUT stealing focus — a background run that
+   *  finishes while the user is reading another project must not yank their
+   *  view to the one that just landed. */
+  saveProject: (p: SavedProject, opts?: { activate?: boolean }) => void
+  updateProject: (id: string, patch: Partial<Pick<SavedProject, 'name' | 'lottieJson' | 'slotOverrides' | 'groundings'>>) => void
   deleteProject: (id: string) => void
   setActiveProjectId: (id: string | null) => void
 }
@@ -80,11 +91,14 @@ export const useProjectsStore = create<ProjectsState>()(
       projects: [],
       activeProjectId: null,
 
-      saveProject: (p) =>
+      saveProject: (p, opts) =>
         set((s) => {
           const filtered = s.projects.filter((x) => x.id !== p.id)
           // Keep the 10 most recent projects to stay within localStorage limits.
-          return { projects: [p, ...filtered].slice(0, 10), activeProjectId: p.id }
+          return {
+            projects: [p, ...filtered].slice(0, 10),
+            activeProjectId: opts?.activate === false ? s.activeProjectId : p.id,
+          }
         }),
 
       updateProject: (id, patch) =>

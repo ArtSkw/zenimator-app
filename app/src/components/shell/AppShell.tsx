@@ -24,8 +24,10 @@ export function AppShell() {
       useGenerateStore.getState().loadProject({
         prompt: project.prompt ?? '',
         subject: project.subject,
+        groundings: project.groundings,
         lottieJson: project.lottieJson,
         controls: project.controls,
+        agentControlsJson: project.agentControlsJson,
         skeleton: project.skeleton,
         cast: project.cast ?? [],
         layerLabels: project.layerLabels,

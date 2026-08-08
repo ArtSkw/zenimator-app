@@ -1,7 +1,7 @@
 import { useState, useLayoutEffect, useEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import {
-  Loader2, Wand2, X, Paperclip, CornerDownLeft, ChevronDown, ChevronUp, Info,
+  Loader2, Wand2, X, Paperclip, CornerDownLeft, ChevronDown, ChevronUp, Info, IterationCw,
   Image as ImageIcon, Monitor, LogIn, Repeat, Square, Crosshair, Sparkles,
   type LucideIcon,
 } from 'lucide-react'
@@ -20,13 +20,14 @@ import { useGeneratePlayback } from '@/store/generatePlaybackStore'
 import { useStudioFeed } from '@/store/studioFeedStore'
 import { useStudioEditBridge } from '@/store/studioEditBridge'
 import { useProjectsStore } from '@/store/projectsStore'
+import { usePendingJobs } from '@/store/pendingJobsStore'
 import { castFromControls, reconcileCast } from '@/engine/controls/cast'
 import { sceneLayers } from '@/engine/lottie/sceneRoot'
 import { rasterizeSvg } from '@/engine/detector/rasterize'
 import { sanitizeSvg } from '@/engine/detector/sanitizeSvg'
 import { humanizeLlmError } from '@/engine/llm/errors'
 import { deriveControls, parseLayerControlSpecs, INTENSITY_FEEL_PREFIX } from '@/engine/controls/deriveControls'
-import { studioCancel, studioGenerate, studioPropose, studioEdit, studioRevert, studioSlugFor, labelsFromDoc, studioFeatures, studioPreflight, studioTitle } from '@/engine/studio/studioClient'
+import { studioCancel, studioGenerate, studioPropose, studioEdit, studioRevert, studioSlugFor, labelsFromDoc, studioFeatures, studioPreflight, studioTitle, studioActivity, studioScene, studioSourceAssets } from '@/engine/studio/studioClient'
 import { useEngineConnect } from '@/store/engineConnectStore'
 import { HEARTBEAT_QUIET_MS, HEARTBEAT_TICK_MS, heartbeatLine } from '@/engine/studio/studioHeartbeat'
 
@@ -92,6 +93,99 @@ export function GenerateView() {
   const lastEventAt = useRef(0)
   const heartbeatTick = useRef(0)
   const markJobStart = () => { jobStartAt.current = Date.now(); lastEventAt.current = Date.now(); heartbeatTick.current = 0 }
+
+  // ── External engine activity ──────────────────────────────────────────
+  // Jobs can hit this project's scene from OUTSIDE the app — an agent
+  // session, a script, another client. Poll the engine's active-job list so
+  // that work is VISIBLE here (the canvas pill), and when it finishes, pull
+  // the fresh scene in automatically instead of showing a stale one.
+  const [engineJob, setEngineJob] = useState<{ slug: string; state: 'queued' | 'running' } | null>(null)
+
+  const refreshFromEngine = async (slug: string) => {
+    const proj = useProjectsStore.getState().projects.find((p) => p.studioSlug === slug)
+    if (!proj || useGenerateStore.getState().status !== 'done') return
+    const scene = await studioScene(slug)
+    if (!scene || scene.lottieJson === useGenerateStore.getState().lottieJson) return
+    try {
+      const doc = JSON.parse(scene.lottieJson)
+      const labels = labelsFromDoc(scene.lottieJson)
+      const effKind = proj.resultKind ?? kind
+      const newControls = deriveControls(doc, labels, parseLayerControlSpecs(scene.controlsJson ?? undefined), effKind !== 'loop')
+      // Same override-survival rule as a chat edit: keep what still targets
+      // a real control on the new result.
+      const kept = survivingOverrides(doc, newControls)
+      const nextCast = reconcileCast(proj.cast ?? [], doc, newControls, labels, { allowAdd: true })
+      setResult(scene.lottieJson, resultSignature ?? '', effKind, newControls, labels, kept)
+      useGenerateStore.getState().setAgentControlsJson(scene.controlsJson ?? proj.agentControlsJson ?? null)
+      setCast(nextCast)
+      saveProject({
+        ...proj, lottieJson: scene.lottieJson, controls: newControls, cast: nextCast,
+        layerLabels: labels, slotOverrides: kept,
+        agentControlsJson: scene.controlsJson ?? proj.agentControlsJson ?? null, sessionAt: Date.now(),
+      })
+      toast.success('Scene updated by the engine', { description: 'An external edit just finished — this is the fresh result.' })
+    } catch { /* malformed fetch — keep the current scene */ }
+  }
+
+  useEffect(() => {
+    const slug = activeProject?.studioSlug
+    // While THIS app runs the job, its own stream owns progress and refresh.
+    // Stale pill state from a previous slug is render-gated, never shown.
+    if (!slug || status !== 'done' || applying) return
+    let alive = true
+    // Edge detection lives with the interval that produces it — the effect
+    // owns the poll's whole lifetime, so no ref mirror of the state is needed.
+    let prev: { slug: string; state: 'queued' | 'running' } | null = null
+    const tick = async () => {
+      if (document.visibilityState === 'hidden') return
+      const jobs = await studioActivity()
+      if (!alive) return
+      const mine = jobs.find((j) => j.slug === slug)
+      const next = mine ? { slug, state: mine.state } : null
+      const wasRunning = prev?.slug === slug
+      prev = next
+      setEngineJob(next)
+      // Falling edge FOR THIS SLUG → the external job finished; pull the result.
+      if (wasRunning && next == null) void refreshFromEngine(slug)
+    }
+    void tick()
+    const iv = setInterval(() => { void tick() }, 4000)
+    return () => { alive = false; clearInterval(iv) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProject?.studioSlug, status, applying])
+
+  // ── Recover lost source artwork ───────────────────────────────────────
+  // A finished project with no attachment can't be regenerated (the button
+  // needs artwork), which strands it. The ENGINE still has the SVGs it built
+  // from, so pull them back once per project rather than making the user
+  // re-attach files by hand.
+  const healedRef = useRef<string | null>(null)
+  useEffect(() => {
+    const proj = activeProject
+    if (!proj?.studioSlug || !proj.lottieJson) return
+    if (proj.groundings?.length || healedRef.current === proj.id) return
+    healedRef.current = proj.id
+    let alive = true
+    void (async () => {
+      const svgs = await studioSourceAssets(proj.studioSlug!)
+      if (!alive || !svgs.length) return
+      const restored = await Promise.all(svgs.map(async (s) => ({
+        id: crypto.randomUUID(),
+        name: s.name,
+        svgText: s.svg,
+        pngDataUrl: await rasterizeSvg(s.svg).catch(() => ''),
+      })))
+      // Only adopt them if the user is still on this project and hasn't
+      // attached anything since.
+      if (!alive) return
+      if (useProjectsStore.getState().activeProjectId !== proj.id) return
+      if (useGenerateStore.getState().groundings.length) return
+      setGroundings(restored)
+      updateProject(proj.id, { groundings: restored })
+    })()
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProject?.id, activeProject?.studioSlug, activeProject?.lottieJson])
 
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const changeRef = useRef<HTMLTextAreaElement>(null)
@@ -193,7 +287,19 @@ export function GenerateView() {
     setEditingSetup(false)
   }
 
-  const generating = status === 'generating'
+  // A run in flight for the OPEN project — set whether or not this view
+  // started it, so returning to a project mid-build shows its progress
+  // instead of an empty composer.
+  const activeJob = usePendingJobs((s) => (activeProjectId ? s.jobs[activeProjectId] : undefined))
+  const generating = status === 'generating' || (!!activeJob && !activeJob.error)
+  // When the view didn't start the run, its own store has no stage line —
+  // fall back to the one the job itself is carrying.
+  const stageLine = stage ?? activeJob?.stage ?? null
+  // An open project that has no scene YET (first build, or a failure worth
+  // reading) gets the building screen. A regenerate keeps showing its current
+  // animation — there's a result on screen, so replacing it with a skeleton
+  // would hide work the user still has.
+  const inProgress = !!activeJob && !activeJob.stopped && !lottieJson
 
   // Apply control overrides onto the base Lottie for live preview — each control
   // re-writes the keyframes it was derived from (duration, visibility…).
@@ -251,14 +357,20 @@ export function GenerateView() {
     if (slug) void studioCancel(slug)
   }
 
-  /** Sequence briefs need an engine that understands `svgs` — gate on the
-   *  /health features handshake with a clear message, never a silent failure
-   *  and never a quiet fall back to the first artwork alone. */
+  /** Optional capabilities this run depends on — gated on the /health features
+   *  handshake with a clear message, never a silent failure and never a quiet
+   *  downgrade (an old engine would degrade intro-loop to a plain entry, or
+   *  see only the first artwork of a sequence). */
   const multiSvgReady = async () => {
-    if (groundings.length < 2) return true
-    if ((await studioFeatures()).includes('multi-svg')) return true
-    toast.error('Engine update needed for multi-attach', {
-      description: 'Pull the latest engine and restart it (npm run agent), or attach a single SVG.',
+    const needed: Array<[feature: string, label: string]> = []
+    if (groundings.length >= 2) needed.push(['multi-svg', 'multi-attach'])
+    if (kind === 'intro-loop') needed.push(['intro-loop', 'Entry + Loop scenes'])
+    if (!needed.length) return true
+    const features = await studioFeatures()
+    const missing = needed.find(([f]) => !features.includes(f))
+    if (!missing) return true
+    toast.error(`Engine update needed for ${missing[1]}`, {
+      description: 'Pull the latest engine and restart it (npm run agent).',
     })
     return false
   }
@@ -278,28 +390,73 @@ export function GenerateView() {
     const status = await studioPreflight()
     if (status !== 'ok') { useEngineConnect.getState().show(status); return }
     if (!(await multiSvgReady())) return
+    // Identity snapshot at CLICK time: regenerating an open project evolves
+    // THAT project even if the user browses elsewhere during the run.
+    const openId = useProjectsStore.getState().activeProjectId
+    const evolving = useProjectsStore.getState().projects.find((p) => p.id === openId)
+    // A draft left behind by Stop is still this project: re-running must fill
+    // it in, not mint a second row beside it.
+    const stoppedDraftId = !evolving && openId && usePendingJobs.getState().jobs[openId]?.stopped
+      ? openId
+      : null
     const ac = new AbortController()
     abortRef.current = ac
     startGenerating()
     beginFeed()
     markJobStart()
+    const intent = prompt.trim()
+    // The project exists from this moment — named, listed and openable — so a
+    // multi-minute run behaves like a chat session instead of something that
+    // only materialises if you stay on the screen. `projectId` is captured
+    // HERE and everything below writes to it, whatever the user opens next.
+    const projectId = evolving?.id ?? stoppedDraftId ?? crypto.randomUUID()
+    const studioSlug = studioSlugFor(deriveProjectName(intent) || 'scene')
+    const pending = usePendingJobs.getState()
+    pending.start({
+      id: projectId,
+      name: evolving?.name ?? (deriveProjectName(intent) || 'Untitled'),
+      prompt: intent,
+      subject,
+      kind,
+      groundings: useGenerateStore.getState().groundings,
+      studioSlug,
+      startedAt: Date.now(),
+      stage: null,
+      error: null,
+      abort: () => ac.abort(),
+    })
+    useProjectsStore.getState().setActiveProjectId(projectId)
+    // Name polish runs against the placeholder too, so the row stops reading
+    // "Untitled" long before the scene lands.
+    if (!evolving) {
+      studioTitle(intent).then((title) => {
+        if (!title) return
+        usePendingJobs.getState().setName(projectId, title)
+        updateProject(projectId, { name: title })
+      })
+    }
+    /** True while the user is still looking at the project this job builds. */
+    const isForeground = () => useProjectsStore.getState().activeProjectId === projectId
+    /** Status line goes to the job row always, to this view only in front. */
+    const publishStage = (line: string) => {
+      usePendingJobs.getState().setStage(projectId, line)
+      if (isForeground()) setStage(line)
+    }
     try {
       const { createStudioStatusLine } = await import('@/engine/studio/studioStatus')
       const statusLine = createStudioStatusLine('generate')
-      const intent = prompt.trim()
-      const studioSlug = studioSlugFor(deriveProjectName(intent) || 'scene')
       activeSlugRef.current = studioSlug
       const done = await studioGenerate(
         { slug: studioSlug, ...svgPayload(), brief: intent, kind },
         (e) => {
           lastEventAt.current = Date.now() // resets the heartbeat's quiet timer
-          pushFeed(e)
+          if (isForeground()) pushFeed(e)
           if (e.type === 'queued' && e.position) {
-            setStage(`In line for a studio slot (position ${e.position})…`)
+            publishStage(`In line for a studio slot (position ${e.position})…`)
             return
           }
           const line = statusLine(e)
-          if (line) setStage(line)
+          if (line) publishStage(line)
         },
         ac.signal,
       )
@@ -313,49 +470,74 @@ export function GenerateView() {
       // The cast is curated ONCE here, from the freshly-authored motion, then
       // frozen for the life of the scene (edits reconcile, never rebuild).
       const freshCast = castFromControls(controls, labels)
-      setResult(json, signature, kind, controls, labels)
-      setCast(freshCast)
-      // A fresh, one-off id — NOT derived from `signature` — so generating
-      // again with the same setup (a very normal thing to do from a clean,
-      // idle state) always creates a new project instead of silently
-      // overwriting the last one that happened to share those settings.
-      const newId = crypto.randomUUID()
+      // Only paint the result if the user is still on this project — a run
+      // that finishes while they're browsing elsewhere must not yank the
+      // canvas out from under them. It lands in the project either way.
+      if (isForeground()) {
+        setResult(json, signature, kind, controls, labels)
+        // The raw controls.json travels with the scene — slot autoFit specs
+        // (padding/min/max) live only there.
+        useGenerateStore.getState().setAgentControlsJson(done.controlsJson ?? null)
+        setCast(freshCast)
+      }
+      // Regenerating an OPEN project EVOLVES it: same id, name, URL and
+      // creation date — the fresh take replaces the scene (the previous
+      // build stays on disk under its old workbench slug). Only a truly
+      // fresh start (empty state) mints a new project, so re-running a
+      // setup never floods the sidebar with near-duplicates the user then
+      // has to tell apart.
       saveProject({
-        id: newId,
-        name: deriveProjectName(intent) || 'Untitled',
+        id: projectId,
+        name: usePendingJobs.getState().jobs[projectId]?.name
+          ?? evolving?.name ?? (deriveProjectName(intent) || 'Untitled'),
         prompt: intent,
         subject,
+        // The artworks this scene was built FROM, taken from the JOB's
+        // click-time snapshot — the composer may hold something else by now
+        // (opening the in-flight project swaps its contents), and saving that
+        // would leave the finished project unable to regenerate.
+        groundings: usePendingJobs.getState().jobs[projectId]?.groundings
+          ?? useGenerateStore.getState().groundings,
         lottieJson: json,
         controls,
+        agentControlsJson: done.controlsJson ?? null,
         skeleton: null,
         cast: freshCast,
         layerLabels: labels,
         slotOverrides: {},
         resultKind: kind,
-        createdAt: Date.now(),
+        createdAt: evolving?.createdAt ?? Date.now(),
         studioSlug,
         sceneDoc: `docs/${studioSlug}-animation.md`,
         sessionAt: Date.now(),
-      })
-      // Background title polish — runs on the shared ENGINE (its subscription),
-      // so every teammate gets it with just the access token; no per-user key.
-      // Falls back silently to the heuristic name on any failure.
-      studioTitle(intent).then((title) => {
-        if (title) updateProject(newId, { name: title })
-      })
-      setEditingSetup(false)
+      }, { activate: isForeground() })
+      usePendingJobs.getState().finish(projectId)
+      if (isForeground()) setEditingSetup(false)
+      else {
+        toast.success('Scene ready', {
+          description: `"${useProjectsStore.getState().projects.find((p) => p.id === projectId)?.name ?? 'Your project'}" finished while you were elsewhere.`,
+        })
+      }
     } catch (err) {
       if (ac.signal.aborted || (err instanceof Error && err.name === 'StudioCancelled')) {
-        resetStatus()
+        // Stop marks the job as a draft and keeps it; only clear the row when
+        // the abort came from somewhere that didn't (e.g. a teardown).
+        if (!usePendingJobs.getState().jobs[projectId]?.stopped) {
+          usePendingJobs.getState().finish(projectId)
+        }
+        if (isForeground()) resetStatus()
         return
       }
       const msg = humanizeLlmError(err)
-      setError(msg)
+      // Keep the row so the failure is visible and readable later, rather than
+      // having the project silently vanish from the list.
+      usePendingJobs.getState().fail(projectId, msg)
+      if (isForeground()) setError(msg)
       toast.error('Generation failed', { description: msg })
     } finally {
       abortRef.current = null
       activeSlugRef.current = null
-      finishFeed()
+      if (isForeground()) finishFeed()
     }
   }
 
@@ -410,8 +592,9 @@ export function GenerateView() {
       // A revert restores a prior doc — reconcile the cast to match it.
       const nextCast = reconcileCast(proj.cast ?? cast, doc, newControls, labels, { allowAdd: true })
       setResult(json, resultSignature ?? '', resultKind ?? kind, newControls, labels, {})
+      useGenerateStore.getState().setAgentControlsJson(controlsJson ?? null)
       setCast(nextCast)
-      saveProject({ ...proj, lottieJson: json, controls: newControls, cast: nextCast, layerLabels: labels, slotOverrides: {}, sessionAt: Date.now() })
+      saveProject({ ...proj, lottieJson: json, controls: newControls, cast: nextCast, layerLabels: labels, slotOverrides: {}, agentControlsJson: controlsJson ?? null, sessionAt: Date.now() })
       toast.success(`Restored version ${version}`, { description: 'The previous state was saved too — revert is undoable.' })
     } catch (err) {
       toast.error('Could not revert', { description: err instanceof Error ? err.message : String(err) })
@@ -510,21 +693,15 @@ export function GenerateView() {
       // A surgical edit must not reset the user's OTHER adjustments: keep
       // every override whose control still exists on the new result (ids are
       // layer-name-based, so untouched layers keep their exact values).
-      const validIds = new Set(newControls.controls.map((c) => c.id))
-      const survivingNms = new Set(sceneLayers<{ nm: string }>(doc).map((l) => l.nm))
-      const keptOverrides = Object.fromEntries(
-        Object.entries(useGenerateStore.getState().slotOverrides).filter(
-          ([id]) =>
-            validIds.has(id) ||
-            // Intensity easing isn't a control id — keep it while its layer survives.
-            (id.startsWith(INTENSITY_FEEL_PREFIX) && survivingNms.has(id.slice(INTENSITY_FEEL_PREFIX.length))),
-        ),
-      )
+      const keptOverrides = survivingOverrides(doc, newControls)
       // Keep the layer list STABLE: reconcile against the new doc — prune only
       // layers the edit actually removed, add ones it introduced.
       const prevSelNm = selectedLayer != null ? cast[selectedLayer]?.nm : undefined
       const nextCast = reconcileCast(cast, doc, newControls, labels, { allowAdd: true })
       setResult(json, resultSignature ?? '', resultKind ?? kind, newControls, labels, keptOverrides)
+      useGenerateStore.getState().setAgentControlsJson(
+        done.controlsJson ?? useGenerateStore.getState().agentControlsJson,
+      )
       setCast(nextCast)
       // Preserve the selection across the edit when its layer survived.
       const nextIdx = prevSelNm ? nextCast.findIndex((m) => m.nm === prevSelNm) : -1
@@ -536,7 +713,9 @@ export function GenerateView() {
         name: proj.name,
         prompt: proj.prompt,
         subject: proj.subject,
+        groundings: proj.groundings, // an edit never changes the source artworks
         lottieJson: json,
+        agentControlsJson: done.controlsJson ?? proj.agentControlsJson ?? null,
         controls: newControls,
         skeleton: proj.skeleton ?? null,
         cast: nextCast,
@@ -566,7 +745,7 @@ export function GenerateView() {
   // Publish the revert entry point + the applying flag so the History panel
   // (right sidebar) can restore versions through the same store/save path.
   const handleRevertRef = useRef(handleRevert)
-  handleRevertRef.current = handleRevert
+  useEffect(() => { handleRevertRef.current = handleRevert })
   useEffect(() => {
     useStudioEditBridge.getState().setRevert(canChat ? (v) => handleRevertRef.current(v) : null)
     return () => useStudioEditBridge.getState().setRevert(null)
@@ -623,16 +802,99 @@ export function GenerateView() {
         onClick={(e) => { if (e.target === e.currentTarget) setSelectedLayer(null) }}
       >
         <div className="w-full max-w-xl my-auto">
-          {/* Setup — the full controls before the first result (and when
-              reopened to re-generate), otherwise a slim read-only summary so the
-              focus stays on refining the current animation. */}
-          {showFullSetup ? (
+          {/* ── Building ─────────────────────────────────────────────────
+              An open project whose scene doesn't exist yet gets its OWN
+              screen: its brief, a placeholder where the animation will be,
+              and the live status. Not the marketing headline (this isn't a
+              blank start) and not an empty composer (the setup is already
+              decided) — the two things that leaked through before. */}
+          {inProgress ? (
+            <div className="space-y-4 animate-in fade-in-0 duration-300">
+              {/* The brief reads as the composer does, and carries its own
+                  action bar — Stop belongs with the prompt it governs, in the
+                  same dark style as every other Stop in the app, not floating
+                  loose between the panels. */}
+              <div className="rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
+                <div className="px-5 pt-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {subject} · {kind === 'intro-loop' ? 'Entry + loop' : kind === 'loop' ? 'Loop' : 'Entry'}
+                  </p>
+                  <p className="mt-1.5 line-clamp-3 text-sm leading-relaxed text-foreground">{prompt}</p>
+                </div>
+                <div className="flex items-center gap-2.5 px-4 py-3">
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
+                    <span
+                      key={stageLine ?? 'busy'}
+                      className="truncate text-xs text-muted-foreground animate-in fade-in duration-300"
+                    >
+                      {activeJob?.error ?? stageLine ?? 'Setting up the studio…'}
+                    </span>
+                  </span>
+                  {activeJob?.error ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 shrink-0 rounded-full gap-1.5"
+                      onClick={() => {
+                        usePendingJobs.getState().finish(activeJob.id)
+                        useProjectsStore.getState().setActiveProjectId(null)
+                        resetStatus()
+                      }}
+                    >
+                      <X size={13} /> Dismiss
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="h-8 shrink-0 rounded-full gap-1.5 font-semibold"
+                      onClick={() => {
+                        if (!activeJob) return
+                        activeJob.abort()
+                        void studioCancel(activeSlugRef.current ?? activeJob.studioSlug)
+                        // Keep the project as an editable draft rather than
+                        // deleting it out from under the user.
+                        usePendingJobs.getState().stop(activeJob.id)
+                        resetStatus()
+                      }}
+                    >
+                      <Square size={13} /> Stop
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Activity sits between the brief and the canvas — the reading
+                  order of the work: what was asked, what's happening, where it
+                  will appear. */}
+              <StudioFeed />
+
+              {/* Where the animation will land. The shimmer is the only thing
+                  moving, so the eye rests here while the studio works. */}
+              <div
+                className="relative overflow-hidden rounded-2xl border border-border"
+                style={{ aspectRatio: '1 / 1', ...CHECKER_BG }}
+              >
+                <div className="absolute inset-0 animate-[skeleton-breathe_3.2s_ease-in-out_infinite] bg-card" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-8 text-center">
+                  <p className="text-sm text-muted-foreground">Your animation will appear here</p>
+                  {!activeJob?.error && (
+                    <p className="text-xs text-muted-foreground/70">
+                      This takes a few minutes — you can browse other projects meanwhile.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          ) : showFullSetup ? (
             <div className="relative space-y-4 animate-in fade-in-0 duration-300">
               {/* Greeting floats ABOVE the composer (absolute) so the composer
                   itself sits at the vertical center of the canvas; the feed
                   flows below. Only on the pre-result setup — the feed's small
                   cap keeps this from clipping the scroll during generation. */}
-              {!lottieJson && (
+              {!lottieJson && !activeJob && (
                 <div className="absolute bottom-full left-0 right-0 pb-6 text-center space-y-1.5">
                   <h2 className="font-heading text-2xl font-bold tracking-tight text-foreground">Bring the still. We’ll bring the motion.</h2>
                   <p className="text-sm text-muted-foreground">Attach your SVG, describe how it moves — the studio does the rest.</p>
@@ -727,6 +989,7 @@ export function GenerateView() {
                         options={[
                           { value: 'entry', label: 'Entry', icon: LogIn },
                           { value: 'loop', label: 'Loop', icon: Repeat },
+                          { value: 'intro-loop', label: 'Entry + Loop', icon: IterationCw },
                         ]}
                       />
                     </div>
@@ -740,10 +1003,10 @@ export function GenerateView() {
                         <span className="flex min-w-0 items-center gap-1.5">
                           <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
                           <span
-                            key={stage ?? 'busy'}
+                            key={stageLine ?? 'busy'}
                             className="truncate text-xs text-muted-foreground animate-in fade-in duration-300"
                           >
-                            {stage ?? (proposing ? (groundings.length >= 2 ? 'Reading your artworks…' : 'Reading your artwork…') : 'Generating…')}
+                            {stageLine ?? (proposing ? (groundings.length >= 2 ? 'Reading your artworks…' : 'Reading your artwork…') : 'Generating…')}
                           </span>
                         </span>
                         <Button
@@ -835,7 +1098,7 @@ export function GenerateView() {
                     <>
                       <SkottiePlayer
                         lottieJson={bakedLottieJson}
-                        loop={resultKind === 'loop'}
+                        loop={resultKind === 'loop' || resultKind === 'intro-loop'}
                         renderScale={renderScale}
                         onReady={(c, lp) => (c ? attach(c, lp) : detach())}
                         onPlayStateChange={setPlaying}
@@ -846,6 +1109,19 @@ export function GenerateView() {
                     </>
                   )}
                 </ZoomableStage>
+                {/* External engine work on THIS scene — visible even when the
+                    job wasn't started from this app. */}
+                {engineJob && engineJob.slug === activeProject?.studioSlug && (
+                  <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center">
+                    <div className="flex items-center gap-2 rounded-full border border-border bg-background/95 px-3.5 py-1.5 text-xs font-medium shadow-sm animate-in fade-in-0 slide-in-from-top-1 duration-300">
+                      <span className="relative flex size-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-foreground/40" />
+                        <span className="relative inline-flex size-2 rounded-full bg-foreground" />
+                      </span>
+                      {engineJob.state === 'queued' ? 'Engine job queued for this scene' : 'Engine is working on this scene…'}
+                    </div>
+                  </div>
+                )}
                 {canChat && activeProject?.studioSlug && (
                   <Tooltip>
                     <TooltipTrigger
@@ -965,10 +1241,14 @@ export function GenerateView() {
           )}
 
           {/* Studio activity — narration, tool lines, and the agent's own
-              verification frames; live during a job, reviewable after. */}
-          <div className="mt-4">
-            <StudioFeed />
-          </div>
+              verification frames; live during a job, reviewable after. The
+              building screen renders its own copy in reading order, so this
+              one stands down there to avoid two activity bars. */}
+          {!inProgress && (
+            <div className="mt-4">
+              <StudioFeed />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -976,7 +1256,27 @@ export function GenerateView() {
 }
 
 const SUBJECT_LABEL: Record<Subject, string> = { illustration: 'Illustration', screen: 'Screen' }
-const KIND_LABEL: Record<Kind, string> = { entry: 'Entry', loop: 'Loop' }
+const KIND_LABEL: Record<Kind, string> = { entry: 'Entry', loop: 'Loop', 'intro-loop': 'Entry + Loop' }
+
+/** The overrides that still target something real on a fresh doc: a control
+ *  id that survived, or an intensity-feel entry whose layer survived. ONE
+ *  survival rule, shared by chat edits and external-job refreshes — the two
+ *  paths that adopt a re-authored scene over live user adjustments. */
+function survivingOverrides(
+  doc: { layers?: { nm: string }[] },
+  newControls: { controls: Array<{ id: string }> },
+): Record<string, unknown> {
+  const validIds = new Set(newControls.controls.map((c) => c.id))
+  const survivingNms = new Set(sceneLayers<{ nm: string }>(doc).map((l) => l.nm))
+  return Object.fromEntries(
+    Object.entries(useGenerateStore.getState().slotOverrides).filter(
+      ([id]) =>
+        validIds.has(id) ||
+        // Intensity easing isn't a control id — keep it while its layer survives.
+        (id.startsWith(INTENSITY_FEEL_PREFIX) && survivingNms.has(id.slice(INTENSITY_FEEL_PREFIX.length))),
+    ),
+  )
+}
 
 
 /**
@@ -1003,6 +1303,11 @@ function deriveProjectName(prompt: string): string {
 
 /** Placeholder that reflects how the studio reasons about each subject + kind. */
 function placeholderFor(subject: Subject, kind: Kind): string {
+  if (kind === 'intro-loop') {
+    return subject === 'screen'
+      ? 'Describe the arrival, then the idle — e.g. "the toast slides in once, then its icon pulses forever".'
+      : 'Describe the arrival, then the idle — e.g. "the bubble pops in once, then the mascot breathes forever".'
+  }
   if (subject === 'screen') {
     return kind === 'loop'
       ? 'Describe the ambient screen motion — e.g. "subtle floating accents while the screen idles".'
