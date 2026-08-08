@@ -118,6 +118,14 @@ below.
   nested under the main rig so it inherits the primary motion. Parent the whole
   carried assembly (object plus the hand holding it) to this one null so it swings
   as a rigid unit.
+- Worn gear is not a satellite: suit pieces, helmet, visor shine, badges and
+  packs parent into the SAME rig null as the body — the ensemble drifts as one
+  mass, and rigid pieces keep a CONSTANT offset to the body across the whole
+  loop (render two idle frames and measure; only a named joint or soft part —
+  a strap, an antenna, fabric — may lag or swing). Never give suit parts the
+  independent micro-floats decorative satellites get: relative drift between
+  fixed parts reads as the character disassembling, not as floatiness
+  (motion-taste, "Worn gear is the wearer").
 - The "steady island": when one element must stay put while the rig moves,
   exclude it from the rig entirely (leave it unparented at its authored
   coordinates) rather than counter-animating it. Counter-animation must cancel the

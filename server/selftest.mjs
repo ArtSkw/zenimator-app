@@ -436,6 +436,14 @@ try {
         p.includes('PARENTED to the limb') && p.includes('own secondary motion'))
       check(`living-motion (${kind}): nothing in frame is inert`,
         p.includes('Nothing in frame is inert'))
+      // Worn gear must never detach: suit pieces given independent drifts made
+      // a spacesuit read as the character coming apart (reported 2026-08-08).
+      check(`living-motion (${kind}): assemblies stay whole — worn gear is the wearer`,
+        p.includes('Partition the artwork into ASSEMBLIES') &&
+        p.includes('CONSTANT offset') && p.includes('genuinely free elements'))
+      check(`living-motion (${kind}): distant backdrops hold still, parallax is derived`,
+        p.includes('Distant backdrops hold still') &&
+        p.includes('never self-translate') && p.includes("DERIVED from the subject"))
       check(`living-motion (${kind}): parts articulate, not just the rig`,
         p.includes('Articulate the PARTS') && p.includes('cardboard test'))
       check(`living-motion (${kind}): the body breathes`,

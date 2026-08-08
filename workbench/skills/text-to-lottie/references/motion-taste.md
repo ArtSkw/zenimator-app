@@ -8,7 +8,8 @@ Use this reference when choosing pacing, easings, staging, or animation style.
 - Timing Defaults
 - Easing Anchors
 - Fluidity — The Character-Animation Bar (incl. Living idles: articulation,
-  held objects, breathing bodies, amplitude audits, phase-locked effort)
+  held objects, worn assemblies, breathing bodies, amplitude audits,
+  phase-locked effort)
 - Choreography
 - Reveal Grammar
 - Chapterization And Transition Grammar
@@ -391,7 +392,29 @@ Four properties separate a living idle from a placed one:
   them a slow independent float on their own clock — different period from
   the hero, tiny amplitude, offset from each other so they never bob in
   unison. A satellite that only appears is decoration; one that drifts is
-  part of the world.
+  part of the world. BUT partition first: a satellite is a genuinely FREE
+  element. Parts of a worn or built-on assembly — a helmet ring, visor
+  shine, backpack panel, chest badge — are NOT satellites however separate
+  their layers look, and riding their parent already satisfies this rule
+  (measured: a spacesuit scene that gave each suit piece its own float read
+  as the character coming apart, not as zero gravity).
+- **Worn gear is the wearer — assemblies stay whole.** Suit, helmet, armor,
+  outfit: parent the whole ensemble to the SAME rig null as the body so it
+  travels as one mass, then articulate inside it only where a joint or soft
+  material justifies it (a strap dangles, an antenna lags, fabric ripples —
+  a visor does not slide across its helmet). Audit it as a fact, not a
+  feeling: render two idle frames and measure the offset between a point on
+  the gear and a point on the body — constant, or a named joint explains
+  why not. Floatiness comes from the ASSEMBLY's shared drift plus the
+  silhouette breath riding it, never from fixed parts wandering relative to
+  each other.
+- **Distant backdrops hold still.** The moon, the sun, stars, a skyline:
+  from a human viewpoint these do not visibly translate, so a self-propelled
+  drift on one reads as a bug, not as depth. Give them life IN PLACE —
+  twinkle on opacity in whole cycles, a slow glow — or, when the subject
+  itself drifts, a parallax counter-move explicitly derived from the
+  subject's track: opposite in direction, far slower, smaller amplitude, so
+  it reads as the observer moving, never the moon.
 - **The body always breathes.** Whatever the limbs are doing, the torso/mass
   keeps its own slow breath — a silhouette morph or a small scale swell —
   running independently of the action's beats. A character whose arms are
@@ -683,6 +706,7 @@ be false the moment anyone measured it.
 | 10 | The body breathes | continuous low-amplitude torso/mass cycle under whatever the limbs do | amplitude on the body track across the loop |
 | 11 | Effort is phase-locked | strain on the contraction, never on the release | RENDER the extreme frames and look; never reason about the sign convention |
 | 12 | No double-driven property | each property animated once down any parent chain | trace every animated property up through its parents |
+| 13 | Assemblies stay whole | rigid worn/built-on parts keep a constant offset to their wearer; independent drift only for genuinely free elements | render two idle frames; measure a gear-point↔body-point offset — identical, or a named joint/soft part explains why |
 
 Two failure modes this gate exists to catch, both observed in shipped scenes:
 

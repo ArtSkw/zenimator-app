@@ -72,6 +72,14 @@ not the amount of craft — a top-tier idle is small but DENSE:
   volume roughly conserved, the face patch rides the deforming mass, props
   flex along their length. A companion whose outline never changes reads as
   a moved puppet next to the Rive rigs it sits beside in the portal.
+- Partition before animating: the mascot plus everything it WEARS is one
+  assembly on one rig — a spacesuit's helmet, visor shine, packs and badges
+  drift with the body as one mass, never as separate floaters (motion-taste
+  "Worn gear is the wearer"; assemblies is a blocking gate in the Aliveness
+  Contract). Free satellites — thought-trail circles, stars, loose props —
+  get their own clocks; celestial backdrops (a moon, a sun) hold still and
+  twinkle in place, or counter-drift only as parallax DERIVED from the
+  mascot's own motion: opposite, far slower, smaller.
 - Match the idle to the scene's MOOD (motion-taste "Mood governs the
   system"). The relax archetype specifically: breath lives in the chest/
   belly MORPH, the body SWAYS slowly about its seat contact like a hammock
