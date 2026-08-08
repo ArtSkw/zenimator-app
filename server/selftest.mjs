@@ -86,7 +86,12 @@ chmodSync(join(binDir, 'claude'), 0o755)
 
 // Seed a dead session so the /edit fallback path is exercised.
 const sessionsFile = join(tmp, 'sessions.json')
-writeFileSync(sessionsFile, JSON.stringify({ 'selftest-e': { id: 'dead-session-id', updatedAt: Date.now() } }))
+writeFileSync(sessionsFile, JSON.stringify({
+  'selftest-e': { id: 'dead-session-id', updatedAt: Date.now() },
+  // …and one for the RESUME fallback: asking to continue a session that no
+  // longer exists must still deliver the scene, from the full brief.
+  'selftest-rz': { id: 'dead-session-id', updatedAt: Date.now() },
+}))
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -241,6 +246,7 @@ try {
       h.features.includes('intro-loop') && h.features.includes('text-slots'))
     check('health advertises job-visibility and an active array (idle = empty)',
       h.features.includes('job-visibility') && Array.isArray(h.active) && h.active.length === 0)
+    check('health advertises resume-generate (v1.2)', h.features.includes('resume-generate'))
   }
 
   // 7. Security posture: origin allowlist, content-type gate, host check
@@ -446,6 +452,56 @@ try {
       check(`living-motion (${kind}): mood governs the numbers`,
         p.includes('Mood governs the system'))
     }
+  }
+
+  // 1c-3. Resume a stopped generation (v1.2): continue the session instead of
+  // rebuilding from step one. What makes this safe is that the session id is
+  // recorded when the agent STARTS, so a run cancelled part-way still has one.
+  {
+    const body = { svg: '<svg/>', brief: 'a mascot hugs a stone', kind: 'loop' }
+    // First run establishes the session (the stub reports its own id).
+    const first = await stream('/generate', { slug: 'selftest-rs', ...body })
+    check('resume: the first run completes and banks a session', first.at(-1)?.type === 'done')
+
+    const again = await stream('/generate', { slug: 'selftest-rs', ...body, resume: true })
+    check('resume: the resumed run completes', again.at(-1)?.type === 'done')
+    check('resume: the user is told it is a continuation',
+      again.some((e) => e.type === 'status' && /Resuming where the studio left off/.test(e.text ?? '')))
+    const rPrompt = readFileSync(join(wb, 'assets', 'selftest-rs.prompt.txt'), 'utf8')
+    check('resume: prompt continues rather than restarting', rPrompt.startsWith('CONTINUE the selftest-rs scene'))
+    check('resume: does NOT restate the brief or the kind contract',
+      !rPrompt.includes('a mascot hugs a stone') && !rPrompt.includes('KIND:') && !rPrompt.includes('PROJECT SLUG:'))
+    check('resume: re-grounds in what is actually on disk before continuing',
+      rPrompt.includes('re-ground yourself in what actually exists on disk') &&
+      rPrompt.includes('scripts/build-selftest-rs.mjs') &&
+      rPrompt.includes('may have landed mid-write'))
+    check('resume: holds the SAME completion bar', rPrompt.includes('Aliveness Contract') &&
+      rPrompt.includes('SCENE_READY selftest-rs/scene-1'))
+    const rArgs = JSON.parse(readFileSync(join(wb, 'assets', 'selftest-rs.args.json'), 'utf8'))
+    check('resume: spawns with --resume on the banked session',
+      rArgs.includes('--resume') && rArgs[rArgs.indexOf('--resume') + 1] === 'stub-session-selftest-rs')
+
+    // Degrade 1 — nothing to resume: a normal generation, announced as such.
+    const cold = await stream('/generate', { slug: 'selftest-rc', ...body, resume: true })
+    check('resume: with no session it still builds the scene', cold.at(-1)?.type === 'done')
+    check('resume: and says it started fresh',
+      cold.some((e) => e.type === 'status' && /No earlier session to resume/.test(e.text ?? '')))
+    const cPrompt = readFileSync(join(wb, 'assets', 'selftest-rc.prompt.txt'), 'utf8')
+    check('resume: the cold run gets the FULL generate prompt',
+      cPrompt.includes('PROJECT SLUG: selftest-rc') && cPrompt.includes('a mascot hugs a stone'))
+
+    // Degrade 2 — the session is gone: retry once from the full brief rather
+    // than failing. (selftest-rz is seeded with a dead id above.)
+    const dead = await stream('/generate', { slug: 'selftest-rz', ...body, resume: true })
+    check('resume: a dead session still delivers the scene', dead.at(-1)?.type === 'done')
+    check('resume: the fallback is announced, not silent',
+      dead.some((e) => e.type === 'status' && /no longer available/.test(e.text ?? '')))
+    const zPrompt = readFileSync(join(wb, 'assets', 'selftest-rz.prompt.txt'), 'utf8')
+    check('resume: the retry rebuilds from the full brief',
+      zPrompt.includes('PROJECT SLUG: selftest-rz') && zPrompt.includes('a mascot hugs a stone'))
+    // The edit path's own fallback must be untouched by the generalization.
+    check('resume: generalizing the fallback left /edit re-seeding intact',
+      readFileSync(join(wb, 'assets', 'selftest-e.prompt.txt'), 'utf8').includes('original session is no longer available'))
   }
 
   // 1d. Font endpoint (v1.2): families resolve to assets/fonts, never to paths

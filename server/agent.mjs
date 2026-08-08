@@ -202,6 +202,34 @@ function generatePrompt(slug, brief, kind, assets = []) {
   )
 }
 
+/** Continuation prompt for a run the user STOPPED part-way (v1.2, additive).
+ *
+ *  Deliberately short: the brief, the kind contract, the craft rules and
+ *  whatever the agent had already worked out are all in the resumed session's
+ *  transcript, exactly as they are for a chat edit. Restating them would
+ *  compete with what it already decided — the only new information is that it
+ *  was interrupted, and that the interruption may have landed mid-write.
+ *
+ *  Re-grounding in the files FIRST is the load-bearing instruction: a SIGTERM
+ *  can leave a half-written build script or a scene that no longer parses, and
+ *  a resumed agent that trusts its memory of "what I just wrote" instead of
+ *  reading disk would build on top of a broken file. */
+const resumeGeneratePrompt = (slug) =>
+  `CONTINUE the ${slug} scene — your previous run on it was interrupted part-way by the user.\n\n` +
+  `Everything you had established (the brief, the artwork, the KIND contract, the craft rules, ` +
+  `your plan) is already in this session. Do not ask for it again and do not start over from a ` +
+  `blank page — pick the work back up where it stopped.\n\n` +
+  `FIRST, re-ground yourself in what actually exists on disk right now, because the interruption ` +
+  `may have landed mid-write and your memory of the last edit may not match the file:\n` +
+  `  - read scripts/build-${slug}.mjs if it exists (it may be partial or syntactically broken),\n` +
+  `  - check whether public/projects/${slug}/scene-1/lottie.json exists and still parses,\n` +
+  `  - re-run the build script and scripts/preview-scene.mjs, and LOOK at the render.\n` +
+  `Repair whatever the interruption left half-finished, then carry on from there.\n\n` +
+  `Finish to the SAME bar as an uninterrupted run — being resumed buys back the time already ` +
+  `spent, it does not lower the standard. The Aliveness Contract in references/motion-taste.md ` +
+  `is still a completion blocker, and you must READ your rendered preview before finishing.\n\n` +
+  `Finish with the line: SCENE_READY ${slug}/scene-1`
+
 function editPrompt(slug, instruction, anchor = {}) {
   const { frame, layer } = anchor
   // Anchoring lines come FIRST so the agent grounds itself in the exact moment
@@ -757,14 +785,17 @@ function runClaude({ job, prompt, resumeId, model, effort, send, end }) {
     }
 
     // Dead-session fallback: a --resume against an expired/foreign session id
-    // exits non-zero without producing a scene. Retry ONCE with a fresh
-    // session seeded from the scene's durable artifacts.
-    if (resumeId && code !== 0 && !sceneReady && !job.retried) {
+    // exits non-zero without producing a scene. Retry ONCE in a fresh session,
+    // using the prompt the caller supplied for exactly this case — an edit
+    // re-seeds from the scene's durable artifacts, a resumed generation
+    // rebuilds the scene from its full brief. Never silently succeed with
+    // nothing: the retry is announced so the user knows why it took longer.
+    if (resumeId && code !== 0 && !sceneReady && !job.retried && job.fallbackPrompt) {
       job.retried = true
       delete sessions[job.slug]
       saveSessions()
-      send({ type: 'status', text: 'Original session expired — reopening the scene from its build script…' })
-      runClaude({ job, prompt: seededEditPrompt(job.slug, job.instruction, job.anchor ?? {}), resumeId: null, model, effort, send, end })
+      send({ type: 'status', text: job.fallbackNote ?? 'Original session expired — starting a fresh one…' })
+      runClaude({ job, prompt: job.fallbackPrompt, resumeId: null, model, effort, send, end })
       return
     }
 
@@ -846,7 +877,10 @@ const readBody = (req) =>
 
 /** Submit a job and wire its stream to the response; handles busy slugs and
  *  client-disconnect cancellation. */
-function submitJob({ res, req, slug, kind, prompt, resumeId, model, effort, instruction, anchor, runner = runClaude }) {
+function submitJob({
+  res, req, slug, kind, prompt, resumeId, model, effort, instruction, anchor,
+  fallbackPrompt, fallbackNote, notice, runner = runClaude,
+}) {
   let job = null // assigned below; queued events fire first and carry their own jobId
   const send = (obj) => {
     if (res.writableEnded) return
@@ -874,6 +908,13 @@ function submitJob({ res, req, slug, kind, prompt, resumeId, model, effort, inst
   }
   job.instruction = instruction ?? null // kept for the dead-session fallback
   job.anchor = anchor ?? null // frame/layer, re-applied on the fallback prompt
+  // What to run instead if `--resume` finds no session (expired, pruned, or
+  // from another machine). Absent = no retry; the run reports the failure.
+  job.fallbackPrompt = fallbackPrompt ?? null
+  job.fallbackNote = fallbackNote ?? null
+  // Surfaced before the engine's own first status, so the user learns the run
+  // is a continuation (or that it quietly became a fresh start) up front.
+  if (notice) send({ type: 'status', text: notice })
   req.on('close', () => {
     if (jobs.get(slug) === job && !res.writableEnded) jobs.cancel(slug)
   })
@@ -971,7 +1012,7 @@ const server = createServer(async (req, res) => {
       // against an older engine.
       // `active` lists queued/running jobs by slug so ANY client can see work
       // on its scene — including jobs it didn't start (v1.2 job-visibility).
-      return res.end(JSON.stringify({ ok: Boolean(claudeVersion), claude: claudeVersion, jobs: jobs.counts(), active: jobs.active(), features: ['multi-svg', 'intro-loop', 'text-slots', 'job-visibility', 'source-assets'] }))
+      return res.end(JSON.stringify({ ok: Boolean(claudeVersion), claude: claudeVersion, jobs: jobs.counts(), active: jobs.active(), features: ['multi-svg', 'intro-loop', 'text-slots', 'job-visibility', 'source-assets', 'resume-generate'] }))
     }
 
     if (req.method === 'GET' && req.url?.startsWith('/scene/')) {
@@ -1084,17 +1125,36 @@ const server = createServer(async (req, res) => {
           res.write(JSON.stringify({ type: 'error', text: 'generate needs {slug, svg|svgs, brief, kind}' }) + '\n')
           return res.end()
         }
+        const freshPrompt = generatePrompt(
+          slug,
+          String(body.brief),
+          // Unknown kinds degrade to 'entry' — same posture as model/effort.
+          body.kind === 'loop' || body.kind === 'intro-loop' ? body.kind : 'entry',
+          assets,
+        )
+        // Resume (v1.2, additive): continue the session a stopped run left
+        // behind instead of rebuilding the scene from step one. The session id
+        // is recorded the moment the agent starts, so a run cancelled mid-way
+        // still has one — but a client may ask to resume a slug that never got
+        // that far, or whose session has since expired, so the flag degrades
+        // to a normal generation rather than failing.
+        const sessionId = body.resume === true ? sessions[slug]?.id ?? null : null
         submitJob({
           res, req, slug,
           kind: 'generate',
-          prompt: generatePrompt(
-            slug,
-            String(body.brief),
-            // Unknown kinds degrade to 'entry' — same posture as model/effort.
-            body.kind === 'loop' || body.kind === 'intro-loop' ? body.kind : 'entry',
-            assets,
-          ),
-          resumeId: null,
+          prompt: sessionId ? resumeGeneratePrompt(slug) : freshPrompt,
+          resumeId: sessionId,
+          // If the session turns out to be dead, the scene is still owed — fall
+          // back to building it from the full brief.
+          fallbackPrompt: sessionId ? freshPrompt : null,
+          fallbackNote: sessionId
+            ? 'That session is no longer available — building this scene from the brief instead…'
+            : null,
+          notice: sessionId
+            ? 'Resuming where the studio left off…'
+            : body.resume === true
+              ? 'No earlier session to resume — starting this scene fresh…'
+              : null,
           model: body.model,
           effort: body.effort,
         })
@@ -1114,6 +1174,9 @@ const server = createServer(async (req, res) => {
           kind: 'edit',
           prompt: editPrompt(slug, String(body.instruction), anchor),
           resumeId: sessions[slug]?.id ?? null,
+          // Session gone: reopen the scene from its build script + learnings doc.
+          fallbackPrompt: seededEditPrompt(slug, String(body.instruction), anchor),
+          fallbackNote: 'Original session expired — reopening the scene from its build script…',
           model: body.model,
           effort: body.effort,
           instruction: String(body.instruction),

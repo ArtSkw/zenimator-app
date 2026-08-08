@@ -15,7 +15,7 @@ and fields.
 | GET | `/controls/<slug>` | — | the scene's `controls.json` (404 `{}` if absent) — pairs with `/scene` for a full external refresh (v1.2, additive) |
 | GET | `/history/<slug>` | — | `{versions:[{v, at, note}]}` — edit snapshots, oldest first (v1.1) |
 | GET | `/dossier/<slug>` | — | `{doc, script, versions}` — learnings doc + build script + history (v1.1) |
-| POST | `/generate` | `{slug, svg, brief, kind, model?, effort?}` — or (v1.2, additive) `svgs: [{name, svg}, …]` in story order for sequence briefs; first file lands at `assets/<slug>.svg`, the rest at `<slug>-2.svg`…, and the prompt enumerates them | NDJSON event stream |
+| POST | `/generate` | `{slug, svg, brief, kind, model?, effort?, resume?}` — or (v1.2, additive) `svgs: [{name, svg}, …]` in story order for sequence briefs; first file lands at `assets/<slug>.svg`, the rest at `<slug>-2.svg`…, and the prompt enumerates them. `resume: true` (v1.2, additive, feature `resume-generate`) continues the session a stopped run left behind — see below | NDJSON event stream |
 | POST | `/propose` | `{slug, svg, model?, effort?}` — or (v1.2, additive) the same `svgs` array, in which case the proposal is ONE brief connecting all of them | NDJSON stream ending in a `proposal` event (v1.1). The brief is a structured document (opening · BEATS · FIDELITY MUSTS · ending · check line), not a paragraph — clients render it as-is into the composer |
 | POST | `/edit` | `{slug, instruction, frame?, layer?, model?, effort?}` | NDJSON event stream |
 | POST | `/revert` | `{slug, version}` | `{ok, lottieJson, versions, controlsJson?}` or `{ok:false, error}` (v1.1; `controlsJson` added v1.2) |
@@ -27,6 +27,23 @@ entrance that settles into an endless idle — the scene carries top-level Lotti
 `markers` named `intro` and `loop`, players run the intro once then cycle the
 loop segment; unknown kinds degrade to `entry`). Slugs are normalized
 server-side (lowercase, `[a-z0-9-]`, ≤48 chars).
+
+**Resume (v1.2, additive, feature `resume-generate`):** `POST /generate` with
+`resume: true` continues the Claude Code session a cancelled run left behind
+instead of rebuilding the scene from step one. The session id is recorded the
+moment the agent starts (not when it finishes), so a run stopped part-way still
+has one, and every file it wrote before the stop is still in the workbench. The
+prompt becomes a short continuation — the brief, kind contract and craft rules
+are already in the transcript — that first re-grounds the agent in what is
+actually on disk, since a cancel can land mid-write.
+
+Send the SAME `slug` as the stopped run (the session and the scene folder are
+both keyed by it) and the same `{svg|svgs, brief, kind}` payload; those stay
+required, because they are what the request falls back to. The flag **never
+fails the request**: with no session for the slug it runs a normal generation
+(`status`: "No earlier session to resume…"), and if the session turns out to be
+dead it retries once from the full brief ("That session is no longer
+available…"). Clients gate the affordance on the `resume-generate` feature.
 
 **Fonts (v1.2, additive):** `GET /font/<family>` serves
 `workbench/assets/fonts/<family>.ttf` (404 if absent; family allowlisted to

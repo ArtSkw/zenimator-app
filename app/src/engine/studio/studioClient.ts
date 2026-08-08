@@ -241,6 +241,11 @@ export function studioGenerate(
     svgs?: { name: string; svg: string }[]
     brief: string
     kind: 'entry' | 'loop' | 'intro-loop'
+    /** Continue the session a stopped run left behind instead of building the
+     *  scene from step one (v1.2 — gate on `resume-generate`). Send the SAME
+     *  slug as the stopped run; `brief`/`svg` stay required because they are
+     *  what the engine falls back to when no session survives. */
+    resume?: boolean
   },
   onEvent: (e: StudioEvent) => void,
   signal?: AbortSignal,
