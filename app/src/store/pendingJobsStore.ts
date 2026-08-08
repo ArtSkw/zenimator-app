@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { studioCancel } from '@/engine/studio/studioClient'
 import type { Kind, Subject, Grounding } from './generateStore'
 
 /**
@@ -78,4 +79,29 @@ export const usePendingJobs = create<PendingJobsState>((set) => {
 /** Pending rows for the sidebar, newest first. */
 export function pendingList(jobs: Record<string, PendingJob>): PendingJob[] {
   return Object.values(jobs).sort((a, b) => b.startedAt - a.startedAt)
+}
+
+/**
+ * Cancel a run, everywhere the same way: abort the stream, tell the engine to
+ * drop the job, and settle the row.
+ *
+ * Aborting alone would already end the engine's job (it cancels when the client
+ * disconnects), but the explicit `/cancel` is what makes that immediate and
+ * independent of stream teardown — and it was missing from one of the three
+ * hand-rolled copies this replaces.
+ *
+ * `keepDraft` is the difference between the two intents: STOP keeps the row as
+ * an editable draft the user can resume, while deleting it drops the row
+ * entirely.
+ */
+export function stopJob(id: string, { keepDraft, slug }: { keepDraft: boolean; slug?: string }): void {
+  const job = usePendingJobs.getState().jobs[id]
+  if (!job) return
+  if (!job.stopped && !job.error) {
+    job.abort()
+    // Prefer the slug the run is actually using; the job's own is the fallback.
+    void studioCancel(slug ?? job.studioSlug)
+  }
+  if (keepDraft) usePendingJobs.getState().stop(id)
+  else usePendingJobs.getState().finish(id)
 }

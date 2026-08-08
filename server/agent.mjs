@@ -790,12 +790,12 @@ function runClaude({ job, prompt, resumeId, model, effort, send, end }) {
     // re-seeds from the scene's durable artifacts, a resumed generation
     // rebuilds the scene from its full brief. Never silently succeed with
     // nothing: the retry is announced so the user knows why it took longer.
-    if (resumeId && code !== 0 && !sceneReady && !job.retried && job.fallbackPrompt) {
+    if (resumeId && code !== 0 && !sceneReady && !job.retried && job.fallback) {
       job.retried = true
       delete sessions[job.slug]
       saveSessions()
-      send({ type: 'status', text: job.fallbackNote ?? 'Original session expired — starting a fresh one…' })
-      runClaude({ job, prompt: job.fallbackPrompt, resumeId: null, model, effort, send, end })
+      send({ type: 'status', text: job.fallback.note ?? 'Original session expired — starting a fresh one…' })
+      runClaude({ job, prompt: job.fallback.prompt, resumeId: null, model, effort, send, end })
       return
     }
 
@@ -878,8 +878,8 @@ const readBody = (req) =>
 /** Submit a job and wire its stream to the response; handles busy slugs and
  *  client-disconnect cancellation. */
 function submitJob({
-  res, req, slug, kind, prompt, resumeId, model, effort, instruction, anchor,
-  fallbackPrompt, fallbackNote, notice, runner = runClaude,
+  res, req, slug, kind, prompt, resumeId, model, effort,
+  fallback, notice, runner = runClaude,
 }) {
   let job = null // assigned below; queued events fire first and carry their own jobId
   const send = (obj) => {
@@ -906,12 +906,10 @@ function submitJob({
     res.write(JSON.stringify({ type: 'error', text: `A job for “${slug}” is already running — wait for it or cancel it first.` }) + '\n')
     return res.end()
   }
-  job.instruction = instruction ?? null // kept for the dead-session fallback
-  job.anchor = anchor ?? null // frame/layer, re-applied on the fallback prompt
   // What to run instead if `--resume` finds no session (expired, pruned, or
-  // from another machine). Absent = no retry; the run reports the failure.
-  job.fallbackPrompt = fallbackPrompt ?? null
-  job.fallbackNote = fallbackNote ?? null
+  // from another machine): the prompt, and the line that explains the switch.
+  // Absent = no retry; the run reports the failure instead.
+  job.fallback = fallback ?? null
   // Surfaced before the engine's own first status, so the user learns the run
   // is a continuation (or that it quietly became a fresh start) up front.
   if (notice) send({ type: 'status', text: notice })
@@ -1146,9 +1144,8 @@ const server = createServer(async (req, res) => {
           resumeId: sessionId,
           // If the session turns out to be dead, the scene is still owed — fall
           // back to building it from the full brief.
-          fallbackPrompt: sessionId ? freshPrompt : null,
-          fallbackNote: sessionId
-            ? 'That session is no longer available — building this scene from the brief instead…'
+          fallback: sessionId
+            ? { prompt: freshPrompt, note: 'That session is no longer available — building this scene from the brief instead…' }
             : null,
           notice: sessionId
             ? 'Resuming where the studio left off…'
@@ -1175,12 +1172,12 @@ const server = createServer(async (req, res) => {
           prompt: editPrompt(slug, String(body.instruction), anchor),
           resumeId: sessions[slug]?.id ?? null,
           // Session gone: reopen the scene from its build script + learnings doc.
-          fallbackPrompt: seededEditPrompt(slug, String(body.instruction), anchor),
-          fallbackNote: 'Original session expired — reopening the scene from its build script…',
+          fallback: {
+            prompt: seededEditPrompt(slug, String(body.instruction), anchor),
+            note: 'Original session expired — reopening the scene from its build script…',
+          },
           model: body.model,
           effort: body.effort,
-          instruction: String(body.instruction),
-          anchor,
         })
       }
       return

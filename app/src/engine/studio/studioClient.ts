@@ -56,13 +56,7 @@ export class StudioCancelled extends Error {
 }
 
 export async function studioHealth(): Promise<boolean> {
-  try {
-    const r = await fetch(`${baseUrl()}/health`, { headers: authHeaders() })
-    const j = (await r.json()) as { ok?: boolean }
-    return Boolean(j.ok)
-  } catch {
-    return false
-  }
+  return Boolean((await healthPayload())?.ok)
 }
 
 export type EngineStatus = 'ok' | 'unauthorized' | 'unreachable'
@@ -70,16 +64,15 @@ export type EngineStatus = 'ok' | 'unauthorized' | 'unreachable'
 /** Preflight before a job: is the engine reachable AND does our token authenticate?
  *  /health returns the full payload (with `jobs`) only to an authenticated caller;
  *  a bare {ok:true} means reachable-but-unauthorized (missing/wrong token). Lets the
- *  UI gate a generation with a clear reason instead of a long, doomed run. */
-export async function studioPreflight(): Promise<EngineStatus> {
-  try {
-    const r = await fetch(`${baseUrl()}/health`, { headers: authHeaders() })
-    if (!r.ok) return 'unauthorized'
-    const j = (await r.json()) as { ok?: boolean; jobs?: unknown }
-    return j.jobs != null ? 'ok' : 'unauthorized'
-  } catch {
-    return 'unreachable'
-  }
+ *  UI gate a generation with a clear reason instead of a long, doomed run.
+ *
+ *  The advertised `features` come back on the SAME response: every gated action
+ *  preflights and then checks a capability, and those were two round trips to
+ *  one endpoint before the run could even start. */
+export async function studioPreflight(): Promise<{ status: EngineStatus; features: string[] }> {
+  const j = await healthPayload()
+  if (!j) return { status: 'unreachable', features: [] }
+  return { status: j.jobs != null ? 'ok' : 'unauthorized', features: j.features ?? [] }
 }
 
 /** Ask the ENGINE to name a project (3–5 words) from the prompt. Runs on the
@@ -259,13 +252,18 @@ export function studioGenerate(
  *  is nothing. */
 export type EngineJob = { slug: string; kind: string; state: 'queued' | 'running' }
 
-/** One fetch of /health as parsed JSON, or null on any failure — the shape
- *  every capability probe (`features`, `active`) destructures. Uncached by
+type HealthPayload = { ok?: boolean; jobs?: unknown; features?: string[]; active?: EngineJob[] }
+
+/** One fetch of /health as parsed JSON — the shape every probe (`ok`, `jobs`,
+ *  `features`, `active`) destructures. Null means UNREACHABLE; an empty object
+ *  means reachable but rejected (no token), which callers read as unauthorized
+ *  because none of the authenticated-only fields are present. Uncached by
  *  design: the engine can be upgraded and restarted mid-session. */
-async function healthPayload(): Promise<{ features?: string[]; active?: EngineJob[] } | null> {
+async function healthPayload(): Promise<HealthPayload | null> {
   try {
     const r = await fetch(`${baseUrl()}/health`, { headers: authHeaders() })
-    return (await r.json()) as { features?: string[]; active?: EngineJob[] }
+    if (!r.ok) return {}
+    return (await r.json()) as HealthPayload
   } catch {
     return null
   }
@@ -321,14 +319,11 @@ export async function studioSourceAssets(
   }
 }
 
+/** Capabilities the engine advertises, on their own. Prefer the `features`
+ *  that `studioPreflight()` already returns when a caller is about to
+ *  preflight anyway — that's one round trip instead of two. */
 export async function studioFeatures(): Promise<string[]> {
-  try {
-    const r = await fetch(`${baseUrl()}/health`, { headers: authHeaders() })
-    const j = (await r.json()) as { features?: string[] }
-    return Array.isArray(j.features) ? j.features : []
-  } catch {
-    return []
-  }
+  return (await healthPayload())?.features ?? []
 }
 
 /** Ask the agent to study the SVG and propose a brief. Streams progress like a
