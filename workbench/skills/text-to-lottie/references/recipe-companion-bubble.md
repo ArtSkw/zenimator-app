@@ -78,10 +78,14 @@ not the amount of craft — a top-tier idle is small but DENSE:
   "Worn gear is the wearer"; assemblies and contacts are blocking gates in
   the Aliveness Contract). Free satellites — thought-trail circles, stars —
   get their own clocks ONLY if they have clear air on all sides: anything
-  touching or tucked BEHIND the mascot is welded to it (same rig or same
-  driver — a contact edge must never slide, whatever the brief calls the
-  element). A mascot inside a helmet earns the two-tier float: shell gentle,
-  face/eyes on a nested null drifting a touch more inside it. Celestial
+  touching or tucked BEHIND the mascot is welded to it — welded means NO own
+  relative clock (same period at a different phase still slides), and suit
+  surface details (seams, hatches, badges, tick marks) are decals that move
+  only with the shell. A mascot inside a helmet earns the two-tier float:
+  shell gentle, the visible interior MASS (not just the eyes) on a nested
+  null drifting ≥ ~3px relative, matte-clipped by the opening
+  (`<host>__matte`) so it never crosses the helmet's lines — carve the
+  interior from the shell path if the source bakes them together. Celestial
   backdrops (a moon, a sun) twinkle in place, or counter-drift strictly as
   `−k ×` the mascot's own track (k ≈ 0.2–0.5) — never on their own clock.
 - Match the idle to the scene's MOOD (motion-taste "Mood governs the

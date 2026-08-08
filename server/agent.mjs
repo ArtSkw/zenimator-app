@@ -104,8 +104,15 @@ const slugify = (s) =>
  *  defect, and Motion Economy in motion-taste.md still governs. */
 const LIVING_MOTION_CONTRACT =
   `LIVING MOTION — completion blockers for EVERY scene, whatever the subject. The full ` +
-  `rules are in references/motion-taste.md under "The Aliveness Contract"; run that ` +
-  `checklist before finishing and report its results, per track, in your final message.\n` +
+  `rules are in references/motion-taste.md under "The Aliveness Contract". Re-read that ` +
+  `section IN THIS RUN — the gate list changes between runs — and report EVERY numbered ` +
+  `gate it currently contains with its MEASURED value, per track, in your final message; ` +
+  `a report missing a gate number that exists in the references is an incomplete run.\n` +
+  `A prior build script for the same or similar artwork — including one you wrote ` +
+  `yourself minutes ago — is a source of GEOMETRY only: never of rig topology, motion ` +
+  `constants, or its verification report. The references may have changed since it was ` +
+  `written (this is exactly how fixed defects return); re-derive the rig and every ` +
+  `constant from the CURRENT references and run the CURRENT gate list from scratch.\n` +
   `Every scene:\n` +
   `  - Nothing in frame is inert. Every element the artwork puts on stage — subject, ` +
   `held props, decorative satellites, background marks — either moves or gets a stated ` +
@@ -121,15 +128,25 @@ const LIVING_MOTION_CONTRACT =
   `giving fixed parts their own wander, which reads as the character coming apart.\n` +
   `  - Contact welds — occlusion is contact. Where the artwork shows elements touching, ` +
   `gripping, resting on, or tucked BEHIND the subject, they may not slide along that ` +
-  `contact edge: parent them into the assembly they touch, or drive them from the SAME ` +
-  `driver so the contact stays fixed while both breathe together. A brief calling ` +
+  `contact edge: parent them into the assembly they touch. Parenting alone is NOT a ` +
+  `weld if the part keeps its own relative clock — same period at a different PHASE is ` +
+  `a time-shifted copy, i.e. relative motion, and breaks the weld. Surface details ON ` +
+  `a shell — seam lines, panel lines, hatches, vents, badges, tick marks — are DECALS: ` +
+  `zero motion of their own, they move only because the shell moves. The joint/soft ` +
+  `exception requires a visible FREE END that dangles or protrudes (a strap, an ` +
+  `antenna, a cloth hem) — name the free end, or weld it rigid. A brief calling ` +
   `something a "floating prop" does not license breaking a visible contact — verify by ` +
   `rendering the motion extremes and checking every contact/occlusion edge for slide.\n` +
-  `  - An occupant may float INSIDE its shell. A creature inside a container — helmet, ` +
-  `suit, cockpit, window — earns a nested, slower, few-px drift of its own WITHIN the ` +
-  `container's bounds (face and eyes drifting gently inside the visor), while the ` +
-  `shell's pieces stay mutually rigid. That inside-drift is what reads as floating IN ` +
-  `the suit rather than being glued to it.\n` +
+  `  - An occupant may float INSIDE its shell — and it must READ. A creature inside a ` +
+  `container — helmet, suit, cockpit, window — earns a nested drift of its own WITHIN ` +
+  `the container: the occupant is the visible INTERIOR MASS (the head/body seen ` +
+  `through the visor), not just the eyes, its relative travel against the shell must ` +
+  `clear ~3px peak-to-peak or lag the shell's tilt by a visible phase, and it is ` +
+  `CLIPPED by a track matte of the container's opening so it never crosses the ` +
+  `container's border lines. If the interior mass is baked into the shell's path, ` +
+  `CARVE it: duplicate the opening path as the matte (the __matte host convention), ` +
+  `build the interior as its own layer drifting behind the rim. Shell pieces stay ` +
+  `mutually rigid throughout.\n` +
   `  - Distant backdrops hold still. Celestial and far-background elements — moon, sun, ` +
   `stars, a skyline — never self-translate; their life is opacity/glow (twinkle, in ` +
   `whole cycles) in place, or a parallax counter-drift explicitly DERIVED from the ` +

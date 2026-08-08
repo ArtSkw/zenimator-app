@@ -127,17 +127,25 @@ below.
   fixed parts reads as the character disassembling, not as floatiness
   (motion-taste, "Worn gear is the wearer").
 - Occupant-inside-shell (the Rive two-tier float): when the character sits
-  INSIDE a container (helmet, suit, cockpit), nest a second null under the
-  shell rig carrying the face/eyes/visible body, and give it its own small
-  drift — slower period than the shell, ~1–2 px, never reaching the
-  container's edge. Shell gentle, occupant slightly more: the relative
-  motion sells "floating in it". Keep the shell's pieces rigid to each other.
+  INSIDE a container (helmet, suit, cockpit), the occupant is the visible
+  INTERIOR MASS — the dark head/body seen through the opening — not just the
+  eyes. Construction: if the interior is baked into the shell's path, CARVE
+  it — duplicate the opening path, fill it as the interior mass on its own
+  layer, and matte-clip that layer with the opening (`<host>__matte`, the
+  established plumbing convention) so the mass can drift behind the rim
+  without ever crossing the container's lines. Nest it on its own null under
+  the shell rig: slower period than the shell, relative travel ≥ ~3px
+  peak-to-peak (or a visible phase lag behind the shell's tilt) — 1–2px
+  reads as glued. Shell gentle, occupant visibly more, mask absolute.
 - Contact welds: anything the artwork shows touching, gripped by, resting
-  on, or tucked BEHIND the character joins that assembly (or is driven by
-  the SAME driver, scaled) — a contact/occlusion edge must show zero
-  relative slide across the motion extremes. Brief labels like "floating
-  prop" never override a visible contact; free drift needs clear air on all
-  sides. Verify with rendered extremes, edge by edge.
+  on, or tucked BEHIND the character joins that assembly — with NO own
+  relative clock. Same period at a different phase is a time-shifted copy,
+  i.e. relative motion, and breaks the weld. Shell surface details (seam
+  lines, panel lines, hatches, vents, badges, tick marks) are DECALS: they
+  move only because the shell moves. The soft-part exception needs a visible
+  FREE END (strap, antenna, hem) — name it, or weld rigid. Brief labels like
+  "floating prop" never override a visible contact; free drift needs clear
+  air on all sides. Verify with rendered extremes, edge by edge.
 - The "steady island": when one element must stay put while the rig moves,
   exclude it from the rig entirely (leave it unparented at its authored
   coordinates) rather than counter-animating it. Counter-animation must cancel the

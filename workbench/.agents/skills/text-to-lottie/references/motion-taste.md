@@ -410,24 +410,33 @@ Four properties separate a living idle from a placed one:
   each other.
 - **An occupant may float INSIDE its shell — the Rive two-tier read.** A
   creature inside a container (helmet, suit, cockpit, porthole) earns a
-  nested drift of its own WITHIN the container: a second null under the
-  shell rig carrying the face/eyes/visible body, slower period than the
-  shell's, a couple of px of travel, never reaching the container's edge.
-  The shell moves gently as one; the occupant moves a touch MORE inside it —
-  that relative motion is what reads as floating IN the suit instead of
-  being glued to it. The shell's own pieces stay mutually rigid throughout.
+  nested drift of its own WITHIN the container — and it must READ. The
+  occupant is the visible INTERIOR MASS (the head/body seen through the
+  visor), not just the eyes (measured: an eyes-only occupant at 1.3px was
+  invisible — the mascot still read as glued to its suit). Its relative
+  travel against the shell must clear ~3px peak-to-peak or lag the shell's
+  tilt by a visible phase, and it is CLIPPED by a track matte of the
+  container's opening (`<host>__matte`, per the player-contract) so it never
+  crosses the container's border lines. If the interior mass is baked into
+  the shell's path, CARVE it: duplicate the opening path as the matte and
+  build the interior as its own layer drifting behind the rim. The shell's
+  own pieces stay mutually rigid throughout.
 - **Contact welds — occlusion is contact.** Where the artwork shows elements
   touching, gripping, resting on, or tucked BEHIND the subject, they must
   not slide along that contact edge: parent them into the assembly they
-  touch, or drive them from the SAME driver (scaled/phase-locked) so the
-  contact stays fixed while both breathe. A brief calling something a
-  "floating prop" does not license breaking a visible contact (measured: a
-  spacesuit scene whose tucked-behind frame and bead-cord rocked on their
-  own clocks read as the character disassembling at every edge they
-  crossed, even though every labeled suit part was correctly rigged).
-  Free-prop drift belongs only to elements with clear air on all sides.
-  Verify by rendering the motion extremes and inspecting every
-  contact/occlusion edge for slide.
+  touch. Parenting alone is NOT a weld if the part keeps its own relative
+  clock — the same period at a different PHASE is a time-shifted copy,
+  i.e. relative motion (measured twice: independent clocks in one run,
+  same-period-different-phase rocks in the next; both read as the character
+  disassembling at every edge they crossed). Surface details ON a shell —
+  seam lines, panel lines, hatches, vents, badges, tick marks — are DECALS:
+  zero motion of their own; they move only because the shell moves. The
+  joint/soft exception requires a visible FREE END that dangles or
+  protrudes (a strap, an antenna, a cloth hem) — name the free end, or weld
+  it rigid. A brief calling something a "floating prop" does not license
+  breaking a visible contact. Free-prop drift belongs only to elements with
+  clear air on all sides. Verify by rendering the motion extremes and
+  inspecting every contact/occlusion edge for slide.
 - **Distant backdrops hold still.** The moon, the sun, stars, a skyline:
   from a human viewpoint these do not visibly translate, so a self-propelled
   drift on one reads as a bug, not as depth. Give them life IN PLACE —
@@ -729,7 +738,8 @@ be false the moment anyone measured it.
 | 11 | Effort is phase-locked | strain on the contraction, never on the release | RENDER the extreme frames and look; never reason about the sign convention |
 | 12 | No double-driven property | each property animated once down any parent chain | trace every animated property up through its parents |
 | 13 | Assemblies stay whole | rigid worn/built-on parts keep a constant offset to their wearer; independent drift only for genuinely free elements | render two idle frames; measure a gear-point↔body-point offset — identical, or a named joint/soft part explains why |
-| 14 | Contacts hold | no relative slide at any contact/occlusion edge — touching or tucked-behind elements share the assembly or its driver; backdrop parallax is `−k ×` the subject's own track | render the motion extremes; inspect every edge where elements touch or overlap for slide; for parallax, show the derivation from the subject's driver |
+| 14 | Contacts hold | no relative slide at any contact/occlusion edge — welded means NO own clock (same period at a different phase is relative motion); shell surface details are decals; backdrop parallax is `−k ×` the subject's own track | render the motion extremes; inspect every edge where elements touch or overlap for slide; for parallax, show the derivation from the subject's driver |
+| 15 | The occupant reads | inside-a-container characters drift as the visible interior mass, ≥ ~3px relative to the shell (or a visible phase lag), matte-clipped so they never cross the container's lines | isolate shell vs occupant at the extremes: measurable relative offset, zero pixels outside the opening |
 
 Two failure modes this gate exists to catch, both observed in shipped scenes:
 
