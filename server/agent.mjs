@@ -81,10 +81,100 @@ const sessions = loadSessions()
 const saveSessions = () => writeFileSync(SESSIONS_FILE, JSON.stringify(sessions, null, 2))
 saveSessions() // persist migration + GC immediately
 
+/** Where a scene's i-th source artwork lives under assets/ — the ONE naming
+ *  rule, shared by the /generate write path and the /assets recovery read. */
+const assetFileName = (slug, i) => (i === 0 ? `${slug}.svg` : `${slug}-${i + 1}.svg`)
+
 const slugify = (s) =>
   String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'scene'
 
 // ── Prompts ──────────────────────────────────────────────────────────────────
+
+/** Craft blockers that hold for EVERY generated scene, independent of kind.
+ *
+ *  These used to live inside the intro-loop branch below, which meant an ENTRY
+ *  or LOOP scene was asked for nothing but "settle on the source composition" —
+ *  so aliveness depended on the agent choosing to read far enough into
+ *  motion-taste.md. Every "the object he holds is stiff" / "the decorations are
+ *  static" report traced back to that: the knowledge existed, the contract
+ *  didn't. Stated here, it is a completion blocker for whatever lands next.
+ *
+ *  The rules are deliberately self-applying (a UI screen has no limbs, so the
+ *  character clauses are no-ops) — over-animating a calm layout is its own
+ *  defect, and Motion Economy in motion-taste.md still governs. */
+const LIVING_MOTION_CONTRACT =
+  `LIVING MOTION — completion blockers for EVERY scene, whatever the subject. The full ` +
+  `rules are in references/motion-taste.md under "The Aliveness Contract"; run that ` +
+  `checklist before finishing and report its results, per track, in your final message.\n` +
+  `Every scene:\n` +
+  `  - Nothing in frame is inert. Every element the artwork puts on stage — subject, ` +
+  `held props, decorative satellites, background marks — either moves or gets a stated ` +
+  `reason why stillness is the right call. A static decorative circle beside a moving ` +
+  `subject reads as a bug, not as restraint.\n` +
+  `  - Measure AMPLITUDE, not keyframe count. A track with 200 keyframes spanning 0.2px ` +
+  `is dead. Audit peak-to-peak travel per animated track — for path morphs, ` +
+  `max(vertex, control-handle) travel — and name any track that fails to read.\n` +
+  `  - Read the artwork for what it MEANS, not only what it is. A heart, a flame, a coin, ` +
+  `a leaf each imply their own behaviour; give an element the motion its meaning earns ` +
+  `instead of a generic bob, and preserve its source shape while doing so.\n` +
+  `  - Mood governs the system. Derive clock periods, amplitudes and easing from the ` +
+  `brief's mood — the same rig on "calm" and on "triumphant" must not produce the same ` +
+  `numbers.\n` +
+  `  - Fluidity: velocity continuous through poses, motion travelling in arcs, overlap as ` +
+  `drag rather than a time-shifted copy. Run the velocity audit on every hero track ` +
+  `(max / median-while-moving under ~3x; entrances and deliberate accents exempt).\n` +
+  `  - Accents must be readable: a signature micro-motion needs a half-cycle of at least ` +
+  `~4 frames at 60fps (~0.4s round trip), or it reads as a glitch rather than a beat.\n` +
+  `Any scene with a character, figure, creature or mascot:\n` +
+  `  - Articulate the PARTS — a limb that only travels is a stick. Joints bend, ` +
+  `extremities lead or lag the mass they hang from, and at least half the nameable parts ` +
+  `move. Apply the cardboard test: if the rig would survive being cut from flat card and ` +
+  `swung on pins, it is not animated yet.\n` +
+  `  - A held object is part of the body. Anything held, hugged, carried or worn — a cup, ` +
+  `a pillow, a stone, a bag, a hat — is PARENTED to the limb or rig that holds it AND ` +
+  `carries its own secondary motion on top: compressing into the squeeze, settling a beat ` +
+  `after the arms, riding the breath. If the holder moves and the held thing's pixels do ` +
+  `not, it is not being held.\n` +
+  `  - The body always breathes. Whatever the limbs are doing, the torso/mass carries a ` +
+  `continuous low-amplitude cycle; a still body under busy arms reads as a puppet.\n` +
+  `  - Effort is phase-locked to the moment it physically happens — strain on the ` +
+  `contraction, not on the release. Verify the sign by RENDERING the frames, not by ` +
+  `reasoning about the sign convention.\n`
+
+/** The per-kind contract line — hoisted like LIVING_MOTION_CONTRACT so the
+ *  prompt assembly below stays readable. */
+const KIND_CONTRACT = {
+  loop: 'seamless LOOP (first frame = last frame on every property)',
+  entry: 'ENTRY (plays once, settles exactly on the source composition)',
+  'intro-loop':
+    'INTRO + LOOP (a one-shot entrance layered OVER an endless idle). Author ONE composition where ' +
+    'the idle motion runs CONTINUOUSLY from frame 0 — the subject is alive the whole time, never ' +
+    'frozen waiting for the entrance. The one-shot elements enter during [0..T], settle strictly ' +
+    'before T, then hold perfectly still through op. [T..op] carries a WHOLE number of idle cycles, ' +
+    'so every property that moves during the idle matches exactly at frame T and frame op (that ' +
+    'pair is the loop seam — render and READ both, and also render two mid-intro frames to prove ' +
+    'the idle is already moving under the entrance). Declare the boundary with top-level markers, ' +
+    'exactly: "markers":[{"cm":"intro","tm":0,"dr":T},{"cm":"loop","tm":T,"dr":op-T}] — players run ' +
+    '[0..T] once, then cycle [T..op] forever. Read references/recipe-companion-bubble.md and ' +
+    'honor its HARD CONTRACT — these are completion blockers, not suggestions: (1) bubble text ' +
+    'is a REAL text layer in the Bold static (fName equals the shipped ttf basename, e.g. ' +
+    'Nunito-Bold, never a variable/regular file for bold text); (2) controls.json publishes ' +
+    'autoFit {padding, min, max} with max sized from the stage margins; (3) the scene ships a ' +
+    '<prefix>.textPos slot bound to the text layer position (internal: true) — tools center ' +
+    'wrapped translations through it; (4) the idle meets the motion-taste Living-idles bar ' +
+    '(clock system, world-responds, amplitudes that read — hundreds of keyframes, not dozens); ' +
+    '(5) every animated track keys exactly AT T and AT op with equal values, and the seam is ' +
+    'verified by PIXEL-diffing rendered frames T and op, not by eyeballing; (6) the bubble ' +
+    'entrance uses the HOUSE CONSTANTS in absolute time (60fps): trail-small starts 0 with a ' +
+    '20f scale-in, trail-large starts +8 with 24f, plate+text start +28 with a 54f (900ms) ' +
+    'scale-in at ~112% overshoot and opacity resolving in ~16f — size the intro marker T to ' +
+    'the entrance (a few frames after it settles), NEVER the entrance to a shorter T. ' +
+    'PORTING IS NOT AUTHORING: if you copy or adapt an existing build script because the ' +
+    'artwork matches a previous scene, you inherit whatever constants that script froze — ' +
+    're-derive every published value against the CURRENT references before shipping, and ' +
+    'state in your final message which constants you verified rather than assumed. An ' +
+    'inherited value that predates a contract change is exactly how a fixed defect returns.',
+}
 
 function generatePrompt(slug, brief, kind, assets = []) {
   // Sequence briefs (v1.2 §3.8): when several artworks arrive, enumerate every
@@ -103,8 +193,9 @@ function generatePrompt(slug, brief, kind, assets = []) {
     opening +
     `PROJECT SLUG: ${slug} (write to public/projects/${slug}/scene-1/lottie.json via a build script ` +
     `at scripts/build-${slug}.mjs, per CLAUDE.md).\n` +
-    `KIND: ${kind === 'loop' ? 'seamless LOOP (first frame = last frame on every property)' : 'ENTRY (plays once, settles exactly on the source composition)'}.\n\n` +
+    `KIND: ${KIND_CONTRACT[kind] ?? KIND_CONTRACT.entry}.\n\n` +
     `BRIEF:\n${brief}\n\n` +
+    LIVING_MOTION_CONTRACT + `\n` +
     `Follow the text-to-lottie skill workflow. Verify headlessly with ` +
     `scripts/preview-scene.mjs and READ the preview image before finishing — design quality is a ` +
     `completion blocker. Finish with the line: SCENE_READY ${slug}/scene-1`
@@ -134,6 +225,15 @@ function editPrompt(slug, instruction, anchor = {}) {
     `with scripts/preview-scene.mjs — smallest change that satisfies it, keep everything else):\n\n` +
     anchorBlock +
     `${instruction}\n\n` +
+    // Scoped deliberately: an edit stays small, but motion it ADDS must clear
+    // the same bar a fresh generation would — otherwise "make the stone move"
+    // buys a stone that translates without deforming, and the next round-trip
+    // is spent asking for the secondary motion that should have come with it.
+    `Any motion this change adds or reworks must meet the Aliveness Contract in ` +
+    `references/motion-taste.md — held objects parented to their holder AND carrying their ` +
+    `own secondary motion, nothing left inert beside something that moves, amplitude that ` +
+    `actually reads, effort phase-locked to the moment it happens. Meet it within the scope ` +
+    `asked for; do not re-animate the rest of the scene.\n\n` +
     `Finish with the line: SCENE_READY ${slug}/scene-1`
   )
 }
@@ -456,7 +556,7 @@ function writeSourceAssets(slug, body) {
   if (!list.length) return { assets: [] }
   mkdirSync(join(WORKBENCH, 'assets'), { recursive: true })
   const assets = list.map((entry, i) => {
-    const file = i === 0 ? `${slug}.svg` : `${slug}-${i + 1}.svg`
+    const file = assetFileName(slug, i)
     writeFileSync(join(WORKBENCH, 'assets', file), String(entry.svg))
     // Filenames appear only in the prompt manifest — strip newlines and quotes
     // so a hostile name can't break the manifest's line format.
@@ -869,7 +969,9 @@ const server = createServer(async (req, res) => {
       // `features` is the additive capability handshake — the app gates UI
       // affordances (e.g. multi-attach) on it instead of failing silently
       // against an older engine.
-      return res.end(JSON.stringify({ ok: Boolean(claudeVersion), claude: claudeVersion, jobs: jobs.counts(), features: ['multi-svg'] }))
+      // `active` lists queued/running jobs by slug so ANY client can see work
+      // on its scene — including jobs it didn't start (v1.2 job-visibility).
+      return res.end(JSON.stringify({ ok: Boolean(claudeVersion), claude: claudeVersion, jobs: jobs.counts(), active: jobs.active(), features: ['multi-svg', 'intro-loop', 'text-slots', 'job-visibility', 'source-assets'] }))
     }
 
     if (req.method === 'GET' && req.url?.startsWith('/scene/')) {
@@ -881,6 +983,62 @@ const server = createServer(async (req, res) => {
       }
       res.setHeader('content-type', 'application/json')
       return res.end(readFileSync(p, 'utf8'))
+    }
+
+    // The SOURCE artworks a scene was generated from. The engine keeps them
+    // (assets/<slug>.svg, -2, -3…), so a client that lost its copy can
+    // recover the attachment instead of leaving the project unable to
+    // regenerate. Additive (v1.2, feature `source-assets`).
+    if (req.method === 'GET' && req.url?.startsWith('/assets/')) {
+      const slug = slugify(decodeURIComponent(req.url.slice('/assets/'.length)))
+      const dir = join(WORKBENCH, 'assets')
+      const out = []
+      for (let i = 0; i < MAX_ASSETS; i++) {
+        const file = assetFileName(slug, i)
+        const p = join(dir, file)
+        if (!existsSync(p)) break
+        out.push({ name: file, svg: readFileSync(p, 'utf8') })
+      }
+      if (!out.length) {
+        res.statusCode = 404
+        return res.end('{"svgs":[]}')
+      }
+      res.setHeader('content-type', 'application/json')
+      return res.end(JSON.stringify({ svgs: out }))
+    }
+
+    // The scene's controls.json (slot specs, layerControls) — pairs with
+    // /scene so a client can fully refresh a project after an external job.
+    if (req.method === 'GET' && req.url?.startsWith('/controls/')) {
+      const slug = slugify(decodeURIComponent(req.url.slice('/controls/'.length)))
+      const p = join(WORKBENCH, 'public/projects', slug, 'scene-1/controls.json')
+      if (!existsSync(p)) {
+        res.statusCode = 404
+        return res.end('{}')
+      }
+      res.setHeader('content-type', 'application/json')
+      return res.end(readFileSync(p, 'utf8'))
+    }
+
+    if (req.method === 'GET' && req.url?.startsWith('/font/')) {
+      // Fonts for native text layers (v1.2, additive). The app fetches every
+      // family a scene's `fonts.list` declares and hands the bytes to Skottie —
+      // without them a text layer renders blank. Families resolve to files in
+      // workbench/assets/fonts/<family>.ttf; the allowlist keeps the family
+      // from ever being a path.
+      const family = decodeURIComponent(req.url.slice('/font/'.length))
+      if (!/^[A-Za-z0-9 _-]{1,64}$/.test(family)) {
+        res.statusCode = 400
+        return res.end('{}')
+      }
+      const fp = join(WORKBENCH, 'assets/fonts', `${family}.ttf`)
+      if (!existsSync(fp)) {
+        res.statusCode = 404
+        return res.end('{}')
+      }
+      res.setHeader('content-type', 'font/ttf')
+      res.setHeader('cache-control', 'max-age=3600')
+      return res.end(readFileSync(fp))
     }
 
     if (req.method === 'POST' && req.url === '/cancel') {
@@ -929,7 +1087,13 @@ const server = createServer(async (req, res) => {
         submitJob({
           res, req, slug,
           kind: 'generate',
-          prompt: generatePrompt(slug, String(body.brief), body.kind === 'loop' ? 'loop' : 'entry', assets),
+          prompt: generatePrompt(
+            slug,
+            String(body.brief),
+            // Unknown kinds degrade to 'entry' — same posture as model/effort.
+            body.kind === 'loop' || body.kind === 'intro-loop' ? body.kind : 'entry',
+            assets,
+          ),
           resumeId: null,
           model: body.model,
           effort: body.effort,
