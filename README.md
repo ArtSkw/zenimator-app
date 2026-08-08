@@ -11,7 +11,8 @@ intentional. You watch it think — its narration and the very frames it's
 judging stream into the app while it works.
 
 The result plays in a live preview, refines through conversation with the same
-agent that built it, and exports as Lottie JSON, HTML, WebM, or GIF.
+agent that built it, and exports as Lottie JSON, dotLottie, HTML, MP4, WebM,
+GIF, or a paste-ready pack for web and mobile.
 
 **Live UI → [artskw.github.io/zenimator-app](https://artskw.github.io/zenimator-app/)**
 *(the UI is hosted; the engine runs on your machine — see Getting started)*
@@ -36,9 +37,11 @@ agent that built it, and exports as Lottie JSON, HTML, WebM, or GIF.
   (movement, rotation, scale, speed, draw-on) derived from the motion that's
   actually there, plus bespoke controls the agent authors for the specific
   scene — never a dead slider.
-- **Export anywhere.** Lottie JSON for web/iOS/Android players, plus
-  standalone HTML, WebM, or GIF — cancel mid-render if you change your mind.
-  Projects are saved locally.
+- **Editable content.** Scenes can carry real text bound to Lottie slots — try
+  a locale string and watch the speech bubble re-size to fit it.
+- **Export anywhere.** Lottie JSON, dotLottie, HTML, MP4, WebM and GIF, plus
+  paste-ready packs for web, React Native, iOS, Android and Flutter — cancel
+  mid-render if you change your mind. Projects are saved locally.
 
 ---
 
@@ -66,68 +69,25 @@ activity feed shows you exactly what the agent is doing.
 
 ---
 
-## Release notes
-
-### v1.2 — current
+## What's new in v1.2
 
 Multi-artwork scenes, living companions, and exports that speak every language.
 
-- **Entry + Loop scenes.** A third kind beside Entry and Loop: a one-shot
-  entrance that settles into an endless idle, declared with standard Lottie
-  markers — the preview, every export, and every player runtime honor the
-  same intro/loop boundary.
-- **Attach several artworks.** Multi-SVG briefs in story order, with an
-  attachment strip (thumbnails, drag to re-sequence) and sequence-aware
-  generation.
-- **Real text, really editable.** Scenes can carry native text layers bound to
-  Lottie slots — edit the copy in the Content panel, watch the speech bubble
-  re-size to fit, and try locale strings live. Fonts travel with the scene.
-- **Localized web pack.** A new Web export ships `fitBubble()`: measure a
-  translated string in the scene's real font and hand any player the slot
-  overrides that make the bubble hug it — one animation file, every language.
+- **Entry + Loop scenes.** A one-shot entrance that settles into an endless
+  idle, declared with standard Lottie markers — the preview, every export and
+  every player runtime honor the same boundary.
+- **Attach several artworks.** Multi-SVG briefs in story order, with a
+  drag-to-re-sequence attachment strip.
+- **Real text, really editable.** Native text layers bound to Lottie slots:
+  edit the copy, watch the speech bubble re-size to fit, try locale strings
+  live. Fonts travel with the scene, and the new Web pack ships a `fitBubble()`
+  helper so one animation file serves every language.
 - **Generate in the background.** A run becomes a project the moment you press
-  Generate — browse other projects while it builds, come back to live
-  progress, stop it into an editable draft. Work started outside the app shows
-  up on the canvas too, and the fresh scene pulls in when it lands.
-- **Deeper export suite.** One dialog for Lottie JSON, HTML, dotLottie, MP4
-  (H.264), WebM, GIF, and mobile packs (React Native, iOS, Android, Flutter) —
-  intro/loop segments and scene fonts included everywhere.
-- **See inside precomps.** Controls reach nested compositions; retiming scales
-  the whole document — markers, authored cuts and all.
-- **Canvas zoom + pan** and a rounder, quieter control surface.
+  Generate — browse other projects while it builds, and **Resume** a stopped
+  run instead of starting it over.
+- **Deeper exports.** Lottie JSON · HTML · dotLottie · MP4 · WebM · GIF, plus
+  mobile packs for React Native, iOS, Android and Flutter.
+- **Canvas zoom + pan**, controls that reach inside nested compositions, and a
+  quieter control surface throughout.
 
-### v1.1
-
-Richer, scene-aware controls and truer source fidelity.
-
-- **Contextual controls.** Beyond Duration: an entrance *Feel*, a *Stagger* for
-  write-on sequences, and bespoke per-scene knobs the agent authors itself —
-  each grounded in the motion it actually made.
-- **Handwritten write-ons that keep your gradients.** Lettering draws on stroke
-  by stroke over the original artwork, source gradients preserved, not flattened.
-- **Cancellable exports.** Stop a WebM or GIF render mid-progress from the toast.
-- **UI polish.** Clearer activity feed, tidier sidebar, and consistent controls.
-
-### v1.0
-
-The daily tool: everything runs through the agent engine, and you can see it
-work.
-
-- **One engine.** Every generation is authored by headless Claude Code in the
-  animation workbench and verified against its own rendered frames — the older
-  in-browser generator is retired.
-- **Activity feed.** Live narration plus the agent's own verification frames,
-  streamed while it works.
-- **Conversational edits** that resume the exact session that built the scene.
-- **Per-layer controls**, curated down to the parts that actually move.
-- **Crisp preview** — vector-sharp at any zoom, at your display's true pixel
-  density.
-- **Reliable local service** — job queue, mid-run cancel, `npm run doctor`
-  setup check, and a loopback-only bind so nothing else on your network can
-  reach the engine.
-- **Exports:** Lottie JSON · HTML · WebM · GIF.
-
-### v0.1
-
-First working bridge: the UI wired to the agent engine end to end, SVG → scene,
-with session-resuming edits.
+Earlier releases live in the git history.

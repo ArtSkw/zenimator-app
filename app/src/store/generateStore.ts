@@ -136,6 +136,21 @@ type GenerateState = {
 /**
  * State for the generate lane — the single studio-driven surface.
  */
+/** The setup a scene was (or would be) generated from, as a comparable string.
+ *  Two things depend on it agreeing with itself: whether a result is STALE
+ *  (its setup changed since it was built) and whether a stopped run can be
+ *  RESUMED (its setup hasn't changed, so the session's transcript still
+ *  describes what the user wants). Written once so a new axis can't be added
+ *  to one comparison and silently missed by the other. */
+export function setupSignature(s: {
+  subject: Subject
+  kind: Kind
+  prompt: string
+  groundings: { name: string }[]
+}): string {
+  return `${s.subject}|${s.kind}|${s.prompt.trim()}|${s.groundings.map((g) => g.name).join('+')}`
+}
+
 /** Everything scene-shaped, reset to empty. One list, spread wherever a view
  *  leaves the current scene behind (clear, open-pending, load) — a new scene
  *  field lands here once instead of being hand-threaded into each literal. */

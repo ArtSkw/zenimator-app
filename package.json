@@ -1,7 +1,7 @@
 {
   "name": "zenimator",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.2.0",
   "description": "ZENimator UI + headless Claude Code engine (text-to-lottie workbench)",
   "type": "module",
   "scripts": {

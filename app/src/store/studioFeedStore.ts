@@ -31,11 +31,20 @@ export type FeedChannel = {
   live: boolean
   expanded: boolean
   queuedPosition: number | null
+  /** Monotonic tick of the last write — drives pruning, and deliberately not a
+   *  clock (a counter can't go backwards or tie). */
+  touched: number
 }
+
+/** How many finished feeds to keep. Entries include the agent's verification
+ *  frames as data URLs, so channels are not cheap: a session that generates a
+ *  dozen scenes would otherwise retain every frame of all of them. Live
+ *  channels are never pruned regardless of this cap. */
+const MAX_IDLE_CHANNELS = 6
 
 /** Returned by reference for channels that have no run, so a selector never
  *  mints a new object per render (which would re-render on every store tick). */
-export const EMPTY_CHANNEL: FeedChannel = { entries: [], live: false, expanded: false, queuedPosition: null }
+export const EMPTY_CHANNEL: FeedChannel = { entries: [], live: false, expanded: false, queuedPosition: null, touched: 0 }
 
 /** Runs that don't belong to a project yet — Propose from a blank composer. */
 export const DRAFT_CHANNEL = 'draft'
@@ -60,17 +69,48 @@ type StudioFeedState = {
 }
 
 let nextId = 1
+let tick = 1
+
+/** Drop the oldest IDLE channels past the cap. Live ones always survive — a
+ *  background job must never lose the feed it is still writing to. */
+function prune(channels: Record<string, FeedChannel>): Record<string, FeedChannel> {
+  const idle = Object.entries(channels).filter(([, c]) => !c.live)
+  if (idle.length <= MAX_IDLE_CHANNELS) return channels
+  const doomed = idle
+    .sort((a, b) => a[1].touched - b[1].touched)
+    .slice(0, idle.length - MAX_IDLE_CHANNELS)
+  const out = { ...channels }
+  for (const [id] of doomed) delete out[id]
+  return out
+}
 
 export const useStudioFeed = create<StudioFeedState>((set, get) => {
   const patch = (channel: string, p: Partial<FeedChannel>) =>
-    set((s) => ({ channels: { ...s.channels, [channel]: { ...(s.channels[channel] ?? EMPTY_CHANNEL), ...p } } }))
+    set((s) => ({
+      channels: {
+        ...s.channels,
+        [channel]: { ...(s.channels[channel] ?? EMPTY_CHANNEL), ...p, touched: tick++ },
+      },
+    }))
+
+  /** Patch a channel and collect stale ones. Used at the two moments the set
+   *  of idle channels can grow — a run starting, and a run ending — so the cap
+   *  is an actual invariant rather than something enforced a step late. */
+  const patchAndPrune = (channel: string, p: Partial<FeedChannel>) =>
+    set((s) => ({
+      channels: prune({
+        ...s.channels,
+        [channel]: { ...(s.channels[channel] ?? EMPTY_CHANNEL), ...p, touched: tick++ },
+      }),
+    }))
 
   return {
     channels: {},
 
     // Starts collapsed — the header's live pulse says work is happening; the
     // detail stream stays one click away so the initial screen keeps its calm.
-    begin: (channel) => patch(channel, { entries: [], live: true, expanded: false, queuedPosition: null }),
+    begin: (channel) =>
+      patchAndPrune(channel, { entries: [], live: true, expanded: false, queuedPosition: null }),
 
     push: (channel, e) => {
       const current = get().channels[channel] ?? EMPTY_CHANNEL
@@ -98,7 +138,7 @@ export const useStudioFeed = create<StudioFeedState>((set, get) => {
       if (current.queuedPosition !== null) patch(channel, { queuedPosition: null })
     },
 
-    finish: (channel) => patch(channel, { live: false, expanded: false }),
+    finish: (channel) => patchAndPrune(channel, { live: false, expanded: false }),
     setExpanded: (channel, expanded) => patch(channel, { expanded }),
 
     clear: (channel) =>
@@ -114,3 +154,7 @@ export const useStudioFeed = create<StudioFeedState>((set, get) => {
 export function useFeedChannel(channel: string | null | undefined): FeedChannel {
   return useStudioFeed((s) => (channel ? s.channels[channel] ?? EMPTY_CHANNEL : EMPTY_CHANNEL))
 }
+
+/** The channel a run belongs to: its project, or the draft channel for work
+ *  that has no project yet (Propose from a blank composer). */
+export const feedChannelFor = (projectId: string | null | undefined): string => projectId ?? DRAFT_CHANNEL

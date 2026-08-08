@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import {
   Loader2, Wand2, X, Paperclip, CornerDownLeft, ChevronDown, ChevronUp, Info, IterationCw, AlertCircle, Play,
@@ -15,19 +15,20 @@ import { StudioSelectionOverlay } from '@/components/generate/StudioSelectionOve
 import { StudioFeed } from '@/components/generate/StudioFeed'
 import { AttachmentStrip } from '@/components/generate/AttachmentStrip'
 import { ZoomableStage } from '@/components/generate/StageZoom'
-import { useGenerateStore, useBakedLottieJson, type Subject, type Kind } from '@/store/generateStore'
+import { useGenerateStore, useBakedLottieJson, setupSignature, type Subject, type Kind } from '@/store/generateStore'
 import { useGeneratePlayback } from '@/store/generatePlaybackStore'
-import { useStudioFeed, DRAFT_CHANNEL } from '@/store/studioFeedStore'
+import { useStudioFeed, feedChannelFor } from '@/store/studioFeedStore'
 import { useStudioEditBridge } from '@/store/studioEditBridge'
 import { useProjectsStore } from '@/store/projectsStore'
-import { usePendingJobs } from '@/store/pendingJobsStore'
+import { usePendingJobs, stopJob } from '@/store/pendingJobsStore'
+import { useAutoGrow } from '@/hooks/useAutoGrow'
 import { castFromControls, reconcileCast } from '@/engine/controls/cast'
 import { sceneLayers } from '@/engine/lottie/sceneRoot'
 import { rasterizeSvg } from '@/engine/detector/rasterize'
 import { sanitizeSvg } from '@/engine/detector/sanitizeSvg'
 import { humanizeLlmError } from '@/engine/llm/errors'
 import { deriveControls, parseLayerControlSpecs, INTENSITY_FEEL_PREFIX } from '@/engine/controls/deriveControls'
-import { studioCancel, studioGenerate, studioPropose, studioEdit, studioRevert, studioSlugFor, labelsFromDoc, studioFeatures, studioPreflight, studioTitle, studioActivity, studioScene, studioSourceAssets } from '@/engine/studio/studioClient'
+import { studioCancel, studioGenerate, studioPropose, studioEdit, studioRevert, studioSlugFor, labelsFromDoc, studioPreflight, studioTitle, studioActivity, studioScene, studioSourceAssets } from '@/engine/studio/studioClient'
 import { useEngineConnect } from '@/store/engineConnectStore'
 import { HEARTBEAT_QUIET_MS, HEARTBEAT_TICK_MS, heartbeatLine } from '@/engine/studio/studioHeartbeat'
 
@@ -189,14 +190,7 @@ export function GenerateView() {
 
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const changeRef = useRef<HTMLTextAreaElement>(null)
-  useLayoutEffect(() => {
-    const el = changeRef.current; if (!el) return
-    const MAX_PX = 200
-    el.style.height = 'auto'
-    const natural = el.scrollHeight
-    el.style.height = `${Math.min(natural, MAX_PX)}px`
-    el.style.overflowY = natural > MAX_PX ? 'auto' : 'hidden'
-  }, [changeText])
+  useAutoGrow(changeRef, 200, [changeText])
 
   // Space toggles play/pause on the preview — unless the user is typing or has a
   // control focused (where Space has its own meaning).
@@ -303,7 +297,7 @@ export function GenerateView() {
   const stoppedDraft = !!activeJob?.stopped && !lottieJson
   // Which run's activity this view is showing. Feeds live per project, so
   // browsing away from a build and back replays that job's own history.
-  const feedChannel = activeProjectId ?? DRAFT_CHANNEL
+  const feedChannel = feedChannelFor(activeProjectId)
 
   // Apply control overrides onto the base Lottie for live preview — each control
   // re-writes the keyframes it was derived from (duration, visibility…).
@@ -313,33 +307,18 @@ export function GenerateView() {
   // Show the full setup controls before the first result, or when reopened.
   const showFullSetup = !lottieJson || editingSetup
 
-  /** Auto-grow the brief field to its content, capped.
-   *
-   *  The cap depends on what the field IS at that moment. While authoring, it
-   *  is a writing surface and earns the taller cap. For a stopped draft the
-   *  brief is already written and the field is a resume affordance — a preview
-   *  that scrolls, sized so the card doesn't crowd out the canvas note beneath.
-   *
-   *  `showFullSetup`/`inProgress`/`stoppedDraft` are dependencies because the
-   *  textarea MOUNTS on those transitions: sizing keyed only on `prompt` left
-   *  the field at its bare CSS floor when Stop swapped the building screen for
-   *  the composer (the prompt hadn't changed), while reopening the same draft
-   *  from the sidebar did change it and grew to the full cap — one state, two
-   *  heights, depending on how you got there. */
-  useLayoutEffect(() => {
-    const el = promptRef.current; if (!el) return
-    const MAX_PX = stoppedDraft ? 132 : 200
-    el.style.height = 'auto'
-    const natural = el.scrollHeight
-    el.style.height = `${Math.min(natural, MAX_PX)}px`
-    el.style.overflowY = natural > MAX_PX ? 'auto' : 'hidden'
-  }, [prompt, showFullSetup, inProgress, stoppedDraft])
+  /** The brief field's cap depends on what it IS at that moment. While
+   *  authoring it is a writing surface and earns the taller cap; for a stopped
+   *  draft the brief is already written and the field is a resume affordance —
+   *  a preview that scrolls, sized so the card doesn't crowd out the canvas
+   *  note beneath it. The mount transitions are dependencies (see the hook). */
+  useAutoGrow(promptRef, stoppedDraft ? 132 : 200, [prompt, showFullSetup, inProgress, stoppedDraft])
 
   // The studio grounds every scene in real artwork: SVG + brief are both required.
   const canGenerate = groundings.length > 0 && prompt.trim().length > 0 && !generating && !proposing
 
   // A result becomes "stale" when the properties it was generated with change.
-  const signature = `${subject}|${kind}|${prompt.trim()}|${groundings.map((g) => g.name).join('+')}`
+  const signature = setupSignature({ subject, kind, prompt, groundings })
   // Only warn about unapplied setup changes when a regenerate is actually
   // possible (an SVG is attached). Without grounding the axes can't be applied
   // anyway, and a loaded scene has none — so "regenerate to apply" would be a
@@ -356,10 +335,8 @@ export function GenerateView() {
   // resuming after an edit would quietly build the OLD instruction. Change the
   // setup and the plain Generate button comes back — which is the honest
   // answer, since that genuinely is a different scene.
-  const jobSignature = activeJob
-    ? `${activeJob.subject}|${activeJob.kind}|${activeJob.prompt}|${activeJob.groundings.map((g) => g.name).join('+')}`
-    : null
-  const canResume = stoppedDraft && !!activeJob?.studioSlug && jobSignature === signature
+  const canResume =
+    stoppedDraft && !!activeJob?.studioSlug && setupSignature(activeJob) === signature
 
   // Conversational refinement resumes the scene's own studio session — only
   // studio-built projects have one. Legacy saves stay viewable, not chattable.
@@ -392,23 +369,29 @@ export function GenerateView() {
     return { frame: momentFrame ?? undefined, layer: member?.nm, label: member?.label }
   }, [momentFrame, selectedLayer, cast])
 
+  /** Stop from the COMPOSER — the regenerate case, where a finished scene is
+   *  still on screen. The row is dropped rather than kept as a draft: the
+   *  project already exists with its previous result. */
   const handleStop = () => {
+    const id = useProjectsStore.getState().activeProjectId
+    if (id && usePendingJobs.getState().jobs[id]) {
+      stopJob(id, { keepDraft: false, slug: activeSlugRef.current ?? undefined })
+      return
+    }
+    // A propose run (or any job with no row) — abort the stream directly.
     abortRef.current?.abort()
-    const slug = activeSlugRef.current
-    if (slug) void studioCancel(slug)
+    if (activeSlugRef.current) void studioCancel(activeSlugRef.current)
   }
 
   /** Optional capabilities this run depends on — gated on the /health features
    *  handshake with a clear message, never a silent failure and never a quiet
    *  downgrade (an old engine would degrade intro-loop to a plain entry, or
    *  see only the first artwork of a sequence). */
-  const capabilitiesReady = async (opts?: { resume?: boolean }) => {
+  const capabilitiesReady = (features: string[], opts?: { resume?: boolean }) => {
     const needed: Array<[feature: string, label: string]> = []
     if (groundings.length >= 2) needed.push(['multi-svg', 'multi-attach'])
     if (kind === 'intro-loop') needed.push(['intro-loop', 'Entry + Loop scenes'])
     if (opts?.resume) needed.push(['resume-generate', 'resuming a stopped run'])
-    if (!needed.length) return true
-    const features = await studioFeatures()
     const missing = needed.find(([f]) => !features.includes(f))
     if (!missing) return true
     toast.error(`Engine update needed for ${missing[1]}`, {
@@ -429,7 +412,8 @@ export function GenerateView() {
     if (!canGenerate || groundings.length === 0) return
     // Preflight the engine so a disconnected teammate gets the connect modal
     // immediately, not a multi-minute run against an unreachable/unauthorized engine.
-    const status = await studioPreflight()
+    // One /health serves both the reachability gate and the capability gate.
+    const { status, features } = await studioPreflight()
     if (status !== 'ok') { useEngineConnect.getState().show(status); return }
     // Identity snapshot at CLICK time: regenerating an open project evolves
     // THAT project even if the user browses elsewhere during the run.
@@ -444,7 +428,7 @@ export function GenerateView() {
     // Code session and the scene folder by it. A fresh slug would resume
     // nothing — it would silently become a normal generation in a new folder.
     const resuming = resume && !!priorJob?.stopped && !!priorJob.studioSlug
-    if (!(await capabilitiesReady({ resume: resuming }))) return
+    if (!capabilitiesReady(features, { resume: resuming })) return
     const ac = new AbortController()
     abortRef.current = ac
     startGenerating()
@@ -596,15 +580,15 @@ export function GenerateView() {
 
   const handlePropose = async () => {
     if (groundings.length === 0 || proposing || generating) return
-    const status = await studioPreflight()
+    const { status, features } = await studioPreflight()
     if (status !== 'ok') { useEngineConnect.getState().show(status); return }
-    if (!(await capabilitiesReady())) return
+    if (!capabilitiesReady(features)) return
     const ac = new AbortController()
     abortRef.current = ac
     setProposing(true)
     // A propose runs against whatever is open — a saved project's channel, or
     // the draft channel when the composer is still blank.
-    const channel = useProjectsStore.getState().activeProjectId ?? DRAFT_CHANNEL
+    const channel = feedChannelFor(useProjectsStore.getState().activeProjectId)
     beginFeed(channel)
     markJobStart()
     try {
@@ -916,11 +900,9 @@ export function GenerateView() {
                       className="h-8 shrink-0 rounded-full gap-1.5 font-semibold"
                       onClick={() => {
                         if (!activeJob) return
-                        activeJob.abort()
-                        void studioCancel(activeSlugRef.current ?? activeJob.studioSlug)
                         // Keep the project as an editable draft rather than
                         // deleting it out from under the user.
-                        usePendingJobs.getState().stop(activeJob.id)
+                        stopJob(activeJob.id, { keepDraft: true, slug: activeSlugRef.current ?? undefined })
                         resetStatus()
                       }}
                     >

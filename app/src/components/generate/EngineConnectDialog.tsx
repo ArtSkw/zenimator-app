@@ -30,13 +30,13 @@ export function EngineConnectDialog() {
   useEffect(() => {
     if (autoChecked.current) return
     autoChecked.current = true
-    studioPreflight().then((s) => { if (s !== 'ok') show(s) })
+    studioPreflight().then(({ status }) => { if (status !== 'ok') show(status) })
   }, [show])
 
   const connect = async () => {
     setChecking(true)
     setResult(null)
-    const s = await studioPreflight()
+    const { status: s } = await studioPreflight()
     setChecking(false)
     setResult(s)
     if (s === 'ok') {

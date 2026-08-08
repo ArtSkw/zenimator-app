@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useProjectsStore, type SavedProject } from '@/store/projectsStore'
 import { useGenerateStore } from '@/store/generateStore'
-import { usePendingJobs, pendingList } from '@/store/pendingJobsStore'
+import { usePendingJobs, pendingList, stopJob } from '@/store/pendingJobsStore'
 import { useStudioFeed } from '@/store/studioFeedStore'
 import { projectHref } from '@/lib/projectUrl'
 import {
@@ -162,8 +162,9 @@ export function ProjectsPanel() {
               // are per project and would otherwise outlive their project.
               useStudioFeed.getState().clear(ctx.id)
               if (job) {
-                if (!job.stopped && !job.error) job.abort()
-                usePendingJobs.getState().finish(ctx.id)
+                // Cancels the engine job too — deleting the row must not leave
+                // the studio working on a project that no longer exists.
+                stopJob(ctx.id, { keepDraft: false })
                 if (activeProjectId === ctx.id) { clearResult(); setActiveProjectId(null) }
                 setCtx(null)
                 return
