@@ -84,7 +84,13 @@
   --secondary: #1E1E22;
   --secondary-foreground: #F0F0F2;
   --muted: #252529;
-  --muted-foreground: #8A8A94;
+  /* Secondary text (status lines, counts, captions). Lifted from #8A8A94 so
+     dark matches the light theme's contrast instead of running ~20% under it:
+     on `--card` that is 6.6:1 against light's 6.9:1, and on `--muted` — every
+     hover surface — it clears 4.5:1, which the old value did not (4.47:1).
+     Dark UIs need a lighter secondary than the light theme's mirror image;
+     nominally-equal tokens are not perceptually equal. */
+  --muted-foreground: #9A9AA4;
   --accent: #252529;
   --accent-foreground: #F0F0F2;
   --destructive: #EF4444;
