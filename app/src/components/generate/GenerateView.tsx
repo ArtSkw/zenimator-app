@@ -49,10 +49,21 @@ const MAX_ATTACHED_BYTES = 12_000_000
 const ATTACH_BTN =
   'pressable flex h-8 shrink-0 cursor-pointer items-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
 
+/** The transparency checker behind every stage. Deliberately LIGHT in both
+ *  themes and not tokenised: scenes are dark line art on transparency, so a
+ *  dark canvas would swallow the artwork. */
 const CHECKER_BG = {
   backgroundImage: 'repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%)',
   backgroundSize: '20px 20px',
 }
+
+/** Ink for text sitting ON the canvas. Fixed, for the same reason the checker
+ *  is: that surface is light in dark mode too, so themed tokens are wrong
+ *  there. `--muted-foreground` is mid-grey in dark mode, and the placeholder's
+ *  veil used to be `bg-card` — a near-black breathing at 30–70% over a
+ *  near-white checker, which swept the backdrop straight through the text's
+ *  own luminance and made the label vanish for most of every cycle. */
+const CANVAS_INK = { title: 'text-[#54545A]', note: 'text-[#6E6E76]' }
 
 export function GenerateView() {
   const {
@@ -1345,15 +1356,17 @@ function CanvasPlaceholder({ busy = false, title, note }: { busy?: boolean; titl
       className="relative overflow-hidden rounded-2xl border border-border"
       style={{ aspectRatio: '1 / 1', ...CHECKER_BG }}
     >
+      {/* White, not `bg-card`: the veil dims the checker it sits on, so it has
+          to be the same family of light as that checker in BOTH themes. */}
       <div
         className={cn(
-          'absolute inset-0 bg-card',
+          'absolute inset-0 bg-white',
           busy ? 'animate-[skeleton-breathe_3.2s_ease-in-out_infinite]' : 'opacity-50',
         )}
       />
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-8 text-center">
-        <p className="text-sm text-muted-foreground">{title}</p>
-        {note && <p className="text-xs text-muted-foreground/70">{note}</p>}
+        <p className={cn('text-sm', CANVAS_INK.title)}>{title}</p>
+        {note && <p className={cn('text-xs', CANVAS_INK.note)}>{note}</p>}
       </div>
     </div>
   )
