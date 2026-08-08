@@ -190,14 +190,6 @@ export function GenerateView() {
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const changeRef = useRef<HTMLTextAreaElement>(null)
   useLayoutEffect(() => {
-    const el = promptRef.current; if (!el) return
-    const MAX_PX = 200
-    el.style.height = 'auto'
-    const natural = el.scrollHeight
-    el.style.height = `${Math.min(natural, MAX_PX)}px`
-    el.style.overflowY = natural > MAX_PX ? 'auto' : 'hidden'
-  }, [prompt, editingSetup, lottieJson])
-  useLayoutEffect(() => {
     const el = changeRef.current; if (!el) return
     const MAX_PX = 200
     el.style.height = 'auto'
@@ -320,6 +312,28 @@ export function GenerateView() {
   const bakedLottieJson = useBakedLottieJson()
   // Show the full setup controls before the first result, or when reopened.
   const showFullSetup = !lottieJson || editingSetup
+
+  /** Auto-grow the brief field to its content, capped.
+   *
+   *  The cap depends on what the field IS at that moment. While authoring, it
+   *  is a writing surface and earns the taller cap. For a stopped draft the
+   *  brief is already written and the field is a resume affordance — a preview
+   *  that scrolls, sized so the card doesn't crowd out the canvas note beneath.
+   *
+   *  `showFullSetup`/`inProgress`/`stoppedDraft` are dependencies because the
+   *  textarea MOUNTS on those transitions: sizing keyed only on `prompt` left
+   *  the field at its bare CSS floor when Stop swapped the building screen for
+   *  the composer (the prompt hadn't changed), while reopening the same draft
+   *  from the sidebar did change it and grew to the full cap — one state, two
+   *  heights, depending on how you got there. */
+  useLayoutEffect(() => {
+    const el = promptRef.current; if (!el) return
+    const MAX_PX = stoppedDraft ? 132 : 200
+    el.style.height = 'auto'
+    const natural = el.scrollHeight
+    el.style.height = `${Math.min(natural, MAX_PX)}px`
+    el.style.overflowY = natural > MAX_PX ? 'auto' : 'hidden'
+  }, [prompt, showFullSetup, inProgress, stoppedDraft])
 
   // The studio grounds every scene in real artwork: SVG + brief are both required.
   const canGenerate = groundings.length > 0 && prompt.trim().length > 0 && !generating && !proposing
