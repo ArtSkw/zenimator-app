@@ -444,6 +444,16 @@ try {
       check(`living-motion (${kind}): distant backdrops hold still, parallax is derived`,
         p.includes('Distant backdrops hold still') &&
         p.includes('never self-translate') && p.includes("DERIVED from the subject"))
+      // The three refinements from the spacesuit re-test (2026-08-08): labels
+      // never beat visible contact, occupants may drift inside their shells,
+      // and "derived" parallax is a formula, not an independent clock.
+      check(`living-motion (${kind}): contact welds — occlusion is contact`,
+        p.includes('Contact welds') && p.includes('occlusion is contact') &&
+        p.includes('does not license breaking a visible contact'))
+      check(`living-motion (${kind}): occupant floats INSIDE its shell`,
+        p.includes('occupant may float INSIDE its shell') && p.includes('nested, slower'))
+      check(`living-motion (${kind}): parallax is the SAME driver negated and scaled`,
+        p.includes('SAME driver, negated and scaled') && p.includes('NOT parallax'))
       check(`living-motion (${kind}): parts articulate, not just the rig`,
         p.includes('Articulate the PARTS') && p.includes('cardboard test'))
       check(`living-motion (${kind}): the body breathes`,

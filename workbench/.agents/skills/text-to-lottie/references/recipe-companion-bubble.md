@@ -75,11 +75,15 @@ not the amount of craft — a top-tier idle is small but DENSE:
 - Partition before animating: the mascot plus everything it WEARS is one
   assembly on one rig — a spacesuit's helmet, visor shine, packs and badges
   drift with the body as one mass, never as separate floaters (motion-taste
-  "Worn gear is the wearer"; assemblies is a blocking gate in the Aliveness
-  Contract). Free satellites — thought-trail circles, stars, loose props —
-  get their own clocks; celestial backdrops (a moon, a sun) hold still and
-  twinkle in place, or counter-drift only as parallax DERIVED from the
-  mascot's own motion: opposite, far slower, smaller.
+  "Worn gear is the wearer"; assemblies and contacts are blocking gates in
+  the Aliveness Contract). Free satellites — thought-trail circles, stars —
+  get their own clocks ONLY if they have clear air on all sides: anything
+  touching or tucked BEHIND the mascot is welded to it (same rig or same
+  driver — a contact edge must never slide, whatever the brief calls the
+  element). A mascot inside a helmet earns the two-tier float: shell gentle,
+  face/eyes on a nested null drifting a touch more inside it. Celestial
+  backdrops (a moon, a sun) twinkle in place, or counter-drift strictly as
+  `−k ×` the mascot's own track (k ≈ 0.2–0.5) — never on their own clock.
 - Match the idle to the scene's MOOD (motion-taste "Mood governs the
   system"). The relax archetype specifically: breath lives in the chest/
   belly MORPH, the body SWAYS slowly about its seat contact like a hammock

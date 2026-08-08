@@ -408,13 +408,35 @@ Four properties separate a living idle from a placed one:
   why not. Floatiness comes from the ASSEMBLY's shared drift plus the
   silhouette breath riding it, never from fixed parts wandering relative to
   each other.
+- **An occupant may float INSIDE its shell — the Rive two-tier read.** A
+  creature inside a container (helmet, suit, cockpit, porthole) earns a
+  nested drift of its own WITHIN the container: a second null under the
+  shell rig carrying the face/eyes/visible body, slower period than the
+  shell's, a couple of px of travel, never reaching the container's edge.
+  The shell moves gently as one; the occupant moves a touch MORE inside it —
+  that relative motion is what reads as floating IN the suit instead of
+  being glued to it. The shell's own pieces stay mutually rigid throughout.
+- **Contact welds — occlusion is contact.** Where the artwork shows elements
+  touching, gripping, resting on, or tucked BEHIND the subject, they must
+  not slide along that contact edge: parent them into the assembly they
+  touch, or drive them from the SAME driver (scaled/phase-locked) so the
+  contact stays fixed while both breathe. A brief calling something a
+  "floating prop" does not license breaking a visible contact (measured: a
+  spacesuit scene whose tucked-behind frame and bead-cord rocked on their
+  own clocks read as the character disassembling at every edge they
+  crossed, even though every labeled suit part was correctly rigged).
+  Free-prop drift belongs only to elements with clear air on all sides.
+  Verify by rendering the motion extremes and inspecting every
+  contact/occlusion edge for slide.
 - **Distant backdrops hold still.** The moon, the sun, stars, a skyline:
   from a human viewpoint these do not visibly translate, so a self-propelled
   drift on one reads as a bug, not as depth. Give them life IN PLACE —
-  twinkle on opacity in whole cycles, a slow glow — or, when the subject
-  itself drifts, a parallax counter-move explicitly derived from the
-  subject's track: opposite in direction, far slower, smaller amplitude, so
-  it reads as the observer moving, never the moon.
+  twinkle on opacity in whole cycles, a slow glow — or a parallax
+  counter-move DERIVED from the subject's track. Derived is mechanical, not
+  a vibe: `backdrop = rest − k × subjectDrift` with k ≈ 0.2–0.5 — the same
+  driver, negated and scaled. An independent clock at another frequency or
+  phase is not parallax (measured: a moon at "opposite phase, half
+  frequency" spent half of every cycle moving WITH the mascot).
 - **The body always breathes.** Whatever the limbs are doing, the torso/mass
   keeps its own slow breath — a silhouette morph or a small scale swell —
   running independently of the action's beats. A character whose arms are
@@ -707,6 +729,7 @@ be false the moment anyone measured it.
 | 11 | Effort is phase-locked | strain on the contraction, never on the release | RENDER the extreme frames and look; never reason about the sign convention |
 | 12 | No double-driven property | each property animated once down any parent chain | trace every animated property up through its parents |
 | 13 | Assemblies stay whole | rigid worn/built-on parts keep a constant offset to their wearer; independent drift only for genuinely free elements | render two idle frames; measure a gear-point↔body-point offset — identical, or a named joint/soft part explains why |
+| 14 | Contacts hold | no relative slide at any contact/occlusion edge — touching or tucked-behind elements share the assembly or its driver; backdrop parallax is `−k ×` the subject's own track | render the motion extremes; inspect every edge where elements touch or overlap for slide; for parallax, show the derivation from the subject's driver |
 
 Two failure modes this gate exists to catch, both observed in shipped scenes:
 

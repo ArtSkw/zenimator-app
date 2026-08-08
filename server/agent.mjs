@@ -116,14 +116,27 @@ const LIVING_MOTION_CONTRACT =
   `body as its wearer: parent the whole ensemble to ONE rig so it travels as one mass, ` +
   `and rigid parts keep a CONSTANT offset to each other (verify by rendering two idle ` +
   `frames and measuring the gear-to-body offset — identical, or a named joint/soft part ` +
-  `explains why not). Independent drift belongs ONLY to genuinely free elements; "nothing ` +
-  `inert" is satisfied by riding the parent, never by giving fixed parts their own ` +
-  `wander, which reads as the character coming apart.\n` +
+  `explains why not). Independent drift belongs ONLY to genuinely free elements with ` +
+  `clear air on all sides; "nothing inert" is satisfied by riding the parent, never by ` +
+  `giving fixed parts their own wander, which reads as the character coming apart.\n` +
+  `  - Contact welds — occlusion is contact. Where the artwork shows elements touching, ` +
+  `gripping, resting on, or tucked BEHIND the subject, they may not slide along that ` +
+  `contact edge: parent them into the assembly they touch, or drive them from the SAME ` +
+  `driver so the contact stays fixed while both breathe together. A brief calling ` +
+  `something a "floating prop" does not license breaking a visible contact — verify by ` +
+  `rendering the motion extremes and checking every contact/occlusion edge for slide.\n` +
+  `  - An occupant may float INSIDE its shell. A creature inside a container — helmet, ` +
+  `suit, cockpit, window — earns a nested, slower, few-px drift of its own WITHIN the ` +
+  `container's bounds (face and eyes drifting gently inside the visor), while the ` +
+  `shell's pieces stay mutually rigid. That inside-drift is what reads as floating IN ` +
+  `the suit rather than being glued to it.\n` +
   `  - Distant backdrops hold still. Celestial and far-background elements — moon, sun, ` +
   `stars, a skyline — never self-translate; their life is opacity/glow (twinkle, in ` +
   `whole cycles) in place, or a parallax counter-drift explicitly DERIVED from the ` +
-  `subject's own motion: opposite in direction, far slower, smaller. A moon wandering ` +
-  `on its own clock reads as a bug, not as depth.\n` +
+  `subject's own motion. Derived means the SAME driver, negated and scaled ` +
+  `(backdrop = -k x subject's track, k around 0.2-0.5) — an independent clock at ` +
+  `another frequency or phase is NOT parallax and will sometimes move WITH the ` +
+  `subject, which reads as a bug, not as depth.\n` +
   `  - Measure AMPLITUDE, not keyframe count. A track with 200 keyframes spanning 0.2px ` +
   `is dead. Audit peak-to-peak travel per animated track — for path morphs, ` +
   `max(vertex, control-handle) travel — and name any track that fails to read.\n` +

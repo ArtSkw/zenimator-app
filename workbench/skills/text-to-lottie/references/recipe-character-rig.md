@@ -126,6 +126,18 @@ below.
   independent micro-floats decorative satellites get: relative drift between
   fixed parts reads as the character disassembling, not as floatiness
   (motion-taste, "Worn gear is the wearer").
+- Occupant-inside-shell (the Rive two-tier float): when the character sits
+  INSIDE a container (helmet, suit, cockpit), nest a second null under the
+  shell rig carrying the face/eyes/visible body, and give it its own small
+  drift — slower period than the shell, ~1–2 px, never reaching the
+  container's edge. Shell gentle, occupant slightly more: the relative
+  motion sells "floating in it". Keep the shell's pieces rigid to each other.
+- Contact welds: anything the artwork shows touching, gripped by, resting
+  on, or tucked BEHIND the character joins that assembly (or is driven by
+  the SAME driver, scaled) — a contact/occlusion edge must show zero
+  relative slide across the motion extremes. Brief labels like "floating
+  prop" never override a visible contact; free drift needs clear air on all
+  sides. Verify with rendered extremes, edge by edge.
 - The "steady island": when one element must stay put while the rig moves,
   exclude it from the rig entirely (leave it unparented at its authored
   coordinates) rather than counter-animating it. Counter-animation must cancel the
