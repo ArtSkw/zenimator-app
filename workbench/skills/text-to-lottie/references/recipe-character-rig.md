@@ -139,26 +139,41 @@ below.
   Canonical construction (adapt the ids; this shape is the sanctioned
   implementation, coming from this reference — using it is not porting):
 
+  **The matte and the mass are TWO DIFFERENT SHAPES.** The matte is the
+  CONTAINER's opening (the glass area); the occupant is the smaller interior
+  mass that lives inside it (the face). Cutting both from the same path is a
+  silent no-op: the static matte pins the visible edge and a uniform fill has
+  no interior detail to reveal the shift, so a measured 8px float renders as
+  a perfectly still face (observed exactly this way; `check-motion.mjs` now
+  fails it as MATTE CANCELS THE FLOAT). The matte must exceed the mass by
+  more than the drift amplitude in at least one axis — that slack IS the room
+  to move.
+
   ```js
-  // 1. The container's opening subpath (e.g. the visor hole) is the key.
-  const openingSub = /* the opening's subpath from the shell's own geometry */
-  // 2. Occupant mass: the opening path re-filled as its own layer, nested on
-  //    a null that adds readable drift on top of the shell's motion.
+  // 1. TWO shapes: the container opening (bigger) and the interior mass.
+  const containerSub = /* the glass/opening outline — the CLIP */
+  const occupantSub  = /* the face/body mass INSIDE it — strictly smaller */
+  // 2. Occupant mass on a null that adds readable drift over the shell's motion.
   const OCC_AMP_X = 3.8, OCC_AMP_Y = 3.6      // ≥3px p2p relative — 1–2px reads glued
   const OCC_LAG = 25                          // deg behind the shell's tilt phase
   const occupantRigInd = pushLayer({ nm: 'occupant-rig', ty: 3, parent: shellRigInd,
     ks: rigKs(pivot, occupantDriftPts /* shell period, phase − OCC_LAG */) })
   pushLayer({ nm: 'occupant-mass', shapes: [group('occupant-mass',
-    [shapeFromSubpath(openingSub, 'occupant-mass-shape'), fillItem(INTERIOR_FILL)])],
+    [shapeFromSubpath(occupantSub, 'occupant-mass-shape'), fillItem(INTERIOR_FILL)])],
     ks: baseTransform(), parent: occupantRigInd, tt: 1 })   // tt:1 = alpha-matted BY the layer above
-  // 3. Matte source: a STATIC copy of the same opening riding the SHELL rig,
-  //    so the clip follows the shell and the mass can never cross its lines.
+  // 3. Matte source: a STATIC copy of the CONTAINER riding the SHELL rig, so
+  //    the clip follows the shell while the mass roams inside it.
   pushLayer({ nm: 'visor__matte', shapes: [group('visor__matte',
-    [shapeFromSubpath(openingSub, 'visor__matte-shape'), fillItem('#FFFFFF')])],
+    [shapeFromSubpath(containerSub, 'visor__matte-shape'), fillItem('#FFFFFF')])],
     ks: baseTransform(), parent: shellRigInd, td: true })
   // Layer ORDER: …, eyes (parent occupant-rig), visor__matte, occupant-mass, shell…
   // Eyes and face details ride occupant-rig so they drift with the mass.
   ```
+
+  If the source bakes mass and opening as one path, the container shape is
+  the shell's own glass outline (the dark area the face sits in) — take the
+  OUTER subpath for the matte and the inner one for the mass, never the same
+  subpath twice.
 
   Verify like gate 15 says: isolate shell vs occupant at the extremes —
   measurable relative offset, zero occupant pixels outside the opening.
