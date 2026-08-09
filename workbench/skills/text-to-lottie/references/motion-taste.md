@@ -419,7 +419,16 @@ Four properties separate a living idle from a placed one:
   helmet's outline and shaved against its strokes. When the face is drawn as
   negative space (a hole in the body path), carve it into a real layer
   (recipe-character-rig, "Occupant-inside-shell") rather than moving the mass
-  that surrounds it. Clearance is per SIDE and must exceed the drift. Its relative
+  that surrounds it. Clearance is per SIDE and must exceed the drift.
+  - **The occupant's drift is SINGLE-AXIS — vertical by default.** The shell
+    already travels a 2D path (drift + tilt); giving the occupant its own
+    ellipse inside that compounds two circles and reads as swimming, a vague
+    wobble with no direction. One axis against the parent's two is what makes
+    both legible: the suit drifts around, the body settles up and down inside
+    it — buoyancy, which is the physical story of floating in a suit. Keep
+    the phase lag (the body answers the suit late); drop the second axis. The
+    same contrast principle applies to any nested secondary drift: when the
+    parent moves in 2D, the child earns more by moving simply. Its relative
   travel against the shell must clear ~3px peak-to-peak or lag the shell's
   tilt by a visible phase, and it is CLIPPED by a track matte of the
   container's opening (`<host>__matte`, per the player-contract) so it never

@@ -154,7 +154,10 @@ below.
   const containerSub = /* the glass/opening outline — the CLIP */
   const occupantSub  = /* the face/body mass INSIDE it — strictly smaller */
   // 2. Occupant mass on a null that adds readable drift over the shell's motion.
-  const OCC_AMP_X = 3.8, OCC_AMP_Y = 3.6      // ≥3px p2p relative — 1–2px reads glued
+  // Single-axis by default: the shell already travels a 2D path, so a second
+  // ellipse inside it reads as swimming. Vertical-only against the parent's
+  // drift is what reads as the body settling inside the suit (buoyancy).
+  const OCC_AMP_X = 0, OCC_AMP_Y = 3.4        // ≥3px relative — 1–2px reads glued
   const OCC_LAG = 25                          // deg behind the shell's tilt phase
   const occupantRigInd = pushLayer({ nm: 'occupant-rig', ty: 3, parent: shellRigInd,
     ks: rigKs(pivot, occupantDriftPts /* shell period, phase − OCC_LAG */) })

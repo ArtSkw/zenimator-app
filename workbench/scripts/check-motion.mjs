@@ -408,6 +408,24 @@ if (occupantSlides.length) {
   }
 }
 
+// Axis split, reported whether or not the occupant touches anything: the
+// shell already travels 2D, so an occupant with real amplitude on BOTH axes
+// compounds two ellipses and reads as swimming rather than as a body settling
+// inside its suit.
+{
+  const rig = doc.layers.find((l) => l.ty === 3 && OCCUPANT_RE.test(l.nm ?? '') && l.ks?.p?.a)
+  if (rig) {
+    const xs = [], ys = []
+    for (const t of times) { const p = evalProp(rig.ks.p, t, [0, 0, 0]); xs.push(p[0]); ys.push(p[1]) }
+    const p2p = (a) => Math.max(...a) - Math.min(...a)
+    const [ax, ay] = [p2p(xs), p2p(ys)]
+    console.log(`\nOccupant drift axes (${rig.nm}): ${ax.toFixed(1)}px horizontal × ${ay.toFixed(1)}px vertical` +
+      (Math.min(ax, ay) > 1.5
+        ? '\n  → 2D drift beneath a 2D shell reads as swimming; a single axis (vertical) reads as buoyancy'
+        : '  — single-axis, reads as buoyancy'))
+  }
+}
+
 console.log(`\nContact pairs checked: ${pairs.length}`)
 for (const p of pairs.sort((x, y) => y.slide - x.slide).slice(0, 12)) {
   console.log(`  ${p.slide > SLIDE_LIMIT ? 'FAIL' : 'ok  '} ${p.slide.toFixed(2)}px  ${p.a} ↔ ${p.b}`)
