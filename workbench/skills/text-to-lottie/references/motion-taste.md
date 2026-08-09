@@ -411,9 +411,15 @@ Four properties separate a living idle from a placed one:
 - **An occupant may float INSIDE its shell — the Rive two-tier read.** A
   creature inside a container (helmet, suit, cockpit, porthole) earns a
   nested drift of its own WITHIN the container — and it must READ. The
-  occupant is the visible INTERIOR MASS (the head/body seen through the
-  visor), not just the eyes (measured: an eyes-only occupant at 1.3px was
-  invisible — the mascot still read as glued to its suit). Its relative
+  occupant is the FACE: the shape the EYES sit on and travel with. Not the
+  eyes alone (measured: an eyes-only occupant at 1.3px was invisible), and
+  not the larger mass the face sits in — that mass is the character's BODY,
+  welded to the shell and still. Both errors were shipped in turn: an
+  eyes-only float read as glued, then a whole-body float slid under the
+  helmet's outline and shaved against its strokes. When the face is drawn as
+  negative space (a hole in the body path), carve it into a real layer
+  (recipe-character-rig, "Occupant-inside-shell") rather than moving the mass
+  that surrounds it. Clearance is per SIDE and must exceed the drift. Its relative
   travel against the shell must clear ~3px peak-to-peak or lag the shell's
   tilt by a visible phase, and it is CLIPPED by a track matte of the
   container's opening (`<host>__matte`, per the player-contract) so it never

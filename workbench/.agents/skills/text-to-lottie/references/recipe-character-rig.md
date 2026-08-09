@@ -170,6 +170,31 @@ below.
   // Eyes and face details ride occupant-rig so they drift with the mass.
   ```
 
+  **Identify the occupant by the EYES.** The occupant is the FACE — the shape
+  the eyes sit on and travel with — never the larger mass that face sits in.
+  In a helmet scene the dark visor mass is the character's BODY: it is welded
+  to the shell and holds perfectly still, while the light face patch drifts
+  across it. Getting this backwards makes the whole body slide under the
+  helmet's own outline and shave against its strokes (observed; the checker
+  now fails it as OCCUPANT HITS THE EDGE). A quick test before you rig: which
+  shape would the eyes stay glued to if the character glanced around inside
+  its suit? That shape is the occupant.
+
+  **When the face is NEGATIVE SPACE, carve it as a real layer.** Line art
+  often draws the face as a HOLE in the dark mass (a two-subpath `Subtract`:
+  outer boundary + face-shaped hole) — there is no face shape to move, which
+  is why grabbing the whole dark mass is so tempting. Carve instead:
+  1. the dark mass = the OUTER subpath alone, filled with its authored
+     colour, WELDED to the shell (no own motion),
+  2. the face = the HOLE's subpath re-drawn as its own layer on top, filled
+     with the colour that currently shows through it (take it from the
+     artwork — the body/highlight fill behind — never a new colour),
+  3. that face layer plus the eyes ride `occupant-rig`, matte-clipped by the
+     dark mass's outer boundary so the face can roam without ever reaching
+     the helmet's rim.
+  Clearance is per SIDE: the container must exceed the face by MORE than the
+  drift amplitude on every side, or the face runs into the outline.
+
   **Both shapes must already EXIST in the artwork.** The container is the
   region the mass visibly sits in — for a two-subpath cutout, the OUTER
   subpath is the container and the INNER one is the mass, at their authored
@@ -186,6 +211,27 @@ below.
   colour. Every colour in the built scene must appear in the source SVG
   (`check-motion.mjs` fails on INVENTED FILL). Re-using an existing subpath
   and its existing fill is the whole technique.
+
+  **The container and the mass do not have to come from the SAME path.**
+  "For a two-subpath cutout, the outer subpath is the container" is the
+  common case, not the only one — check nearby elements too, especially a
+  rim/ring drawn around the same interior. Observed case: a body silhouette
+  (`Subtract`, a dark disc with its own baked-in visor-hole cutout where the
+  eyes sit) sitting inside a separate ring/rim shape (`Ellipse 377`) whose
+  own inner-boundary subpath was ~3.6px bigger in radius than the disc,
+  already visible as a gap in the static artwork. Trying the literal
+  same-path reading first — the disc's own outer subpath as container, its
+  own inner/hole subpath as mass, both unscaled — technically clears the
+  slack and fill checks, but fills the hole with the disc's own colour, so
+  the "mass" is invisible against its own surroundings, and without a
+  separate static layer for the rest of the disc the helmet renders mostly
+  transparent instead of solid. The ring's own inner boundary as container
+  and the WHOLE disc (both its subpaths together, unscaled) as mass
+  reproduced the artwork's own appearance at rest while adding real drift.
+  When the same-path pairing would make the mass the same colour as what's
+  behind it, or would strand the rest of that path's shape with no layer to
+  render it, look one level out for a bigger already-existing container
+  instead of forcing the pairing.
 
   Verify like gate 15 says: isolate shell vs occupant at the extremes —
   measurable relative offset, zero occupant pixels outside the opening.

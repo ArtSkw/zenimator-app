@@ -323,13 +323,26 @@ for (let i = 0; i < doc.layers.length; i++) {
   const slackX = (tb.x1 - tb.x0) - (mb.x1 - mb.x0)
   const slackY = (tb.y1 - tb.y0) - (mb.y1 - mb.y0)
   const need = occupantSlides.length ? Math.max(...occupantSlides.map((o) => o.slide)) : OCCUPANT_MIN
-  console.log(`\nOccupant clip: ${matted.nm} inside ${matte.nm} — slack ${slackX.toFixed(1)}×${slackY.toFixed(1)}px, area ratio ${(area(tb) / (area(mb) || 1)).toFixed(2)}`)
-  if (slackX < need && slackY < need) {
+  // Slack is shared between the two sides, so what the occupant actually has
+  // to travel into is HALF of it. Comparing the total was too generous: a mass
+  // with 7.2px of total slack and a 4.8px drift has only 3.6px per side, so it
+  // runs into the container's edge and gets shaved against the border strokes
+  // — exactly the "black body clashing with the suit lines" report.
+  const perX = slackX / 2, perY = slackY / 2
+  console.log(`\nOccupant clip: ${matted.nm} inside ${matte.nm} — clearance ${perX.toFixed(1)}px/side × ${perY.toFixed(1)}px/side, drift ${need.toFixed(1)}px, area ratio ${(area(tb) / (area(mb) || 1)).toFixed(2)}`)
+  if (perX <= 0.5 && perY <= 0.5) {
     failures.push(
-      `MATTE CANCELS THE FLOAT  ${matted.nm} fills its own matte (${matte.nm}): only ` +
-      `${slackX.toFixed(1)}×${slackY.toFixed(1)}px of slack for a ${need.toFixed(1)}px drift. ` +
-      `The clip pins the visible edge, so the motion renders as nothing. Use the CONTAINER's ` +
-      `opening as the matte (the larger shape) and the interior mass as the occupant.`,
+      `MATTE CANCELS THE FLOAT  ${matted.nm} fills its own matte (${matte.nm}): ` +
+      `${perX.toFixed(1)}px/side of clearance. The clip pins the visible edge, so the motion ` +
+      `renders as nothing. The matte must be the CONTAINER; the occupant is a smaller feature inside it.`,
+    )
+  } else if (perX < need || perY < need) {
+    failures.push(
+      `OCCUPANT HITS THE EDGE  ${matted.nm} drifts ${need.toFixed(1)}px inside ${matte.nm} but has only ` +
+      `${perX.toFixed(1)}px/side × ${perY.toFixed(1)}px/side of clearance — it reaches the container's ` +
+      `boundary and is shaved against its outline. Either the wrong element is the occupant (it should ` +
+      `be the FACE/feature the eyes sit on, not the mass it sits in — that mass stays welded to the ` +
+      `shell), or the drift exceeds the room the artwork gives it.`,
     )
   }
 }
