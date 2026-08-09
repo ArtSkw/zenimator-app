@@ -244,7 +244,12 @@ function generatePrompt(slug, brief, kind, assets = []) {
     LIVING_MOTION_CONTRACT + `\n` +
     `Follow the text-to-lottie skill workflow. Verify headlessly with ` +
     `scripts/preview-scene.mjs and READ the preview image before finishing — design quality is a ` +
-    `completion blocker. Finish with the line: SCENE_READY ${slug}/scene-1`
+    `completion blocker.\n` +
+    `MECHANICAL GATE: \`node scripts/check-motion.mjs ${slug}\` must EXIT 0, and its output goes in ` +
+    `your final message. It measures the built file for parts sliding where the artwork shows them ` +
+    `touching, and for an occupant too still to read inside its shell. A non-zero exit is not a ` +
+    `finding to explain — it is an unfinished rig. Fix it and re-run.\n` +
+    `Finish with the line: SCENE_READY ${slug}/scene-1`
   )
 }
 

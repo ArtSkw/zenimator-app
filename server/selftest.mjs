@@ -473,6 +473,9 @@ try {
       // A fresh run skipped the carve claiming the SVG had no occupant path —
       // applicability comes from the brief, and the recipe carries canonical
       // code so there is nothing left to interpret.
+      check(`living-motion (${kind}): the MECHANICAL gate is named and must exit 0`,
+        p.includes('check-motion.mjs') && p.includes('must EXIT 0') &&
+        p.includes('not a finding to explain'))
       check(`living-motion (${kind}): gate-15 applicability is the brief's, not the path list's`,
         p.includes('whenever the BRIEF puts the character in/inside something') &&
         p.includes('never an exemption') && p.includes('eyes-only') &&
