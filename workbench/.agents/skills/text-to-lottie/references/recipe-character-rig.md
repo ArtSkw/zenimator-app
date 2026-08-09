@@ -170,10 +170,22 @@ below.
   // Eyes and face details ride occupant-rig so they drift with the mass.
   ```
 
-  If the source bakes mass and opening as one path, the container shape is
-  the shell's own glass outline (the dark area the face sits in) — take the
-  OUTER subpath for the matte and the inner one for the mass, never the same
-  subpath twice.
+  **Both shapes must already EXIST in the artwork.** The container is the
+  region the mass visibly sits in — for a two-subpath cutout, the OUTER
+  subpath is the container and the INNER one is the mass, at their authored
+  sizes. Never manufacture slack: scaling the mass down, or adding a backing
+  layer behind it to fill the gap, invents artwork the designer did not draw
+  (observed: a run that shrank the face to 78% and slid a grey plate behind
+  it, producing a halo around the face that had no story). If the only
+  candidate container is the mass itself, the correct read is usually that
+  you have mis-identified which shape is which — re-read the artwork, and
+  remember that a dark area around a light face is typically the CHARACTER'S
+  BODY seen through the opening, not the interior of the shell.
+
+  Fidelity rule that follows: an occupant carve introduces NO new fill
+  colour. Every colour in the built scene must appear in the source SVG
+  (`check-motion.mjs` fails on INVENTED FILL). Re-using an existing subpath
+  and its existing fill is the whole technique.
 
   Verify like gate 15 says: isolate shell vs occupant at the extremes —
   measurable relative offset, zero occupant pixels outside the opening.

@@ -334,6 +334,51 @@ for (let i = 0; i < doc.layers.length; i++) {
   }
 }
 
+// ── Invented fills ───────────────────────────────────────────────────────────
+// Every colour on screen must come from the artwork. Rigs are re-parenting and
+// re-timing existing shapes, never repainting them — a new colour means a
+// layer was invented to make the rig work (observed: a grey plate slid behind
+// a shrunken face to manufacture matte slack, giving it a halo the designer
+// never drew). Matte sources are exempt: their fill is an alpha channel.
+const srcPath = join(__dirname, `../assets/${slug}.svg`)
+if (existsSync(srcPath)) {
+  const svg = readFileSync(srcPath, 'utf8')
+  const sourceFills = new Set()
+  // Named colours are ordinary in exported SVG ("white" outnumbers hex in
+  // some exports), so a hex-only scan would call the artwork's own white an
+  // invention — the fastest way to make this check untrustworthy.
+  const NAMED = { white: '#FFFFFF', black: '#000000', red: '#FF0000', gray: '#808080', grey: '#808080' }
+  for (const m of svg.matchAll(/(?:fill|stroke)\s*[:=]\s*["']?\s*(#[0-9a-fA-F]{3,8}|[a-zA-Z]+)/g)) {
+    const raw = m[1]
+    if (/^#/.test(raw)) {
+      let hex = raw.toUpperCase()
+      if (hex.length === 4) hex = '#' + [...hex.slice(1)].map((c) => c + c).join('')
+      sourceFills.add(hex.slice(0, 7))
+    } else if (NAMED[raw.toLowerCase()]) {
+      sourceFills.add(NAMED[raw.toLowerCase()])
+    }
+  }
+  const toHex = (k) => '#' + k.slice(0, 3)
+    .map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('').toUpperCase()
+  const seen = new Map()
+  const walkFills = (items, layerName) => {
+    for (const it of items ?? []) {
+      if (it.ty === 'gr') walkFills(it.it, layerName)
+      else if ((it.ty === 'fl' || it.ty === 'st') && it.c) {
+        const k = it.c.a ? it.c.k?.[0]?.s : it.c.k
+        if (Array.isArray(k)) seen.set(toHex(k), layerName)
+      }
+    }
+  }
+  for (const l of doc.layers) if (l.ty === 4 && !l.td) walkFills(l.shapes, l.nm)
+  const invented = [...seen.entries()].filter(([hex]) => !sourceFills.has(hex))
+  if (sourceFills.size && invented.length) {
+    for (const [hex, layerName] of invented) {
+      failures.push(`INVENTED FILL  ${hex} on "${layerName}" appears nowhere in ${slug}.svg — the rig repainted the artwork instead of re-using its shapes`)
+    }
+  }
+}
+
 // Gate 15, mechanically: an occupant that exists must READ against its shell.
 if (occupantSlides.length) {
   const best = occupantSlides.sort((a, b) => b.slide - a.slide)[0]
