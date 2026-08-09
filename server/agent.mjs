@@ -569,6 +569,11 @@ function proposePrompt(slug, assets = []) {
     `    • clip paths, especially the ones rounding a screen's corners\n` +
     `    • elements byte-identical ACROSS assets — those are ONE element that persists, never a crossfade\n` +
     `    • text as outlines vs live text; groups that are already positioned for a jump or a reveal\n` +
+    `    • a feature drawn as NEGATIVE SPACE — a face that is a hole cut in the body path rather than a\n` +
+    `      shape of its own. It cannot be animated until it is carved into a real layer, and missing this\n` +
+    `      is why a rig ends up moving the whole mass instead of the feature inside it\n` +
+    `    • elements that TOUCH, overlap or tuck BEHIND the subject — every such contact is a weld the\n` +
+    `      motion must preserve, whatever the element looks like on its own\n` +
     `- Report only what you actually found. If an asset is clean, say so in a line — never invent a hazard.\n` +
     `- Read the text-to-lottie skill's design-taste and motion-taste references first` +
     (multi ? `, plus the Grounded Handoffs section of references/chapterization-transition-grammar.md` : '') +
@@ -581,8 +586,21 @@ function proposePrompt(slug, assets = []) {
         `screens) and what genuinely arrives. Attachment order is the suggested sequence; propose a ` +
         `different one only if the artwork clearly reads better that way, and say which.\n`
       : `\n`) +
+    `- STRUCTURE — who moves with whom, before any beat is described. Sort EVERY element into exactly one:\n` +
+    `    • the SUBJECT ASSEMBLY: the body plus everything worn, attached, gripped, resting on it or tucked\n` +
+    `      behind it. These share one rig and hold constant offsets — no element here gets a clock of its\n` +
+    `      own, not even the same period at a different phase.\n` +
+    `    • features INSIDE the subject that may drift against it (a face within a helmet or window): name\n` +
+    `      the feature, the container that bounds it, and say if the feature is negative space to be carved.\n` +
+    `    • FREE elements with clear air on every side, which may drift on their own slow clocks.\n` +
+    `    • DISTANT backdrops (moon, sun, skyline): these hold still, living through opacity, or counter-drift\n` +
+    `      strictly as a negated, scaled copy of the subject's own track — never on an independent clock.\n` +
+    `  This section is what stops a rig from animating the wrong element, so make each call explicitly; if a\n` +
+    `  piece is ambiguous, say which reading you chose and why.\n` +
     `- BEATS: numbered, each with a rough timing (~seconds), what moves, what deliberately does NOT, and how\n` +
     `  it should feel. Let beats overlap rather than queue — a settle can start while the next thing begins.\n` +
+    `  For a LOOPING idle, state the cycle lengths so they divide the loop a whole number of times, and keep\n` +
+    `  different details on different clocks so nothing peaks in unison.\n` +
     `- FIDELITY MUSTS: one line per thing step 1 turned up, written as an instruction, using the real ids,\n` +
     `  filenames, colours and coordinates from the file.\n` +
     `- How it ends: ENTRY settles exactly on the final artwork, LOOP's first frame equals its last. Say which,\n` +
@@ -595,7 +613,9 @@ function proposePrompt(slug, assets = []) {
     `- Outcomes, not Lottie internals: "the card exits through the check's draw-on", never "trim path 0→100".\n` +
     `- Specific beats generic: real part names and real colours from the file, not "the shape" and "the accent".\n` +
     `- House style: restraint, purposeful motion, one idea per beat; no bounce for its own sake.\n` +
-    `- Never propose animating something the artwork doesn't contain, and never redraw a supplied subject.\n\n` +
+    `- Never propose animating something the artwork doesn't contain, and never redraw a supplied subject.\n` +
+    `- Never propose a NEW colour, shape or filler layer. Every fill must already exist in the source; a rig\n` +
+    `  re-parents and re-times the artwork, it never repaints it.\n\n` +
 
     `OUTPUT — write ONLY the brief itself (opening, BEATS, FIDELITY MUSTS, how it ends, the check line) to ` +
     `assets/${slug}.brief.txt. No preamble, no notes about your process, no summary of these instructions. ` +

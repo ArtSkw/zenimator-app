@@ -363,6 +363,18 @@ try {
         text.includes('exported TWICE') && text.includes('compound path'))
       check(`propose ${label}: dictates the brief anatomy`,
         text.includes('BEATS:') && text.includes('FIDELITY MUSTS:'))
+      // The rig map: every scene defect this session traced back to the brief
+      // not saying which element belonged to which group, so the propose
+      // output must sort them before describing a single beat.
+      check(`propose ${label}: demands a STRUCTURE map before the beats`,
+        text.includes('STRUCTURE — who moves with whom') &&
+        text.includes('SUBJECT ASSEMBLY') && text.includes('FREE elements') &&
+        text.includes('DISTANT backdrops'))
+      check(`propose ${label}: flags negative-space features and contacts as hazards`,
+        text.includes('NEGATIVE SPACE') && text.includes('carved into a real layer') &&
+        text.includes('tuck BEHIND the subject'))
+      check(`propose ${label}: forbids inventing colour/shape, and pins loop cycles`,
+        text.includes('never repaints it') && text.includes('divide the loop a whole number of times'))
       check(`propose ${label}: keeps the settle/loop requirement`,
         text.includes('ENTRY settles exactly') && text.includes("LOOP's first frame equals its last"))
       check(`propose ${label}: still writes the brief file and the sentinel`,
