@@ -305,6 +305,35 @@ if (periods.some((p) => p.period)) {
   }
 }
 
+// A matte the SAME shape as the mass it clips cancels the drift exactly: the
+// visible edge is pinned by the static matte and a uniform fill has no
+// interior detail to reveal the shift, so a measured 7px float renders as
+// nothing at all. The matte must be the CONTAINER's opening — bigger than the
+// occupant, which is what gives it room to move (observed: a scene where the
+// visor hole was used for both, and the face sat dead still while the
+// transform said otherwise).
+for (let i = 0; i < doc.layers.length; i++) {
+  const matted = doc.layers[i]
+  if (!matted.tt || !OCCUPANT_RE.test(matted.nm ?? '')) continue
+  const matte = doc.layers.slice(0, i).reverse().find((l) => l.td)
+  if (!matte) continue
+  const mb = bboxOf(matted), tb = bboxOf(matte)
+  if (!mb || !tb) continue
+  const area = (b) => Math.max(0, b.x1 - b.x0) * Math.max(0, b.y1 - b.y0)
+  const slackX = (tb.x1 - tb.x0) - (mb.x1 - mb.x0)
+  const slackY = (tb.y1 - tb.y0) - (mb.y1 - mb.y0)
+  const need = occupantSlides.length ? Math.max(...occupantSlides.map((o) => o.slide)) : OCCUPANT_MIN
+  console.log(`\nOccupant clip: ${matted.nm} inside ${matte.nm} — slack ${slackX.toFixed(1)}×${slackY.toFixed(1)}px, area ratio ${(area(tb) / (area(mb) || 1)).toFixed(2)}`)
+  if (slackX < need && slackY < need) {
+    failures.push(
+      `MATTE CANCELS THE FLOAT  ${matted.nm} fills its own matte (${matte.nm}): only ` +
+      `${slackX.toFixed(1)}×${slackY.toFixed(1)}px of slack for a ${need.toFixed(1)}px drift. ` +
+      `The clip pins the visible edge, so the motion renders as nothing. Use the CONTAINER's ` +
+      `opening as the matte (the larger shape) and the interior mass as the occupant.`,
+    )
+  }
+}
+
 // Gate 15, mechanically: an occupant that exists must READ against its shell.
 if (occupantSlides.length) {
   const best = occupantSlides.sort((a, b) => b.slide - a.slide)[0]
