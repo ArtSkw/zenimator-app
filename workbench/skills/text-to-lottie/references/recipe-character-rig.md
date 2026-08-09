@@ -159,7 +159,10 @@ below.
   // drift is what reads as the body settling inside the suit (buoyancy).
   const OCC_AMP_X = 0, OCC_AMP_Y = 3.4        // ≥3px relative — 1–2px reads glued
   const OCC_LAG = 25                          // deg behind the shell's tilt phase
-  const occupantRigInd = pushLayer({ nm: 'occupant-rig', ty: 3, parent: shellRigInd,
+  // parent = the shell's BREATHE null (the innermost transform the body
+  // carries), never the rig above it: the occupant must swell with the body,
+  // or the shell reads as inflating around a fixed-size face.
+  const occupantRigInd = pushLayer({ nm: 'occupant-rig', ty: 3, parent: shellBreatheInd,
     ks: rigKs(pivot, occupantDriftPts /* shell period, phase − OCC_LAG */) })
   pushLayer({ nm: 'occupant-mass', shapes: [group('occupant-mass',
     [shapeFromSubpath(occupantSub, 'occupant-mass-shape'), fillItem(INTERIOR_FILL)])],
