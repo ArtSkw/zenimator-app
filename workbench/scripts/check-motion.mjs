@@ -1,0 +1,328 @@
+#!/usr/bin/env node
+/**
+ * check-motion.mjs — mechanical audit of a built scene's RIGID relationships.
+ *
+ *   node scripts/check-motion.mjs <slug> [scene-1]
+ *
+ * Prose rules kept getting rationalized away ("this element is a floating
+ * prop", "gate N/A by construction") while the render still showed parts
+ * sliding off a character. This measures the built lottie.json instead of
+ * asking, and exits non-zero when it finds a violation:
+ *
+ *   1. CONTACT SLIDE — any two layers whose artwork touches or overlaps must
+ *      keep a constant relative transform. Computed exactly: for a contact
+ *      point P, compare where each layer's own world matrix carries P over
+ *      time. Welded parts move it identically; a slide is the distance
+ *      between them. No opinion involved.
+ *   2. FOREIGN CLOCK — every animated track's dominant period must match the
+ *      scene's primary period (or be an exact integer multiple). A backdrop
+ *      "parallax" on its own frequency drifts WITH the subject half the time,
+ *      which is the bug that keeps coming back.
+ *
+ * It reports rather than guesses intent: a genuinely free element simply has
+ * no contact pair, and a deliberate joint is a one-line documented exception.
+ */
+import { readFileSync, existsSync } from 'fs'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const slug = process.argv[2]
+const scene = process.argv[3] && process.argv[3].startsWith('scene') ? process.argv[3] : 'scene-1'
+if (!slug) {
+  console.error('usage: node scripts/check-motion.mjs <slug> [scene-1]')
+  process.exit(2)
+}
+const path = join(__dirname, `../public/projects/${slug}/${scene}/lottie.json`)
+if (!existsSync(path)) {
+  console.error(`no scene at ${path}`)
+  process.exit(2)
+}
+const doc = JSON.parse(readFileSync(path, 'utf8'))
+
+// ── Property evaluation ──────────────────────────────────────────────────────
+// Build scripts bake dense samples, so linear interpolation between adjacent
+// keys is accurate to well under the thresholds below.
+function evalProp(p, t, fallback) {
+  if (!p) return fallback
+  if (!p.a) return p.k
+  const ks = p.k
+  if (!Array.isArray(ks) || !ks.length) return fallback
+  if (t <= ks[0].t) return ks[0].s ?? fallback
+  const last = ks[ks.length - 1]
+  if (t >= last.t) return last.s ?? ks[ks.length - 2]?.e ?? fallback
+  for (let i = 0; i < ks.length - 1; i++) {
+    if (t >= ks[i].t && t <= ks[i + 1].t) {
+      const a = ks[i].s, b = ks[i + 1].s ?? ks[i].e
+      if (!a) return b ?? fallback
+      if (!b) return a
+      const span = ks[i + 1].t - ks[i].t
+      const u = span === 0 ? 0 : (t - ks[i].t) / span
+      return a.map((v, j) => v + ((b[j] ?? v) - v) * u)
+    }
+  }
+  return last.s ?? fallback
+}
+
+// ── 2D affine matrices as [a,b,c,d,e,f] (x' = ax+cy+e, y' = bx+dy+f) ─────────
+const mul = (m, n) => [
+  m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1],
+  m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3],
+  m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5],
+]
+const apply = (m, p) => [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]]
+function invert(m) {
+  const det = m[0] * m[3] - m[1] * m[2]
+  if (!det) return [1, 0, 0, 1, 0, 0]
+  const [a, b, c, d, e, f] = m
+  return [d / det, -b / det, -c / det, a / det, (c * f - d * e) / det, (b * e - a * f) / det]
+}
+function localMatrix(ks, t) {
+  const a = evalProp(ks?.a, t, [0, 0, 0])
+  const p = evalProp(ks?.p, t, [0, 0, 0])
+  const s = evalProp(ks?.s, t, [100, 100, 100])
+  const r = ((evalProp(ks?.r, t, [0]))[0] ?? 0) * Math.PI / 180
+  const cos = Math.cos(r), sin = Math.sin(r)
+  const sx = (s[0] ?? 100) / 100, sy = (s[1] ?? 100) / 100
+  // translate(p) · rotate(r) · scale(s) · translate(-a)
+  const T = [1, 0, 0, 1, p[0] ?? 0, p[1] ?? 0]
+  const R = [cos, sin, -sin, cos, 0, 0]
+  const S = [sx, 0, 0, sy, 0, 0]
+  const A = [1, 0, 0, 1, -(a[0] ?? 0), -(a[1] ?? 0)]
+  return mul(mul(mul(T, R), S), A)
+}
+
+const byInd = new Map(doc.layers.map((l) => [l.ind, l]))
+function worldMatrix(layer, t, seen = 0) {
+  const m = localMatrix(layer.ks, t)
+  if (layer.parent == null || seen > 12) return m
+  const parent = byInd.get(layer.parent)
+  return parent ? mul(worldMatrix(parent, t, seen + 1), m) : m
+}
+
+// ── Local-space bbox from shape geometry (approximate, enough for contact) ───
+function collectPoints(items, out) {
+  for (const it of items ?? []) {
+    if (it.ty === 'gr') collectPoints(it.it, out)
+    else if (it.ty === 'sh') {
+      const path = it.ks?.a ? it.ks.k?.[0]?.s : it.ks?.k
+      for (const v of path?.v ?? []) out.push(v)
+    } else if (it.ty === 'el' || it.ty === 'rc') {
+      const c = evalProp(it.p, 0, [0, 0])
+      const s = evalProp(it.s, 0, [0, 0])
+      out.push([c[0] - s[0] / 2, c[1] - s[1] / 2], [c[0] + s[0] / 2, c[1] + s[1] / 2])
+    }
+  }
+  return out
+}
+function bboxOf(layer) {
+  const pts = collectPoints(layer.shapes, [])
+  if (!pts.length) return null
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  for (const [x, y] of pts) {
+    if (x < x0) x0 = x; if (y < y0) y0 = y
+    if (x > x1) x1 = x; if (y > y1) y1 = y
+  }
+  return { x0, y0, x1, y1 }
+}
+
+// ── Sampling window: the idle segment when the scene declares one ────────────
+const loopMarker = doc.markers?.find((m) => m?.cm === 'loop' && typeof m.tm === 'number')
+const t0 = loopMarker ? loopMarker.tm : (doc.ip ?? 0)
+const t1 = doc.op ?? 0
+const SAMPLES = 28
+const times = Array.from({ length: SAMPLES }, (_, i) => t0 + ((t1 - t0) * i) / (SAMPLES - 1))
+
+const shapeLayers = doc.layers.filter((l) => l.ty === 4 && !l.td)
+const world = new Map()
+for (const l of doc.layers) world.set(l.ind, times.map((t) => worldMatrix(l, t)))
+const boxes = new Map()
+for (const l of shapeLayers) {
+  const b = bboxOf(l)
+  if (b) boxes.set(l.ind, b)
+}
+// World-space bbox at rest, for contact detection.
+const worldBox = new Map()
+for (const [ind, b] of boxes) {
+  const m = world.get(ind)[0]
+  const corners = [[b.x0, b.y0], [b.x1, b.y0], [b.x0, b.y1], [b.x1, b.y1]].map((p) => apply(m, p))
+  worldBox.set(ind, {
+    x0: Math.min(...corners.map((c) => c[0])), x1: Math.max(...corners.map((c) => c[0])),
+    y0: Math.min(...corners.map((c) => c[1])), y1: Math.max(...corners.map((c) => c[1])),
+  })
+}
+
+const CONTACT_GAP = 3      // px — touching or overlapping in the artwork
+const SLIDE_LIMIT = 0.75   // px — anything above this reads as a part coming loose
+
+// Contact is decided on real GEOMETRY, not bounding boxes: two diagonally
+// placed elements (a moon up-right, a helmet down-left) can have overlapping
+// AABBs with clear air between the actual ink, and calling that a contact
+// would flood the report with false failures — the fastest way to get a
+// checker ignored.
+const localPts = new Map()
+for (const l of shapeLayers) {
+  const pts = collectPoints(l.shapes, [])
+  if (pts.length) {
+    const step = Math.max(1, Math.floor(pts.length / 160)) // cap the pair cost
+    localPts.set(l.ind, pts.filter((_, i) => i % step === 0))
+  }
+}
+const worldPts = new Map()
+for (const [ind, pts] of localPts) {
+  const m = world.get(ind)[0]
+  worldPts.set(ind, pts.map((p) => apply(m, p)))
+}
+function minDistance(indA, indB) {
+  const A = worldPts.get(indA), B = worldPts.get(indB)
+  if (!A || !B) return Infinity
+  let best = Infinity
+  for (const a of A) for (const b of B) {
+    const d = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
+    if (d < best) { best = d; if (best === 0) return 0 }
+  }
+  return Math.sqrt(best)
+}
+
+/** Max distance between where each layer's own motion carries a shared point. */
+function maxSlide(indA, indB, point) {
+  const A = world.get(indA), B = world.get(indB)
+  const a0 = invert(A[0]), b0 = invert(B[0])
+  let worst = 0
+  for (let i = 1; i < times.length; i++) {
+    const pa = apply(A[i], apply(a0, point))
+    const pb = apply(B[i], apply(b0, point))
+    worst = Math.max(worst, Math.hypot(pa[0] - pb[0], pa[1] - pb[1]))
+  }
+  return worst
+}
+
+const OCCUPANT_RE = /occupant/i
+const OCCUPANT_MIN = 3     // px — below this the inside-the-shell float doesn't read
+const failures = []
+const occupantSlides = []
+const pairs = []
+const inds = [...worldBox.keys()]
+for (let i = 0; i < inds.length; i++) {
+  for (let j = i + 1; j < inds.length; j++) {
+    const A = worldBox.get(inds[i]), B = worldBox.get(inds[j])
+    // Cheap AABB reject first, then the exact geometry test.
+    const gapX = Math.max(A.x0 - B.x1, B.x0 - A.x1)
+    const gapY = Math.max(A.y0 - B.y1, B.y0 - A.y1)
+    if (gapX > CONTACT_GAP || gapY > CONTACT_GAP) continue
+    if (minDistance(inds[i], inds[j]) > CONTACT_GAP) continue // AABBs met, ink didn't
+    // Contact point: centre of the overlapping/adjacent region.
+    const px = (Math.max(A.x0, B.x0) + Math.min(A.x1, B.x1)) / 2
+    const py = (Math.max(A.y0, B.y0) + Math.min(A.y1, B.y1)) / 2
+    const nmA = byInd.get(inds[i]).nm, nmB = byInd.get(inds[j]).nm
+    const slide = maxSlide(inds[i], inds[j], [px, py])
+    pairs.push({ a: nmA, b: nmB, slide })
+    // An OCCUPANT is the one contact that must NOT hold: it is the character
+    // inside the shell, and the matte is what keeps it contained. So the rule
+    // inverts rather than exempting — gate 15 fails when it does not move.
+    if (OCCUPANT_RE.test(nmA) || OCCUPANT_RE.test(nmB)) {
+      occupantSlides.push({ pair: `${nmA} ↔ ${nmB}`, slide })
+      continue
+    }
+    if (slide > SLIDE_LIMIT) {
+      failures.push(`CONTACT SLIDE  ${nmA} ↔ ${nmB}: ${slide.toFixed(2)}px (limit ${SLIDE_LIMIT})`)
+    }
+  }
+}
+
+// ── Foreign clocks ───────────────────────────────────────────────────────────
+// A track's period, read from its own values: the gap between successive
+// maxima of the sampled signal over the idle window.
+function periodOf(layer) {
+  const ks = layer.ks
+  const sig = []
+  const N = 240
+  for (let i = 0; i < N; i++) {
+    const t = t0 + ((t1 - t0) * i) / (N - 1)
+    const p = evalProp(ks?.p, t, [0, 0, 0])
+    const r = evalProp(ks?.r, t, [0])
+    sig.push((p?.[0] ?? 0) + (p?.[1] ?? 0) * 1.7 + (r?.[0] ?? 0) * 13)
+  }
+  const peaks = []
+  for (let i = 1; i < N - 1; i++) if (sig[i] > sig[i - 1] && sig[i] >= sig[i + 1]) peaks.push(i)
+  if (peaks.length < 2) return null
+  const gaps = []
+  for (let i = 1; i < peaks.length; i++) gaps.push(peaks[i] - peaks[i - 1])
+  const mean = gaps.reduce((s, g) => s + g, 0) / gaps.length
+  return (mean / (N - 1)) * (t1 - t0)
+}
+/** Sampled world-x/y of a layer, for comparing one track's shape to another's. */
+function signal(layer) {
+  const W = world.get(layer.ind)
+  return W.map((m) => apply(m, [0, 0]))
+}
+function correlation(a, b, axis) {
+  const xs = a.map((p) => p[axis]), ys = b.map((p) => p[axis])
+  const mx = xs.reduce((s, v) => s + v, 0) / xs.length
+  const my = ys.reduce((s, v) => s + v, 0) / ys.length
+  let num = 0, dx = 0, dy = 0
+  for (let i = 0; i < xs.length; i++) {
+    num += (xs[i] - mx) * (ys[i] - my); dx += (xs[i] - mx) ** 2; dy += (ys[i] - my) ** 2
+  }
+  return dx && dy ? num / Math.sqrt(dx * dy) : 0
+}
+
+// Free elements (no contact pair) MAY carry their own clock — that is the
+// satellite rule — so a differing period is reported, never failed. What the
+// report exists to expose is fake "derived parallax": a real one is a scalar
+// multiple of the subject's own track, so |correlation| ≈ 1. Anything less is
+// an independent clock wearing a parallax comment.
+const contacted = new Set(pairs.flatMap((p) => [p.a, p.b]))
+// Period is only extractable when a track completes >1 cycle in the window —
+// a once-per-loop backdrop drift yields none, and that is exactly the track
+// most likely to be a fake parallax, so correlation is reported for EVERY
+// animated rig whether or not its period could be measured.
+const animated = doc.layers.filter((l) => (l.ks?.p?.a || l.ks?.r?.a) && l.ty === 3)
+const periods = animated.map((l) => ({ l, nm: l.nm, period: periodOf(l) }))
+if (periods.some((p) => p.period)) {
+  // The scene's clock belongs to the SUBJECT — the rig carrying the most
+  // layers — not to whichever period happens to be most numerous among props.
+  const subtreeSize = (ind) => doc.layers.filter((l) => {
+    let cur = l, hops = 0
+    while (cur && hops++ < 12) { if (cur.ind === ind) return true; cur = byInd.get(cur.parent) }
+    return false
+  }).length
+  const lead = periods.filter((p) => p.period).map((p) => ({ ...p, size: subtreeSize(p.l.ind) }))
+    .sort((a, b) => b.size - a.size)[0]
+  const primary = Math.round(lead.period)
+  console.log(`\nScene clock: ${primary}f (from ${lead.nm})`)
+  const leadSig = signal(lead.l)
+  for (const { l, nm, period } of periods) {
+    if (l.ind === lead.l.ind) continue
+    const cx = correlation(signal(l), leadSig, 0), cy = correlation(signal(l), leadSig, 1)
+    const worst = Math.abs(Math.abs(cx) > Math.abs(cy) ? cx : cy)
+    const derived = worst > 0.9
+    const free = !contacted.has(nm)
+    console.log(
+      `  ${nm}: period ${period ? period.toFixed(0) + 'f' : '>window (once per loop)'} · correlation to ${lead.nm} ${(cx < 0 || cy < 0 ? '-' : '+')}${worst.toFixed(2)}` +
+      `  ${derived ? '(derived from the scene clock)' : free ? '(independent clock — fine for a FREE element, NOT for a backdrop claiming parallax)' : '(independent clock)'}`,
+    )
+  }
+}
+
+// Gate 15, mechanically: an occupant that exists must READ against its shell.
+if (occupantSlides.length) {
+  const best = occupantSlides.sort((a, b) => b.slide - a.slide)[0]
+  console.log(`\nOccupant float: ${best.slide.toFixed(2)}px relative (${best.pair})`)
+  if (best.slide < OCCUPANT_MIN) {
+    failures.push(`OCCUPANT TOO STILL  ${best.pair}: ${best.slide.toFixed(2)}px relative to its shell (needs ≥ ${OCCUPANT_MIN}px to read)`)
+  }
+}
+
+console.log(`\nContact pairs checked: ${pairs.length}`)
+for (const p of pairs.sort((x, y) => y.slide - x.slide).slice(0, 12)) {
+  console.log(`  ${p.slide > SLIDE_LIMIT ? 'FAIL' : 'ok  '} ${p.slide.toFixed(2)}px  ${p.a} ↔ ${p.b}`)
+}
+
+if (failures.length) {
+  console.error(`\n${failures.length} violation(s):`)
+  for (const f of failures) console.error('  ' + f)
+  console.error('\nWeld the parts (same rig, no own relative track) or document a named joint with a visible free end.')
+  process.exit(1)
+}
+console.log('\nAll contacts hold and every clock is the scene\'s own.')

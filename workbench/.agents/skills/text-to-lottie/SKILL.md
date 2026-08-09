@@ -154,14 +154,25 @@ Before finishing:
 6. Check for blank canvas, missing assets, unstyled shapes, wrong layer order,
    bad easing, awkward timing, cropped content, text overflow, and visible SVG
    artifacts.
-7. **Run the Aliveness Contract** in `references/motion-taste.md` — the
+7. **Run `node scripts/check-motion.mjs <slug>` — it must exit 0.** This is a
+   MECHANICAL gate, not a judgement call: it measures the built
+   `lottie.json` and fails on parts that slide where the artwork shows them
+   touching, and on an occupant too still to read inside its shell. Paste its
+   output into your final message. It exists because prose gates kept being
+   reasoned around ("this is a floating prop", "gate N/A by construction")
+   while the render still showed the character coming apart — a failing exit
+   code cannot be argued with. Fix the rig until it passes; never explain the
+   failure away. Read its CLOCKS report too: a backdrop claiming parallax
+   must correlate ±0.9 or better with the subject's own track (a near-zero
+   correlation means an independent clock wearing a parallax comment).
+8. **Run the Aliveness Contract** in `references/motion-taste.md` — the
    completion gate for whether the scene is actually alive: nothing inert,
    amplitude measured rather than assumed, held objects parented and carrying
    their own secondary motion, bodies breathing, parts articulating, effort
    phase-locked, accents slow enough to resolve. Report it as a table (track ·
    amplitude · active span · verdict), not as prose. A scene that renders
    cleanly but fails this gate is not finished.
-8. Finish only when the animation renders cleanly and feels intentional.
+9. Finish only when the animation renders cleanly and feels intentional.
 
 ## Maintenance Evals
 
