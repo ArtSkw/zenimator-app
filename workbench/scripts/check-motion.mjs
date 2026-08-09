@@ -340,9 +340,16 @@ for (let i = 0; i < doc.layers.length; i++) {
 // layer was invented to make the rig work (observed: a grey plate slid behind
 // a shrunken face to manufacture matte slack, giving it a halo the designer
 // never drew). Matte sources are exempt: their fill is an alpha channel.
-const srcPath = join(__dirname, `../assets/${slug}.svg`)
-if (existsSync(srcPath)) {
-  const svg = readFileSync(srcPath, 'utf8')
+// Multi-artwork scenes (v1.2 `svgs`) store sources as <slug>.svg, <slug>-2.svg…
+// — a colour is legitimate if ANY attached file carries it, so scan them all.
+const srcPaths = []
+for (let i = 0; i < 12; i++) {
+  const p = join(__dirname, `../assets/${i === 0 ? `${slug}.svg` : `${slug}-${i + 1}.svg`}`)
+  if (!existsSync(p)) break
+  srcPaths.push(p)
+}
+if (srcPaths.length) {
+  const svg = srcPaths.map((p) => readFileSync(p, 'utf8')).join('\n')
   const sourceFills = new Set()
   // Named colours are ordinary in exported SVG ("white" outnumbers hex in
   // some exports), so a hex-only scan would call the artwork's own white an
