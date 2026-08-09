@@ -9,17 +9,30 @@
  * sliding off a character. This measures the built lottie.json instead of
  * asking, and exits non-zero when it finds a violation:
  *
- *   1. CONTACT SLIDE — any two layers whose artwork touches or overlaps must
- *      keep a constant relative transform. Computed exactly: for a contact
- *      point P, compare where each layer's own world matrix carries P over
- *      time. Welded parts move it identically; a slide is the distance
- *      between them. No opinion involved.
- *   2. FOREIGN CLOCK — every animated track's dominant period must match the
- *      scene's primary period (or be an exact integer multiple). A backdrop
- *      "parallax" on its own frequency drifts WITH the subject half the time,
- *      which is the bug that keeps coming back.
+ * FAILS the build (exit 1) on:
+ *   1. CONTACT SLIDE — layers whose ink touches must keep a constant relative
+ *      transform. Measured exactly: for a contact point P, compare where each
+ *      layer's own world matrix carries P over time. Welded parts move it
+ *      identically; the slide is the distance between them. No opinion.
+ *   2. MATTE CANCELS THE FLOAT / OCCUPANT HITS THE EDGE — a matte-clipped
+ *      occupant needs per-SIDE clearance greater than its drift, or the clip
+ *      pins it still (0 clearance) or shaves it against the container's line.
+ *   3. OCCUPANT TOO STILL — an occupant under ~3px relative to its shell does
+ *      not read as being inside it.
+ *   4. SCALE DIVORCE — an occupant that skips its shell's breathe swell makes
+ *      the shell look like it inflates around a fixed-size face.
+ *   5. INVENTED FILL — every colour must appear in the source artwork; a rig
+ *      re-parents and re-times shapes, it never repaints them.
  *
- * It reports rather than guesses intent: a genuinely free element simply has
+ * REPORTS without failing (judgement stays with the designer): each rig's
+ * period and its correlation to the subject's own track (a backdrop claiming
+ * parallax should correlate ±0.9 or better — near zero means an independent
+ * clock wearing a parallax comment), and the occupant's drift axes.
+ *
+ * Exit 2 means the scene could not be audited (missing or unreadable), which
+ * is a setup failure rather than a motion verdict.
+ *
+ * It measures rather than guesses intent: a genuinely free element simply has
  * no contact pair, and a deliberate joint is a one-line documented exception.
  */
 import { readFileSync, existsSync } from 'fs'
@@ -38,7 +51,20 @@ if (!existsSync(path)) {
   console.error(`no scene at ${path}`)
   process.exit(2)
 }
-const doc = JSON.parse(readFileSync(path, 'utf8'))
+// Exit 1 means "motion violations"; a scene that won't parse is a SETUP
+// failure, so it shares exit 2 with "no scene here" and says so plainly
+// instead of spilling a stack trace into the run's activity feed.
+let doc
+try {
+  doc = JSON.parse(readFileSync(path, 'utf8'))
+} catch (e) {
+  console.error(`${path} is not valid JSON — the build script did not produce a readable scene.\n  ${e.message}`)
+  process.exit(2)
+}
+if (!Array.isArray(doc.layers)) {
+  console.error(`${path} has no layers array — nothing to audit.`)
+  process.exit(2)
+}
 
 // ── Property evaluation ──────────────────────────────────────────────────────
 // Build scripts bake dense samples, so linear interpolation between adjacent
@@ -61,7 +87,7 @@ function evalProp(p, t, fallback) {
       return a.map((v, j) => v + ((b[j] ?? v) - v) * u)
     }
   }
-  return last.s ?? fallback
+  return last.s ?? fallback // unreachable for sorted keys; kept as a guard
 }
 
 // ── 2D affine matrices as [a,b,c,d,e,f] (x' = ax+cy+e, y' = bx+dy+f) ─────────
@@ -93,9 +119,11 @@ function localMatrix(ks, t) {
 }
 
 const byInd = new Map(doc.layers.map((l) => [l.ind, l]))
+/** Guards the parent walks against a cyclic layer graph. */
+const MAX_PARENT_DEPTH = 12
 function worldMatrix(layer, t, seen = 0) {
   const m = localMatrix(layer.ks, t)
-  if (layer.parent == null || seen > 12) return m
+  if (layer.parent == null || seen > MAX_PARENT_DEPTH) return m
   const parent = byInd.get(layer.parent)
   return parent ? mul(worldMatrix(parent, t, seen + 1), m) : m
 }
@@ -198,8 +226,16 @@ function maxSlide(indA, indB, point) {
 }
 
 const OCCUPANT_RE = /occupant/i
+const isOccupant = (l) => OCCUPANT_RE.test(l?.nm ?? '')
+/** Peak-to-peak of a sampled signal. */
+const p2p = (a) => Math.max(...a) - Math.min(...a)
 const OCCUPANT_MIN = 3     // px — below this the inside-the-shell float doesn't read
+/** A violation plus the fix that ACTUALLY addresses it. One shared closing
+ *  line used to be printed for every failure, so an invented fill or a scale
+ *  divorce was answered with "weld the parts" — advice the agent reads and
+ *  acts on, costing a whole write→run→look→fix cycle on the wrong thing. */
 const failures = []
+const fail = (message, fix) => failures.push({ message, fix })
 const occupantSlides = []
 const pairs = []
 const inds = [...worldBox.keys()]
@@ -220,12 +256,13 @@ for (let i = 0; i < inds.length; i++) {
     // An OCCUPANT is the one contact that must NOT hold: it is the character
     // inside the shell, and the matte is what keeps it contained. So the rule
     // inverts rather than exempting — gate 15 fails when it does not move.
-    if (OCCUPANT_RE.test(nmA) || OCCUPANT_RE.test(nmB)) {
+    if (isOccupant({ nm: nmA }) || isOccupant({ nm: nmB })) {
       occupantSlides.push({ pair: `${nmA} ↔ ${nmB}`, slide })
       continue
     }
     if (slide > SLIDE_LIMIT) {
-      failures.push(`CONTACT SLIDE  ${nmA} ↔ ${nmB}: ${slide.toFixed(2)}px (limit ${SLIDE_LIMIT})`)
+      fail(`CONTACT SLIDE  ${nmA} ↔ ${nmB}: ${slide.toFixed(2)}px (limit ${SLIDE_LIMIT})`,
+        'Weld them: same rig, no relative track of their own (same period at a different phase still slides). Only a named joint with a visible free end may move.')
     }
   }
 }
@@ -284,7 +321,7 @@ if (periods.some((p) => p.period)) {
   // layers — not to whichever period happens to be most numerous among props.
   const subtreeSize = (ind) => doc.layers.filter((l) => {
     let cur = l, hops = 0
-    while (cur && hops++ < 12) { if (cur.ind === ind) return true; cur = byInd.get(cur.parent) }
+    while (cur && hops++ < MAX_PARENT_DEPTH) { if (cur.ind === ind) return true; cur = byInd.get(cur.parent) }
     return false
   }).length
   const lead = periods.filter((p) => p.period).map((p) => ({ ...p, size: subtreeSize(p.l.ind) }))
@@ -314,7 +351,7 @@ if (periods.some((p) => p.period)) {
 // transform said otherwise).
 for (let i = 0; i < doc.layers.length; i++) {
   const matted = doc.layers[i]
-  if (!matted.tt || !OCCUPANT_RE.test(matted.nm ?? '')) continue
+  if (!matted.tt || !isOccupant(matted)) continue
   const matte = doc.layers.slice(0, i).reverse().find((l) => l.td)
   if (!matte) continue
   const mb = bboxOf(matted), tb = bboxOf(matte)
@@ -331,18 +368,17 @@ for (let i = 0; i < doc.layers.length; i++) {
   const perX = slackX / 2, perY = slackY / 2
   console.log(`\nOccupant clip: ${matted.nm} inside ${matte.nm} — clearance ${perX.toFixed(1)}px/side × ${perY.toFixed(1)}px/side, drift ${need.toFixed(1)}px, area ratio ${(area(tb) / (area(mb) || 1)).toFixed(2)}`)
   if (perX <= 0.5 && perY <= 0.5) {
-    failures.push(
+    fail(
       `MATTE CANCELS THE FLOAT  ${matted.nm} fills its own matte (${matte.nm}): ` +
-      `${perX.toFixed(1)}px/side of clearance. The clip pins the visible edge, so the motion ` +
-      `renders as nothing. The matte must be the CONTAINER; the occupant is a smaller feature inside it.`,
+      `${perX.toFixed(1)}px/side of clearance. The clip pins the visible edge, so the motion renders as nothing.`,
+      'Matte with the CONTAINER (the larger shape the feature sits in); the occupant is the smaller feature. Both must already exist in the artwork.',
     )
   } else if (perX < need || perY < need) {
-    failures.push(
+    fail(
       `OCCUPANT HITS THE EDGE  ${matted.nm} drifts ${need.toFixed(1)}px inside ${matte.nm} but has only ` +
       `${perX.toFixed(1)}px/side × ${perY.toFixed(1)}px/side of clearance — it reaches the container's ` +
-      `boundary and is shaved against its outline. Either the wrong element is the occupant (it should ` +
-      `be the FACE/feature the eyes sit on, not the mass it sits in — that mass stays welded to the ` +
-      `shell), or the drift exceeds the room the artwork gives it.`,
+      `boundary and is shaved against its outline.`,
+      'Usually the wrong element is the occupant: it should be the FACE (the shape the eyes sit on), not the mass it sits in — that mass stays welded to the shell. Otherwise reduce the drift to fit the room the artwork gives it.',
     )
   }
 }
@@ -394,7 +430,8 @@ if (srcPaths.length) {
   const invented = [...seen.entries()].filter(([hex]) => !sourceFills.has(hex))
   if (sourceFills.size && invented.length) {
     for (const [hex, layerName] of invented) {
-      failures.push(`INVENTED FILL  ${hex} on "${layerName}" appears nowhere in ${slug}.svg — the rig repainted the artwork instead of re-using its shapes`)
+      fail(`INVENTED FILL  ${hex} on "${layerName}" appears nowhere in the source artwork — the rig repainted it instead of re-using its shapes`,
+        'Re-use an existing subpath and its authored fill. Never add a backing plate or recolour to manufacture room for a rig.')
     }
   }
 }
@@ -404,7 +441,8 @@ if (occupantSlides.length) {
   const best = occupantSlides.sort((a, b) => b.slide - a.slide)[0]
   console.log(`\nOccupant float: ${best.slide.toFixed(2)}px relative (${best.pair})`)
   if (best.slide < OCCUPANT_MIN) {
-    failures.push(`OCCUPANT TOO STILL  ${best.pair}: ${best.slide.toFixed(2)}px relative to its shell (needs ≥ ${OCCUPANT_MIN}px to read)`)
+    fail(`OCCUPANT TOO STILL  ${best.pair}: ${best.slide.toFixed(2)}px relative to its shell (needs ≥ ${OCCUPANT_MIN}px to read)`,
+      'Raise the occupant\'s own drift, or check you picked the FACE (the shape the eyes sit on) rather than the eyes alone.')
   }
 }
 
@@ -415,15 +453,14 @@ if (occupantSlides.length) {
 // reads as the suit growing rather than the character breathing.
 {
   const scaleTrack = (ind) => world.get(ind).map((m) => Math.hypot(m[0], m[1]))
-  const p2p = (a) => Math.max(...a) - Math.min(...a)
-  for (const occ of doc.layers.filter((l) => l.ty === 4 && OCCUPANT_RE.test(l.nm ?? ''))) {
+  for (const occ of doc.layers.filter((l) => l.ty === 4 && isOccupant(l))) {
     let root = occ, hops = 0
-    while (root.parent != null && hops++ < 12) { const p = byInd.get(root.parent); if (!p) break; root = p }
+    while (root.parent != null && hops++ < MAX_PARENT_DEPTH) { const p = byInd.get(root.parent); if (!p) break; root = p }
     // The shell: the biggest non-occupant shape sharing that root.
     const kin = doc.layers.filter((l) => {
-      if (l.ty !== 4 || l.td || OCCUPANT_RE.test(l.nm ?? '') || !boxes.has(l.ind)) return false
+      if (l.ty !== 4 || l.td || isOccupant(l) || !boxes.has(l.ind)) return false
       let cur = l, h = 0
-      while (cur && h++ < 12) { if (cur.ind === root.ind) return true; cur = byInd.get(cur.parent) }
+      while (cur && h++ < MAX_PARENT_DEPTH) { if (cur.ind === root.ind) return true; cur = byInd.get(cur.parent) }
       return false
     })
     if (!kin.length) continue
@@ -433,11 +470,11 @@ if (occupantSlides.length) {
     if (shellSwell > 0.005) {
       console.log(`\nBreathe inheritance: ${shell.nm} swells ${(shellSwell * 100).toFixed(1)}%, ${occ.nm} ${(occSwell * 100).toFixed(1)}%`)
       if (occSwell < shellSwell * 0.5) {
-        failures.push(
+        fail(
           `SCALE DIVORCE  ${occ.nm} does not ride ${shell.nm}'s breathe (${(occSwell * 100).toFixed(1)}% vs ` +
           `${(shellSwell * 100).toFixed(1)}%): the shell inflates around a fixed-size occupant, so the suit ` +
-          `appears to grow instead of the character breathing. Nest the occupant UNDER the breathe/scale ` +
-          `null — its own drift belongs inside that inherited scale, never beside it.`,
+          `appears to grow instead of the character breathing.`,
+          'Nest the occupant UNDER the breathe/scale null — its own drift belongs inside that inherited scale, never beside it.',
         )
       }
     }
@@ -449,11 +486,10 @@ if (occupantSlides.length) {
 // compounds two ellipses and reads as swimming rather than as a body settling
 // inside its suit.
 {
-  const rig = doc.layers.find((l) => l.ty === 3 && OCCUPANT_RE.test(l.nm ?? '') && l.ks?.p?.a)
+  const rig = doc.layers.find((l) => l.ty === 3 && isOccupant(l) && l.ks?.p?.a)
   if (rig) {
     const xs = [], ys = []
     for (const t of times) { const p = evalProp(rig.ks.p, t, [0, 0, 0]); xs.push(p[0]); ys.push(p[1]) }
-    const p2p = (a) => Math.max(...a) - Math.min(...a)
     const [ax, ay] = [p2p(xs), p2p(ys)]
     console.log(`\nOccupant drift axes (${rig.nm}): ${ax.toFixed(1)}px horizontal × ${ay.toFixed(1)}px vertical` +
       (Math.min(ax, ay) > 1.5
@@ -469,8 +505,10 @@ for (const p of pairs.sort((x, y) => y.slide - x.slide).slice(0, 12)) {
 
 if (failures.length) {
   console.error(`\n${failures.length} violation(s):`)
-  for (const f of failures) console.error('  ' + f)
-  console.error('\nWeld the parts (same rig, no own relative track) or document a named joint with a visible free end.')
+  for (const f of failures) {
+    console.error('  ' + f.message)
+    console.error('    → ' + f.fix)
+  }
   process.exit(1)
 }
-console.log('\nAll contacts hold and every clock is the scene\'s own.')
+console.log('\nAll contacts hold, every occupant reads, and no colour was invented.')
