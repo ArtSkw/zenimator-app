@@ -408,6 +408,42 @@ if (occupantSlides.length) {
   }
 }
 
+// ── Scale divorce ────────────────────────────────────────────────────────────
+// The occupant is INSIDE the body, so it must ride the body's full transform —
+// breathe/scale swell included. Parenting it above (outside) that swell makes
+// the shell appear to inflate and deflate around a fixed-size face, which
+// reads as the suit growing rather than the character breathing.
+{
+  const scaleTrack = (ind) => world.get(ind).map((m) => Math.hypot(m[0], m[1]))
+  const p2p = (a) => Math.max(...a) - Math.min(...a)
+  for (const occ of doc.layers.filter((l) => l.ty === 4 && OCCUPANT_RE.test(l.nm ?? ''))) {
+    let root = occ, hops = 0
+    while (root.parent != null && hops++ < 12) { const p = byInd.get(root.parent); if (!p) break; root = p }
+    // The shell: the biggest non-occupant shape sharing that root.
+    const kin = doc.layers.filter((l) => {
+      if (l.ty !== 4 || l.td || OCCUPANT_RE.test(l.nm ?? '') || !boxes.has(l.ind)) return false
+      let cur = l, h = 0
+      while (cur && h++ < 12) { if (cur.ind === root.ind) return true; cur = byInd.get(cur.parent) }
+      return false
+    })
+    if (!kin.length) continue
+    const areaOf = (l) => { const b = boxes.get(l.ind); return (b.x1 - b.x0) * (b.y1 - b.y0) }
+    const shell = kin.sort((a, b) => areaOf(b) - areaOf(a))[0]
+    const shellSwell = p2p(scaleTrack(shell.ind)), occSwell = p2p(scaleTrack(occ.ind))
+    if (shellSwell > 0.005) {
+      console.log(`\nBreathe inheritance: ${shell.nm} swells ${(shellSwell * 100).toFixed(1)}%, ${occ.nm} ${(occSwell * 100).toFixed(1)}%`)
+      if (occSwell < shellSwell * 0.5) {
+        failures.push(
+          `SCALE DIVORCE  ${occ.nm} does not ride ${shell.nm}'s breathe (${(occSwell * 100).toFixed(1)}% vs ` +
+          `${(shellSwell * 100).toFixed(1)}%): the shell inflates around a fixed-size occupant, so the suit ` +
+          `appears to grow instead of the character breathing. Nest the occupant UNDER the breathe/scale ` +
+          `null — its own drift belongs inside that inherited scale, never beside it.`,
+        )
+      }
+    }
+  }
+}
+
 // Axis split, reported whether or not the occupant touches anything: the
 // shell already travels 2D, so an occupant with real amplitude on BOTH axes
 // compounds two ellipses and reads as swimming rather than as a body settling

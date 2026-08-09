@@ -420,6 +420,16 @@ Four properties separate a living idle from a placed one:
   negative space (a hole in the body path), carve it into a real layer
   (recipe-character-rig, "Occupant-inside-shell") rather than moving the mass
   that surrounds it. Clearance is per SIDE and must exceed the drift.
+  - **The occupant rides the shell's FULL transform, breathe included.** It
+    sits INSIDE the body, so it must inherit the body's scale swell and be
+    nested UNDER that null — its own drift belongs inside the inherited
+    scale, never beside it. Excluded from the swell, the occupant stays a
+    fixed size while the shell inflates and deflates around it, and the read
+    flips from "the character breathes" to "the suit grows and shrinks"
+    (measured: a shell swelling 5.9% around a face swelling 0.0%). The
+    tempting reasoning — "the occupant's own drift shouldn't also inherit the
+    pulse" — is exactly backwards: a part that does not share its body's
+    scale has visibly left that body.
   - **The occupant's drift is SINGLE-AXIS — vertical by default.** The shell
     already travels a 2D path (drift + tilt); giving the occupant its own
     ellipse inside that compounds two circles and reads as swimming, a vague
@@ -754,6 +764,7 @@ be false the moment anyone measured it.
 | 12 | No double-driven property | each property animated once down any parent chain | trace every animated property up through its parents |
 | 13 | Assemblies stay whole | rigid worn/built-on parts keep a constant offset to their wearer; independent drift only for genuinely free elements | render two idle frames; measure a gear-point↔body-point offset — identical, or a named joint/soft part explains why |
 | 14 | Contacts hold | no relative slide at any contact/occlusion edge — welded means NO own clock (same period at a different phase is relative motion); shell surface details are decals; backdrop parallax is `−k ×` the subject's own track | render the motion extremes; inspect every edge where elements touch or overlap for slide; for parallax, show the derivation from the subject's driver |
+| 16 | The occupant belongs to the body | it inherits the shell's scale/breathe swell (nested UNDER that null) and drifts on a SINGLE axis inside it — a fixed-size occupant under a swelling shell reads as the suit growing; a second ellipse under a 2D shell reads as swimming | `check-motion.mjs` (SCALE DIVORCE; drift-axes report) |
 | 15 | The occupant reads | inside-a-container characters drift as the visible interior mass, ≥ ~3px relative to the shell (or a visible phase lag), matte-clipped so they never cross the container's lines. The matte is the CONTAINER opening and the mass is SMALLER — same-shape matte and mass cancel exactly, rendering a measured float as a dead-still face. Applies whenever the BRIEF puts the character in/inside something — a missing interior path in the SVG is the carve case, never an exemption; an eyes-only null is not an occupant | `node scripts/check-motion.mjs <slug>` (fails on MATTE CANCELS THE FLOAT and OCCUPANT TOO STILL), then isolate shell vs occupant at the extremes: measurable relative offset, zero pixels outside the opening |
 
 Two failure modes this gate exists to catch, both observed in shipped scenes:
