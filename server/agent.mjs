@@ -145,8 +145,11 @@ const LIVING_MOTION_CONTRACT =
   `CLIPPED by a track matte of the container's opening so it never crosses the ` +
   `container's border lines. If the interior mass is baked into the shell's path, ` +
   `CARVE it: duplicate the opening path as the matte (the __matte host convention), ` +
-  `build the interior as its own layer drifting behind the rim. Shell pieces stay ` +
-  `mutually rigid throughout.\n` +
+  `build the interior as its own layer drifting behind the rim — the canonical code is ` +
+  `in recipe-character-rig.md ("Occupant-inside-shell"); adapt it, that is not porting. ` +
+  `This applies whenever the BRIEF puts the character in/inside something; a missing ` +
+  `interior path in the SVG is the carve case, never an exemption, and an eyes-only ` +
+  `null is not an occupant. Shell pieces stay mutually rigid throughout.\n` +
   `  - Distant backdrops hold still. Celestial and far-background elements — moon, sun, ` +
   `stars, a skyline — never self-translate; their life is opacity/glow (twinkle, in ` +
   `whole cycles) in place, or a parallax counter-drift explicitly DERIVED from the ` +

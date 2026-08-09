@@ -128,15 +128,40 @@ below.
   (motion-taste, "Worn gear is the wearer").
 - Occupant-inside-shell (the Rive two-tier float): when the character sits
   INSIDE a container (helmet, suit, cockpit), the occupant is the visible
-  INTERIOR MASS — the dark head/body seen through the opening — not just the
-  eyes. Construction: if the interior is baked into the shell's path, CARVE
-  it — duplicate the opening path, fill it as the interior mass on its own
-  layer, and matte-clip that layer with the opening (`<host>__matte`, the
-  established plumbing convention) so the mass can drift behind the rim
-  without ever crossing the container's lines. Nest it on its own null under
-  the shell rig: slower period than the shell, relative travel ≥ ~3px
-  peak-to-peak (or a visible phase lag behind the shell's tilt) — 1–2px
-  reads as glued. Shell gentle, occupant visibly more, mask absolute.
+  INTERIOR MASS — the head/body seen through the opening — not just the
+  eyes. APPLICABILITY IS DECIDED BY MEANING, not by the SVG's path list: if
+  the brief says the character is in/inside its helmet/suit/vehicle, gate 15
+  applies, and the absence of a separate interior path in the source is
+  precisely the carve case — never an exemption. An eyes-only null is not an
+  occupant. Report the measured relative peak-to-peak AND the matte layer's
+  name in the gate table.
+
+  Canonical construction (adapt the ids; this shape is the sanctioned
+  implementation, coming from this reference — using it is not porting):
+
+  ```js
+  // 1. The container's opening subpath (e.g. the visor hole) is the key.
+  const openingSub = /* the opening's subpath from the shell's own geometry */
+  // 2. Occupant mass: the opening path re-filled as its own layer, nested on
+  //    a null that adds readable drift on top of the shell's motion.
+  const OCC_AMP_X = 3.8, OCC_AMP_Y = 3.6      // ≥3px p2p relative — 1–2px reads glued
+  const OCC_LAG = 25                          // deg behind the shell's tilt phase
+  const occupantRigInd = pushLayer({ nm: 'occupant-rig', ty: 3, parent: shellRigInd,
+    ks: rigKs(pivot, occupantDriftPts /* shell period, phase − OCC_LAG */) })
+  pushLayer({ nm: 'occupant-mass', shapes: [group('occupant-mass',
+    [shapeFromSubpath(openingSub, 'occupant-mass-shape'), fillItem(INTERIOR_FILL)])],
+    ks: baseTransform(), parent: occupantRigInd, tt: 1 })   // tt:1 = alpha-matted BY the layer above
+  // 3. Matte source: a STATIC copy of the same opening riding the SHELL rig,
+  //    so the clip follows the shell and the mass can never cross its lines.
+  pushLayer({ nm: 'visor__matte', shapes: [group('visor__matte',
+    [shapeFromSubpath(openingSub, 'visor__matte-shape'), fillItem('#FFFFFF')])],
+    ks: baseTransform(), parent: shellRigInd, td: true })
+  // Layer ORDER: …, eyes (parent occupant-rig), visor__matte, occupant-mass, shell…
+  // Eyes and face details ride occupant-rig so they drift with the mass.
+  ```
+
+  Verify like gate 15 says: isolate shell vs occupant at the extremes —
+  measurable relative offset, zero occupant pixels outside the opening.
 - Contact welds: anything the artwork shows touching, gripped by, resting
   on, or tucked BEHIND the character joins that assembly — with NO own
   relative clock. Same period at a different phase is a time-shifted copy,
