@@ -252,6 +252,14 @@ top-level Lottie markers — names are contract, lowercase:
   **directly** in a small throwaway CanvasKit script (bypassing the
   previewer's grid/clamp) and diffing the raw pixel buffers — that samples
   the keyframe tracks at the literal authored times.
+  **In that throwaway script, pass `anim.render()` a real `CanvasKit.LTRBRect(...)`,
+  never a plain `{fLeft,fTop,fRight,fBottom}` object literal** — the latter
+  silently produces a garbage/undersized destination rect (the render comes
+  out shrunk and mispositioned), which reads exactly like a broken loop seam
+  (large pixel diff, content visibly different) and will send you hunting for
+  a rig bug that doesn't exist. `preview-scene.mjs` already does this
+  correctly (`ck.LTRBRect(0, 0, W, H)`) — copy its render call verbatim
+  rather than hand-rolling the dest rect.
 - **A periodic idle track's FIRST authored point must equal the true rest
   value, or the flat gap between cycles stops being flat.** The "echo"
   technique (sampling one cycle's shape at `t - period` to fill `[0, T)`,

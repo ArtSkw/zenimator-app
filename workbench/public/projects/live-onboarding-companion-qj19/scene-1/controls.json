@@ -18,8 +18,8 @@
           35
         ],
         "max": [
-          225.6,
-          58
+          221.6,
+          35
         ],
         "leading": 2
       }
@@ -37,18 +37,18 @@
   ],
   "layerControls": [
     {
-      "target": "arm-right-rig",
-      "kind": "amount",
-      "property": "position",
-      "label": "Bicep squeeze",
-      "description": "How far the arms pull up and in at the peak of the pump."
-    },
-    {
-      "target": "shadow-rig",
+      "target": "body-rig",
       "kind": "amount",
       "property": "scale",
-      "label": "Shadow settle",
-      "description": "How much the ground shadow widens as the body settles."
+      "label": "Hug squeeze",
+      "description": "How deeply the mascot presses into the pillow each breath."
+    },
+    {
+      "target": "hug-rig",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Arm tighten",
+      "description": "How firmly the arms (and the pillow they hold) squeeze at the peak of the hug."
     },
     {
       "target": "bubble-anchor",
@@ -56,28 +56,25 @@
       "property": "scale",
       "label": "Bubble pop",
       "description": "How much the speech bubble overshoots as it arrives."
+    },
+    {
+      "target": "shadow-rig",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Shadow settle",
+      "description": "How much the ground shadow widens as the body settles into the pillow."
     }
   ],
   "motionExceptions": [
     {
-      "a": "trail-large",
-      "b": "trail-small",
-      "reason": "free thought-trail satellites drift on their own offset clocks \u2014 clear air on all sides"
+      "a": "arm-crease",
+      "b": "face",
+      "reason": "the hugging arm deforms across the face as the squeeze compresses \u2014 articulation, gate 8"
     },
     {
-      "a": "fist",
-      "b": "bicep",
-      "reason": "the elbow bends on the flex \u2014 joint articulation, gate 8"
-    },
-    {
-      "a": "hilite",
-      "b": "cutout",
-      "reason": "muscle highlights travel across the arm as it flexes \u2014 the light moves with the form"
-    },
-    {
-      "a": "bicep",
-      "b": "cutout",
-      "reason": "the bicep swells against its cutout on the flex \u2014 the squash the pose is built on"
+      "a": "body",
+      "b": "shadow",
+      "reason": "ground shadow answers the body's float, widening and lightening on the same driver \u2014 'the world responds'"
     }
   ]
 }

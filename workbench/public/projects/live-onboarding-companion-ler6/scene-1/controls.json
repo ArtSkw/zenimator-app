@@ -57,5 +57,27 @@
       "label": "Bubble pop",
       "description": "How much the speech bubble overshoots as it arrives."
     }
+  ],
+  "motionExceptions": [
+    {
+      "a": "trail-large",
+      "b": "trail-small",
+      "reason": "free thought-trail satellites drift on their own offset clocks \u2014 clear air on all sides"
+    },
+    {
+      "a": "glint",
+      "b": "sunglass-lens",
+      "reason": "the glint sweeps across the lens as the single loop accent \u2014 a travelling highlight, not a detached part"
+    },
+    {
+      "a": "chair-leg-front",
+      "b": "chair-seat",
+      "reason": "the deck chair flexes under the lounging weight \u2014 a soft joint, named"
+    },
+    {
+      "a": "chair-seat",
+      "b": "chair-leg-back",
+      "reason": "the deck chair flexes under the lounging weight \u2014 a soft joint, named"
+    }
   ]
 }

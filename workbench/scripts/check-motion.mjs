@@ -225,6 +225,34 @@ function maxSlide(indA, indB, point) {
   return worst
 }
 
+// ── Declared exceptions ──────────────────────────────────────────────────────
+// Rigid welds are the DEFAULT, not the only truth: a bending joint, a shadow
+// answering the body, a glint sweeping a lens are all relative motion the
+// other gates positively require. This gate was calibrated on a rigid suit
+// and, applied to an articulated character, condemned that craft. So a build
+// may DECLARE intended relative motion in its controls.json:
+//
+//   "motionExceptions": [
+//     { "a": "fist", "b": "bicep", "reason": "elbow joint bends on the flex" }
+//   ]
+//
+// Each entry needs a reason — the point is to make the intent explicit and
+// reviewable, not to hand out a blanket mute.
+const ctrlPath = join(__dirname, `../public/projects/${slug}/${scene}/controls.json`)
+let exceptions = []
+if (existsSync(ctrlPath)) {
+  try {
+    const raw = JSON.parse(readFileSync(ctrlPath, 'utf8'))
+    if (Array.isArray(raw.motionExceptions)) {
+      exceptions = raw.motionExceptions.filter((e) => e && typeof e.a === 'string' && typeof e.b === 'string' && typeof e.reason === 'string')
+    }
+  } catch { /* a malformed controls.json simply declares nothing */ }
+}
+const declared = (nmA, nmB) => exceptions.find((e) => {
+  const hit = (x, y) => x.toLowerCase().includes(e.a.toLowerCase()) && y.toLowerCase().includes(e.b.toLowerCase())
+  return hit(nmA, nmB) || hit(nmB, nmA)
+})
+
 const OCCUPANT_RE = /occupant/i
 const isOccupant = (l) => OCCUPANT_RE.test(l?.nm ?? '')
 /** Peak-to-peak of a sampled signal. */
@@ -236,6 +264,7 @@ const OCCUPANT_MIN = 3     // px — below this the inside-the-shell float doesn
  *  acts on, costing a whole write→run→look→fix cycle on the wrong thing. */
 const failures = []
 const fail = (message, fix) => failures.push({ message, fix })
+const allowed = []
 const occupantSlides = []
 const pairs = []
 const inds = [...worldBox.keys()]
@@ -252,7 +281,8 @@ for (let i = 0; i < inds.length; i++) {
     const py = (Math.max(A.y0, B.y0) + Math.min(A.y1, B.y1)) / 2
     const nmA = byInd.get(inds[i]).nm, nmB = byInd.get(inds[j]).nm
     const slide = maxSlide(inds[i], inds[j], [px, py])
-    pairs.push({ a: nmA, b: nmB, slide })
+    const okDecl = declared(nmA, nmB)
+    pairs.push({ a: nmA, b: nmB, slide, declared: !!okDecl })
     // An OCCUPANT is the one contact that must NOT hold: it is the character
     // inside the shell, and the matte is what keeps it contained. So the rule
     // inverts rather than exempting — gate 15 fails when it does not move.
@@ -260,9 +290,10 @@ for (let i = 0; i < inds.length; i++) {
       occupantSlides.push({ pair: `${nmA} ↔ ${nmB}`, slide })
       continue
     }
+    if (okDecl) { allowed.push(`${nmA} ↔ ${nmB}: ${slide.toFixed(2)}px — declared: ${okDecl.reason}`); continue }
     if (slide > SLIDE_LIMIT) {
       fail(`CONTACT SLIDE  ${nmA} ↔ ${nmB}: ${slide.toFixed(2)}px (limit ${SLIDE_LIMIT})`,
-        'Weld them: same rig, no relative track of their own (same period at a different phase still slides). Only a named joint with a visible free end may move.')
+        'Weld them: same rig, no relative track of their own (same period at a different phase still slides). If the motion IS intended — a bending joint, a shadow answering the body, a glint sweeping a surface — declare it in controls.json: motionExceptions: [{ a, b, reason }].')
     }
   }
 }
@@ -499,8 +530,13 @@ if (occupantSlides.length) {
 }
 
 console.log(`\nContact pairs checked: ${pairs.length}`)
+if (allowed.length) {
+  console.log(`Declared exceptions (${allowed.length}):`)
+  for (const a of allowed) console.log('  ok   ' + a)
+}
 for (const p of pairs.sort((x, y) => y.slide - x.slide).slice(0, 12)) {
-  console.log(`  ${p.slide > SLIDE_LIMIT ? 'FAIL' : 'ok  '} ${p.slide.toFixed(2)}px  ${p.a} ↔ ${p.b}`)
+  const verdict = p.declared ? 'decl' : p.slide > SLIDE_LIMIT ? 'FAIL' : 'ok  '
+  console.log(`  ${verdict} ${p.slide.toFixed(2)}px  ${p.a} ↔ ${p.b}`)
 }
 
 if (failures.length) {
