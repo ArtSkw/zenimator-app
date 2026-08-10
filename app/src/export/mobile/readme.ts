@@ -69,6 +69,15 @@ If the scene declares a size slot with \`autoFit\` (see \`controls.json\` in
 ZENimator), size the bubble plate from the localized string: measure the text
 in the scene's font, add 2×padding, and write the result to the size slot —
 three lines in any runtime. Fonts for measuring ship in \`fonts/\`.
+
+One catch worth knowing before you ship a translation: the bubble is pinned by
+its bottom edge, so a string that wraps onto another line grows UPWARD, and a
+player crops whatever leaves the composition. Resizing the plate is not enough
+on its own — the frame has to grow too, and it takes its size from the
+document, not from the slots. The web pack handles this for you
+(\`fitAnimation\` in \`zenimator-bubble.js\`). On iOS and Android, grow \`w\`/\`h\` in
+the JSON by the overflow and shift every layer WITHOUT a parent by the same
+amount: the scene then looks identical, only framed larger.
 `
 
   return `# ZENimator animation — ${def.label} pack
