@@ -255,12 +255,37 @@ below.
   coordinates) rather than counter-animating it. Counter-animation must cancel the
   parent exactly every frame; exclusion is stable by construction. Verify with a
   pixel diff across the motion extremes.
-- Blink and eyes as an own-center scale dip: give the eyes their own layer with
-  `p == a` at the eye cluster's own bounding-box center, and a fast `scaleY` dip
-  (near-closed over a few frames), widening `scaleX` slightly at the closed pose
-  for a smiling squint. The eyes still inherit the body's motion through
-  parenting but pivot on themselves. Every independently-pulsing accent (blink,
-  pop, pulse) uses this same "anchor = own bbox center" idiom.
+- Blink as an own-center scale dip: give the eyes their own layer with `p == a`
+  at the eye cluster's own bounding-box centre, and dip `scaleY` **to zero** —
+  the eye must vanish for a beat. "Near-closed" is the classic mistake: a lid
+  parked at 15–20% is a visible slit and reads as a squint (motion-taste,
+  "A blink CLOSES, and it is fast"). The eyes still inherit the body's motion
+  through parenting but pivot on themselves; every independently-pulsing
+  accent uses this same "anchor = own bbox centre" idiom.
+
+  ```js
+  // ~7 frames at 60fps: snap shut, hold, open a touch slower. Asymmetry is
+  // what makes it a lid rather than a pulse. Sample at step 1 — a 2-frame
+  // grid straddles a peak this narrow and bakes a shallower dip than authored.
+  const CLOSE = 2, HOLD = 2, OPEN = 4        // frames
+  function blinkAmount(t) {                   // 1 = fully closed
+    let dt = (t - T - BLINK_PHASE) % BLINK_PERIOD
+    if (dt >  BLINK_PERIOD / 2) dt -= BLINK_PERIOD
+    if (dt < -BLINK_PERIOD / 2) dt += BLINK_PERIOD
+    if (dt <= -CLOSE || dt >= HOLD + OPEN) return 0
+    if (dt < 0) return 1 + dt / CLOSE         // closing
+    if (dt <= HOLD) return 1                  // held shut — the eye is GONE
+    return 1 - (dt - HOLD) / OPEN             // opening
+  }
+  const scalePts = sampleDense((t) => {
+    const b = blinkAmount(t)
+    return [100 + 6 * b, 100 * (1 - b), 100]  // y → 0, x widens into the squash
+  }, 0, OP, 1)
+  ```
+
+  Blinks are EXEMPT from the readable-accent floor (gate 6): that floor governs
+  oscillations the eye must track, and stretching a blink to satisfy it is
+  exactly what produces the drowsy squint.
 - Beat-clock choreography: derive all dependent timing from a few named stage
   constants (FPS, a step/beat length, total frames, and small arrays of the beat
   frames), and have the independent property functions (rotation, position,

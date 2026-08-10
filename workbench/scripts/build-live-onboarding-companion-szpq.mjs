@@ -541,12 +541,19 @@ const occupantRigInd = pushLayer({
 // shell's tilt/drift/breathe AND the occupant's own phase-lagged inner float).
 const BLINK_PERIOD = 140 // matches the shell's own clock (brief: "blinks every 140f") — 3 blinks per idle loop
 const BLINK_PHASE = 65 // frames after T where a blink centers — clear of the tilt's own quarter-period extremes (35/105) and of the seam
-const BLINK_HALF_WIDTH = 5 // frames — clears the ~4-frame readable-accent floor (gate 6)
+// A blink is a SHUTTER, not an oscillation: it closes to zero and is gone for
+// a beat (motion-taste, "A blink CLOSES, and it is fast"; gate 17). Exempt
+// from the readable-accent floor — stretching a lid to satisfy that floor is
+// what produced the earlier 5-frame, 18%-deep squint.
+const BLINK_CLOSE = 2, BLINK_HOLD = 2, BLINK_OPEN = 4 // frames — ~7f total, closes faster than it opens
 function blinkAmount(t) {
   let dt = (t - T - BLINK_PHASE) % BLINK_PERIOD
   if (dt > BLINK_PERIOD / 2) dt -= BLINK_PERIOD
   if (dt < -BLINK_PERIOD / 2) dt += BLINK_PERIOD
-  return Math.max(0, 1 - Math.abs(dt) / BLINK_HALF_WIDTH)
+  if (dt <= -BLINK_CLOSE || dt >= BLINK_HOLD + BLINK_OPEN) return 0
+  if (dt < 0) return 1 + dt / BLINK_CLOSE            // closing
+  if (dt <= BLINK_HOLD) return 1                     // held shut — the eye is GONE
+  return 1 - (dt - BLINK_HOLD) / BLINK_OPEN          // opening
 }
 function eyeLayer(nm, id) {
   const sp = subs(id)
@@ -558,7 +565,7 @@ function eyeLayer(nm, id) {
   // falls between two even samples) and bake a shallower dip than authored.
   const scalePts = sampleDense((t) => {
     const b = blinkAmount(t)
-    return [100 + 8 * b, 100 - 82 * b, 100]
+    return [100 + 6 * b, 100 * (1 - b), 100] // y → 0: the eye vanishes; x widens into the squash
   }, 0, OP, 1)
   const ks = {
     a: { a: 0, k: [bc[0], bc[1], 0] },

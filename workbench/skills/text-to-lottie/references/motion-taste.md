@@ -553,6 +553,24 @@ Four properties separate a living idle from a placed one:
   registers as an event with a beginning and an end. Amplitude does not
   rescue frequency: a tremble too fast to resolve just looks broken,
   however far it moves.
+  - **A BLINK is exempt — it is a switch, not an oscillation.** This floor
+    governs motion the eye must TRACK; an eyelid is a shutter that the eye
+    reads by its absence, and slowing it to clear the floor is what produces
+    a drowsy squint instead of a blink (measured: a 5-frame half-width blink
+    whose scaleY bottomed out at 18%, authored with the comment "clears the
+    ~4-frame readable-accent floor" — the gate itself caused the defect).
+- **A blink CLOSES, and it is fast.** The lid must reach zero — the eye
+  disappears completely for a beat. A lid that stops at 15–20% leaves a
+  visible slit, which the viewer reads as squinting, sleepiness or suspicion,
+  never as a blink; the Rive-grade reference simply has no eye for a frame or
+  two. Shape it asymmetrically, ~6–8 frames total at 60fps (~100–130 ms, a
+  real human blink): snap closed in 2–3, hold fully closed 1–2, reopen over
+  3–4 — closing faster than opening is what makes it read as a lid rather
+  than a pulse. Widen the eye slightly on the way down (a few % on x) so the
+  closure squashes rather than merely shrinking. This applies to any face
+  with visible eyes — mascot, animal, person — and to dot eyes, drawn lids
+  and pupil-in-white alike: scale the eye's own height to 0 about its own
+  centre, or drive the lid shape, but never park the closure short of zero.
 
 ## Choreography
 
@@ -750,7 +768,8 @@ be false the moment anyone measured it.
 | 3 | Meaning drives behaviour | the motion is one only THIS element would have | name the element's meaning and the behaviour it earned; a generic bob fails |
 | 4 | Mood governs the system | periods, amplitudes and easing derived from the brief's mood | the gym-verb test — swap the mood word and the numbers must change |
 | 5 | Fluidity | `max / median-while-moving` under ~3× on every hero track | the velocity audit; entrances and deliberate accents exempt |
-| 6 | Accents resolve | half-cycle ≥ ~4 frames at 60fps, whole accent ≥ ~0.4 s | count frames per half-cycle in the data, not by eye |
+| 6 | Accents resolve | half-cycle ≥ ~4 frames at 60fps, whole accent ≥ ~0.4 s — BLINKS ARE EXEMPT (a shutter, not an oscillation) | count frames per half-cycle in the data, not by eye |
+| 17 | Blinks close | the eye reaches zero height and is gone for a beat; ~6–8 frames total, closing faster than opening. A lid parked at 15–20% is a squint, not a blink | `check-motion.mjs` (BLINK NEVER CLOSES) reads the eye's own scale track |
 | 7 | Loop seam | equal values keyed AT the boundary on every animated track | read interpolated values in the DATA; pixel-diff only corroborates |
 
 **Additionally, any scene with a character, figure, creature or mascot:**

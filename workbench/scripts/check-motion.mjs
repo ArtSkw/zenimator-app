@@ -244,11 +244,17 @@ if (existsSync(ctrlPath)) {
   try {
     const raw = JSON.parse(readFileSync(ctrlPath, 'utf8'))
     if (Array.isArray(raw.motionExceptions)) {
-      exceptions = raw.motionExceptions.filter((e) => e && typeof e.a === 'string' && typeof e.b === 'string' && typeof e.reason === 'string')
+          exceptions = raw.motionExceptions.filter((e) => e && typeof e.reason === 'string'
+        && ((typeof e.a === 'string' && typeof e.b === 'string') || typeof e.layer === 'string'))
     }
   } catch { /* a malformed controls.json simply declares nothing */ }
 }
+/** Layer-scoped exception: { "layer": "eye", "reason": "..." } — for rules
+ *  about ONE element (a deliberate squint) rather than a pair's relationship. */
+const declaredLayer = (nm) => exceptions.find((e) => e.layer && typeof e.layer === 'string'
+  && nm.toLowerCase().includes(e.layer.toLowerCase()))
 const declared = (nmA, nmB) => exceptions.find((e) => {
+  if (!e.a || !e.b) return false
   const hit = (x, y) => x.toLowerCase().includes(e.a.toLowerCase()) && y.toLowerCase().includes(e.b.toLowerCase())
   return hit(nmA, nmB) || hit(nmB, nmA)
 })
@@ -509,6 +515,32 @@ if (occupantSlides.length) {
         )
       }
     }
+  }
+}
+
+// ── Blinks close ─────────────────────────────────────────────────────────────
+// A lid is a shutter: the eye must be GONE for a beat. Parked at 15-20% it
+// reads as a squint — and the readable-accent floor (gate 6), written for
+// oscillations the eye must track, is what pushes a rig to stretch and
+// shallow a blink until it becomes one.
+const EYE_RE = /\beye|pupil|lid\b/i
+for (const eye of doc.layers.filter((l) => EYE_RE.test(l.nm ?? '') && l.ks?.s?.a)) {
+  // Read the KEYFRAMES, not the sample grid: a blink is 6-10 frames wide and
+  // the coarse grid used elsewhere strides straight over it (measured: it
+  // reported 64% for a dip authored at 18%).
+  const ys = (eye.ks.s.k ?? []).map((k) => k?.s?.[1]).filter((v) => typeof v === 'number')
+  if (!ys.length) continue
+  const lo = Math.min(...ys), hi = Math.max(...ys)
+  if (hi - lo < 5) continue // no blink authored on this layer
+  const ok = declaredLayer(eye.nm)
+  console.log(`\nBlink: ${eye.nm} closes to ${lo.toFixed(0)}% of its height`)
+  if (lo > 10 && !ok) {
+    fail(
+      `BLINK NEVER CLOSES  ${eye.nm} bottoms out at ${lo.toFixed(0)}% height — a visible slit reads as a squint, not a blink`,
+      'Dip scaleY to 0 so the eye vanishes for a beat, ~6-8 frames total (snap shut in 2-3, hold 1-2, open 3-4). Blinks are exempt from the readable-accent floor. A deliberate squint may declare { layer, reason } in controls.json.',
+    )
+  } else if (ok) {
+    allowed.push(`${eye.nm} holds at ${lo.toFixed(0)}% — declared: ${ok.reason}`)
   }
 }
 
