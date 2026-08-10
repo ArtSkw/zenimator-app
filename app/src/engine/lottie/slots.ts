@@ -12,6 +12,8 @@
  * and the saved project, so what a teammate sees is exactly what ships.
  */
 
+import { measureText, layoutText, type FitFont, type TextLayout } from './portable/textFit'
+
 export type TextSlotMeta = {
   kind: 'text'
   sid: string
@@ -243,73 +245,47 @@ export function textPosMeta(textSid: string, metas: SlotMeta[]): SizeSlotMeta | 
   return meta ?? null
 }
 
-/** Measured width of a slot string in the scene's font, Lottie-style: glyph
- *  advance plus tracking (`tr` is thousandths of an em per character). The
- *  font must already be registered with `document.fonts` under its family
- *  name — pass the canvas the caller keeps around so measurement doesn't
- *  allocate per keystroke. */
-export function measureSlotText(ctx: CanvasRenderingContext2D, meta: TextSlotMeta, value: string): number {
+/** The scene's font metrics, in the portable module's shape. */
+const fontOf = (meta: TextSlotMeta): FitFont => ({
+  size: meta.size, lineHeight: meta.lineHeight, tracking: meta.tracking,
+})
+
+/** Point `ctx` at the scene's face before measuring. Skipping this measures
+ *  whatever font the canvas last had — silently wrong by a few percent. */
+const useSceneFont = (ctx: CanvasRenderingContext2D, meta: TextSlotMeta): void => {
   ctx.font = `${meta.size}px "${meta.font}"`
-  const base = ctx.measureText(value).width
-  const tracking = (meta.tracking / 1000) * meta.size * Math.max(0, value.length - 1)
-  return base + tracking
 }
 
-/** Greedy word-wrap in the scene's font: each line as wide as fits within
- *  `maxInnerW`. A single word wider than the limit gets its own line whole —
- *  mid-word breaks would corrupt localized text. */
-export function wrapSlotText(
-  ctx: CanvasRenderingContext2D, meta: TextSlotMeta, text: string, maxInnerW: number,
-): string[] {
-  const words = text.split(/\s+/).filter(Boolean)
-  if (words.length === 0) return [text.trim()]
-  const lines: string[] = []
-  let line = words[0]
-  for (const word of words.slice(1)) {
-    const candidate = `${line} ${word}`
-    if (measureSlotText(ctx, meta, candidate) <= maxInnerW) line = candidate
-    else { lines.push(line); line = word }
-  }
-  lines.push(line)
-  return lines
+/** Measured width of a slot string in the scene's font. The font must already
+ *  be registered with `document.fonts` under its family name — pass the canvas
+ *  the caller keeps around so measurement doesn't allocate per keystroke. */
+export function measureSlotText(ctx: CanvasRenderingContext2D, meta: TextSlotMeta, value: string): number {
+  useSceneFont(ctx, meta)
+  return measureText(ctx, fontOf(meta), value)
 }
 
-/** The full auto-fit layout for a string: wrapped text (`\r` separators —
- *  Skottie honors them in point text) plus the plate size that hugs it.
- *  MIRRORED (as standalone JS, no imports possible) by the generated helper in
- *  app/src/export/mobile/snippets/web.ts — a fit-algorithm change lands in BOTH.
- *  Without an autoFit `max` this is exactly the legacy single-line behavior
- *  (width follows, height stays authored); with one, the string wraps at
- *  `max[0]` and the plate grows in lineHeight steps. Padding self-calibrates
- *  from the authored defaults when the spec doesn't publish it. */
+/** The full auto-fit layout for a string: wrapped text plus the plate size that
+ *  hugs it. The algorithm itself lives in `portable/textFit.ts`, which the
+ *  mobile pack SHIPS (compiled) — so a translation is sized by this exact code
+ *  in the studio and in production, with no copy to keep in step. What stays
+ *  here is the studio's own defaulting: without an autoFit spec, padding and
+ *  bounds self-calibrate from the authored design values. */
 export function layoutSlotText(
   ctx: CanvasRenderingContext2D, meta: TextSlotMeta, size: SizeSlotMeta, raw: string,
-): { text: string; w: number; h: number; dy: number; lineHeight: number; lines: number } {
+): TextLayout {
+  useSceneFont(ctx, meta)
+  const font = fontOf(meta)
   const [defaultW, defaultH] = size.value
   const fit = size.autoFit
-  const padX = fit ? fit.padding[0] : Math.max(8, (defaultW - measureSlotText(ctx, meta, meta.value)) / 2)
+  const padX = fit ? fit.padding[0] : Math.max(8, (defaultW - measureText(ctx, font, meta.value)) / 2)
   const padY = fit ? fit.padding[1] : Math.max(4, (defaultH - meta.lineHeight) / 2)
-  const minW = fit?.min?.[0] ?? Math.max(defaultH, 2 * padX + 16)
-  const minH = fit?.min?.[1] ?? defaultH
-  const maxW = fit?.max?.[0]
-
-  const lines = maxW ? wrapSlotText(ctx, meta, raw, maxW - 2 * padX) : [raw]
-  // Wrapped lines get the spec's leading; a single line keeps the authored
-  // line height untouched, so the default state stays pixel-true to the design.
-  const lineHeight = lines.length > 1 ? meta.lineHeight + (fit?.leading ?? 0) : meta.lineHeight
-  const widest = Math.max(...lines.map((l) => measureSlotText(ctx, meta, l)))
-  const w = Math.max(minW, Math.min(maxW ?? Infinity, Math.round(widest + 2 * padX)))
-  // Content wins over max[1]: a string needing more lines than the headroom
-  // documents still renders whole — a too-tall plate beats clipped text.
-  const h = lines.length === 1 && !maxW
-    ? defaultH
-    : Math.max(minH, Math.round(2 * padY + lineHeight * lines.length))
-  // Extra lines grow DOWN from the first baseline while the plate grows from
-  // its center — the text block must rise half a lineHeight per extra line to
-  // stay centered. Applied via the scene's `.textPos` slot (text-doc `ls`
-  // looks like the tool for this but Skottie ignores it).
-  const dy = -((lines.length - 1) * lineHeight) / 2
-  return { text: lines.join('\r'), w, h, dy, lineHeight, lines: lines.length }
+  return layoutText(ctx, font, {
+    defaultSize: [defaultW, defaultH],
+    padding: [padX, padY],
+    min: [fit?.min?.[0] ?? Math.max(defaultH, 2 * padX + 16), fit?.min?.[1] ?? defaultH],
+    max: fit?.max ?? null,
+    leading: fit?.leading ?? 0,
+  }, raw)
 }
 
 /** The `<prefix>.anchor` plumbing slot: the plate layer's anchor point. Tools

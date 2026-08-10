@@ -1,11 +1,48 @@
-import { defineConfig } from 'vite'
+import { defineConfig, transformWithOxc, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { readFile } from 'node:fs/promises'
 import path from 'path'
+
+/** `import src from './x.ts?portable'` → the module's COMPILED JavaScript, as a
+ *  string.
+ *
+ *  The mobile export pack ships runnable helpers (bubble fitting, frame
+ *  fitting, slot baking) that cannot import app code. They used to be
+ *  hand-maintained copies of the studio's own algorithms, with a comment asking
+ *  future editors to change both — the kind of contract that holds right up
+ *  until it doesn't, and then ships a mis-sized bubble to production.
+ *
+ *  Now the shipped text IS the app's module, type-checked and executed in the
+ *  studio, compiled here with the same esbuild pass Vite already uses. Drift
+ *  stops being something to police and becomes impossible. */
+function portableSource(): Plugin {
+  const SUFFIX = '?portable'
+  return {
+    name: 'zenimator-portable-source',
+    enforce: 'pre',
+    async resolveId(id, importer) {
+      if (!id.endsWith(SUFFIX)) return null
+      const resolved = await this.resolve(id.slice(0, -SUFFIX.length), importer, { skipSelf: true })
+      return resolved ? resolved.id + SUFFIX : null
+    },
+    async load(id) {
+      if (!id.endsWith(SUFFIX)) return null
+      const file = id.slice(0, -SUFFIX.length)
+      this.addWatchFile(file) // editing the source re-generates the pack in dev
+      // Oxc is Vite 8's own transformer — no extra toolchain to keep installed.
+      const { code } = await transformWithOxc(await readFile(file, 'utf8'), file, {
+        lang: 'ts',
+        target: 'es2020',
+      })
+      return `export default ${JSON.stringify(code.trimEnd())}`
+    },
+  }
+}
 
 export default defineConfig({
   base: '/zenimator-app/',
-  plugins: [react(), tailwindcss()],
+  plugins: [portableSource(), react(), tailwindcss()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

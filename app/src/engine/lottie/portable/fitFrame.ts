@@ -230,7 +230,7 @@ function offsetPosition(doc: unknown, ks: Transform, dx: number, dy: number): vo
 /** Grow `doc` (mutating) so nothing slot-sized falls outside it, returning what
  *  changed — or `null` when it already fit. Root layers absorb the shift, so
  *  every parented child follows without being touched. */
-export function fitCompToContent(doc: unknown): FitPlan | null {
+export function fitFrame(doc: unknown): FitPlan | null {
   const plan = compFitPlan(doc)
   if (!plan) return null
   const d = doc as Doc
