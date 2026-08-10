@@ -1,0 +1,75 @@
+{
+  "controls": [
+    {
+      "sid": "bubble.text",
+      "label": "Bubble text"
+    },
+    {
+      "sid": "bubble.size",
+      "label": "Bubble size",
+      "autoFit": {
+        "text": "bubble.text",
+        "padding": [
+          16,
+          8
+        ],
+        "min": [
+          90,
+          35
+        ],
+        "max": [
+          144.6,
+          35
+        ],
+        "leading": 2
+      }
+    },
+    {
+      "sid": "bubble.textPos",
+      "label": "Bubble text position",
+      "internal": true
+    },
+    {
+      "sid": "bubble.anchor",
+      "label": "Bubble anchor",
+      "internal": true
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "mascot-rig",
+      "kind": "amount",
+      "property": "rotation",
+      "label": "Helmet sway",
+      "description": "How far the helmet tilts as it floats in zero gravity."
+    },
+    {
+      "target": "mascot-rig",
+      "kind": "amount",
+      "property": "position",
+      "label": "Float drift",
+      "description": "How far the mascot drifts against the frame each cycle."
+    },
+    {
+      "target": "occupant-rig",
+      "kind": "amount",
+      "property": "position",
+      "label": "Inner float",
+      "description": "How much the mascot’s face drifts inside its own helmet, separate from the shell."
+    },
+    {
+      "target": "moon-rig",
+      "kind": "amount",
+      "property": "position",
+      "label": "Moon parallax",
+      "description": "How far the moon drifts opposite the mascot."
+    },
+    {
+      "target": "bubble-anchor",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Bubble pop",
+      "description": "How much the speech bubble overshoots as it arrives."
+    }
+  ]
+}

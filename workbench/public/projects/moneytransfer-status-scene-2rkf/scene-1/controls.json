@@ -1,0 +1,31 @@
+{
+  "controls": [
+    {
+      "sid": "checkAccent",
+      "label": "Check accent color"
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "disc-sway",
+      "kind": "amount",
+      "property": "rotation",
+      "label": "Canopy sway",
+      "description": "How far the paraglider disc tips side to side."
+    },
+    {
+      "target": "zenek-lag",
+      "kind": "amount",
+      "property": "rotation",
+      "label": "Dangle drag",
+      "description": "How much Zenek's own dangle lags behind the canopy."
+    },
+    {
+      "target": "bob-rig",
+      "kind": "amount",
+      "property": "position",
+      "label": "Float bob",
+      "description": "The suspended rise-and-fall of the whole assembly."
+    }
+  ]
+}

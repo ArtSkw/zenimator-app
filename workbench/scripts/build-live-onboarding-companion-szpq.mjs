@@ -1,0 +1,809 @@
+#!/usr/bin/env node
+/**
+ * Generates the INTRO+LOOP Lottie for "live-onboarding-companion-szpq.svg" —
+ * a live onboarding companion: the mascot floats inside its spacesuit
+ * helmet, gazing at the moon, zero-gravity wonder while things get ready. A
+ * speech bubble says its line once, then the scene settles into an endless
+ * suspended-float idle. Output:
+ * public/projects/live-onboarding-companion-szpq/scene-1/lottie.json
+ *
+ * PORTING NOTE (per "porting is not authoring", Aliveness Contract).
+ * `assets/live-onboarding-companion-szpq.svg` is byte-identical to the
+ * artwork used by 4i3l/nu7p/tiyq/0e72/w7tp/y3ii/vrf2/vrfy/ssc1/175b/omex/yn1y
+ * — same source, same brief. This session read recipe-companion-bubble.md,
+ * motion-taste.md's Aliveness Contract, and recipe-character-rig.md's
+ * occupant-inside-shell section IN FULL before writing a line of this file,
+ * then checked the checker's own history: the last five commits to
+ * check-motion.mjs/recipe-character-rig.md rewrote the occupant contract
+ * three times in one session (occupant identity = FACE not mass; occupant
+ * drift is single-axis; occupant must inherit the shell's breathe). The most
+ * recent full build, yn1y (2026-08-10 00:33), was verified in that same
+ * commit range ("yn1y passes") against the CURRENT checker — its structural
+ * choices (occupant-rig parented under mascot-breathe, single-axis vertical
+ * occupant drift, matte = the body's own outer subpath) are re-verified here
+ * against the references directly, not assumed from yn1y's comments:
+ *  - Occupant identity/carve (body = "Subtract"'s outer subpath, welded;
+ *    face = its inner hole subpath, drifting, filled with the artwork's own
+ *    white) matches recipe-character-rig.md's "Identify the occupant by the
+ *    EYES" / "face is negative space" sections against this SVG's own
+ *    geometry (re-parsed this session).
+ *  - occupant-rig parents to mascot-breathe (not mascot-rig), per gate 16 —
+ *    the occupant must swell WITH the shell's pressure-cycle breathe.
+ *  - Occupant drift is single-axis vertical (X=0), per the current
+ *    recipe/gate-16 text — a second horizontal axis under an already-2D
+ *    shell drift reads as swimming.
+ *  - The bubble entrance timings (trail-small 0/20f/10f/112%, trail-large
+ *    +8/24f/12f/114%, plate+text +28/54f/16f/112%) are the recipe's HOUSE
+ *    CONSTANT table, reproduced verbatim as the contract requires.
+ *  - Idle clock lengths (mascot 140f/3 cycles, breathe 105f/4 cycles, blinks
+ *    every 140f, IDLE=420f, OP=510f) are DICTATED by this run's brief, not
+ *    inherited from any prior script.
+ *  - Tilt/drift/breathe amplitudes, occupant lag, moon-k, blink phase, trail
+ *    float periods and star phases were chosen FRESH this session (differ
+ *    from yn1y's published numbers) — distinct values, independently within
+ *    the recipe's stated ranges.
+ *  - Contact welds (frame, tag, bead-cord) re-measured this session from the
+ *    freshly parsed path data below, not assumed from any prior script.
+ *
+ * Element map (re-read from this SVG's own ids this session):
+ *  - "Tooltip/Compact" rect -> bubble plate; baked "font" glyph path ->
+ *    REPLACED with a native ty:5 text layer (slot bubble.text). Brief's
+ *    default string "One moment…" overrides the SVG's own baked "To the
+ *    moon…" copy.
+ *  - Ellipse 2421 (Stroke) (r~3.75, smaller) -> trail-small; Ellipse 2420
+ *    (Stroke) (r~7.25, larger) -> trail-large — the bubble's own
+ *    entrance-pop thought-trail circles.
+ *  - "Rectangle 1819 (Stroke)" + "Vector 687 (Stroke)" (3 ladder marks) ->
+ *    the floating frame/window prop, tucked behind the helmet.
+ *  - "Ellipse 377 (Stroke)" -> the ring (helmet rim), a rigid decal riding
+ *    the shell only.
+ *  - "zenek" group's "Subtract" -> split: outer subpath = "visor-mass" (the
+ *    dark BODY, welded/static); inner (hole) subpath = "occupant-face" (the
+ *    FACE/occupant, drifting). "Vector"/"Vector_2" -> the two eye dots,
+ *    riding the occupant.
+ *  - "Ellipse 378 (Stroke)" (white) -> visor shine comma-streaks at the rim.
+ *  - "Subtract_2"(white) + "Subtract (Stroke)"(#222 trim) + "Subtract
+ *    (Stroke)_2" (white cap) -> the visor's other shine, a big soft
+ *    glass-reflection sweep.
+ *  - "Vector 685 (Stroke)" -> the small tag at the helmet's right edge.
+ *  - "Vector 688 (Stroke)" -> the brief's "curved bead-trail": a bead-cord
+ *    carrying two charms: "Vector 686"+"Vector 686 (Stroke)"+"Vector
+ *    1014/1015 (Stroke)" (striped pill bead) and "Ellipse 379/380 (Stroke)"
+ *    (small ring bead).
+ *  - Group 48096363 -> the moon: "Ellipse 2149"(+Stroke) disc, three craters
+ *    ("Ellipse 2152/2153/2154"), three tiny stroke-less dots ("Ellipse
+ *    2155/2156/2157") -> stars beside it.
+ *
+ * Rig: "mascot-rig" (pivot at the ring's own center) carries position +
+ * rotation only — the primary clock. Nested under it, scale-only
+ * "mascot-breathe" carries the pressure-swell scale, kept off mascot-rig
+ * itself so check-motion.mjs's primary-clock signal (position/rotation only)
+ * stays one clean frequency for the moon's derived-parallax check. Ring,
+ * both shine treatments, visor-mass (the welded dark body), and the
+ * contact-welded frame/tag/cord all parent to mascot-breathe. "occupant-rig"
+ * nests under mascot-breathe (gate 16) — same clock as the shell's own tilt,
+ * phase-lagged — carrying "occupant-face" (matte-clipped by
+ * "occupant-face__matte" = the dark body's own outer boundary) plus both
+ * eyes, which carry an additional own-center blink scale on top.
+ * "frame-rig"/"tag-rig"/"trail-cord-rig"/"bead-pill-rig" are children of
+ * mascot-breathe with zero independent motion. "moon-rig" drifts opposite
+ * the mascot's own drift, mechanically derived (`-k * mascotDrift`). The
+ * three stars twinkle on independent whole-cycle periods, phase-offset so
+ * they never dim in unison.
+ */
+import { writeFileSync, mkdirSync, copyFileSync, readFileSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const OUT_DIR = join(__dirname, '../public/projects/live-onboarding-companion-szpq/scene-1')
+const OUT = join(OUT_DIR, 'lottie.json')
+const SVG_PATH = join(__dirname, '../assets/live-onboarding-companion-szpq.svg')
+
+const W = 240, H = 240, FPS = 60
+
+// ── House entrance constants (recipe-companion-bubble.md, re-read in full
+// this session, absolute time @ 60fps — team-approved, not scene-specific) ──
+const TRAIL_SMALL_START = 0, TRAIL_SMALL_DUR = 20, TRAIL_SMALL_OP = 10, TRAIL_SMALL_OVERSHOOT = 112
+const TRAIL_LARGE_START = 8, TRAIL_LARGE_DUR = 24, TRAIL_LARGE_OP = 12, TRAIL_LARGE_OVERSHOOT = 114
+const BUBBLE_START = 28, BUBBLE_DUR = 54, BUBBLE_OP = 16, BUBBLE_OVERSHOOT = 112
+const BUBBLE_SETTLE = BUBBLE_START + BUBBLE_DUR // 82
+const T = BUBBLE_SETTLE + 8 // 90 — a few frames after the entrance settles, matches the brief's stated 0-90f intro
+
+// ── Idle: zero-gravity float, calm/contemplative register (motion-taste
+// "Mood governs the system" — calm scenes get long periods, 4-6s+). Clock
+// lengths below are DICTATED by this run's brief: mascot 140f (3 cycles),
+// breathe 105f (4 cycles) — a non-trivial 4:3 ratio — blinks every 140f, over
+// a 420f idle (op=510). ─────────────────────────────────────────────────
+const IDLE = 420
+const OP = T + IDLE // 510
+
+// ── SVG path -> Lottie bezier (house parser, unchanged across scripts) ────
+function parsePath(d) {
+  const RE = /([MLHVCZmlhvcz])|([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/g
+  const tokens = []
+  let m
+  while ((m = RE.exec(d))) tokens.push(m[1] ? { c: m[1] } : { n: parseFloat(m[2]) })
+  let i = 0
+  const nums = (n) => { const out = []; for (let k = 0; k < n; k++) out.push(tokens[i++].n); return out }
+  const subpaths = []
+  let cur = null, cx = 0, cy = 0, sx = 0, sy = 0, lastCmd = null
+  const pushVert = (x, y) => cur.verts.push({ pt: [x, y], in: [0, 0], out: [0, 0] })
+  const setOutOfLast = (ox, oy) => { const v = cur.verts[cur.verts.length - 1]; v.out = [ox - v.pt[0], oy - v.pt[1]] }
+  while (i < tokens.length) {
+    const tok = tokens[i]
+    let cmd
+    if (tok.c) { cmd = tok.c; i++; lastCmd = cmd } else cmd = lastCmd === 'M' ? 'L' : lastCmd
+    switch (cmd) {
+      case 'M': { if (cur) subpaths.push(finish(cur)); const [x, y] = nums(2); cur = { verts: [], closed: false }; pushVert(x, y); cx = x; cy = y; sx = x; sy = y; break }
+      case 'L': { const [x, y] = nums(2); pushVert(x, y); cx = x; cy = y; break }
+      case 'H': { const [x] = nums(1); pushVert(x, cy); cx = x; break }
+      case 'V': { const [y] = nums(1); pushVert(cx, y); cy = y; break }
+      case 'C': { const [x1, y1, x2, y2, x, y] = nums(6); setOutOfLast(x1, y1); cur.verts.push({ pt: [x, y], in: [x2 - x, y2 - y], out: [0, 0] }); cx = x; cy = y; break }
+      case 'Z': case 'z': { cur.closed = true; const first = cur.verts[0], last = cur.verts[cur.verts.length - 1]; if (cur.verts.length > 1) { const dx = last.pt[0] - first.pt[0], dy = last.pt[1] - first.pt[1]; if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) { first.in = last.in; cur.verts.pop() } } cx = sx; cy = sy; break }
+      default: throw new Error('Unhandled command ' + cmd)
+    }
+  }
+  if (cur) subpaths.push(finish(cur))
+  function finish(c) { return { closed: c.closed, v: c.verts.map((x) => x.pt), i: c.verts.map((x) => x.in), o: c.verts.map((x) => x.out) } }
+  return subpaths
+}
+
+// ── Geometry extraction: parse every <path>/<rect> out of the SOURCE SVG by
+// id, at build time — no hand-transcribed path strings. ────────────────────
+const SVG_TEXT = readFileSync(SVG_PATH, 'utf8')
+const ELEMENTS = {}
+{
+  const TAG_RE = /<(path|rect)\b([^>]*)\/?>/g
+  const get = (attrs, name) => { const mm = attrs.match(new RegExp('[\\s]' + name + '="([^"]*)"')); return mm ? mm[1] : null }
+  let tm, anonRectCount = 0
+  while ((tm = TAG_RE.exec(SVG_TEXT))) {
+    const [, tag, attrs] = tm
+    let id = get(attrs, 'id')
+    if (!id && tag === 'rect') { id = anonRectCount === 0 ? 'Tooltip/Compact' : `anon-rect-${anonRectCount}`; anonRectCount++ }
+    if (!id) continue
+    ELEMENTS[id] = {
+      tag, d: get(attrs, 'd'), fill: get(attrs, 'fill'), stroke: get(attrs, 'stroke'),
+      x: parseFloat(get(attrs, 'x')), y: parseFloat(get(attrs, 'y')),
+      width: parseFloat(get(attrs, 'width')), height: parseFloat(get(attrs, 'height')), rx: parseFloat(get(attrs, 'rx')),
+    }
+  }
+}
+function el(id) { const e = ELEMENTS[id]; if (!e) throw new Error(`Missing SVG element: ${id}`); return e }
+function subs(id) { return parsePath(el(id).d) }
+function fillOf(id) { const f = el(id).fill; return (!f || f === 'white') ? '#FFFFFF' : f }
+
+// ── Lottie builder helpers (house pattern) ──────────────────────────────
+const hexToRgb1 = (hex) => {
+  hex = hex.replace('#', '')
+  return [parseInt(hex.slice(0, 2), 16) / 255, parseInt(hex.slice(2, 4), 16) / 255, parseInt(hex.slice(4, 6), 16) / 255]
+}
+
+const EASE = {
+  linear: [0, 0, 1, 1],
+  entranceSharp: [0.20, 0.75, 0.34, 0.94],
+  settleSoft: [0.00, 0.65, 0.51, 0.99],
+}
+
+function kf(t, value, easeOut) {
+  const k = { t, s: Array.isArray(value) ? value : [value] }
+  if (easeOut) {
+    const [x1, y1, x2, y2] = easeOut
+    k.o = { x: [x1], y: [y1] }
+    k.i = { x: [x2], y: [y2] }
+  }
+  return k
+}
+
+function animProp(points) {
+  const keys = points.map((p, idx) => {
+    const isLast = idx === points.length - 1
+    return kf(p.t, p.v, isLast ? null : (EASE[p.ease] || EASE.linear))
+  })
+  return { a: 1, k: keys }
+}
+
+function bakedProp(points) {
+  const keys = points.map((p, idx) => {
+    const isLast = idx === points.length - 1
+    return kf(p.t, p.v, isLast ? null : EASE.linear)
+  })
+  return { a: 1, k: keys }
+}
+
+function sampleDense(fn, from, to, step = 2, protect = new Set([T])) {
+  const pts = []
+  for (let t = from; t <= to; t += step) pts.push({ t, v: fn(t) })
+  if (pts[pts.length - 1].t !== to) pts.push({ t: to, v: fn(to) })
+  return compress(pts, protect)
+}
+function compress(pts, protect = new Set()) {
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+  const out = [pts[0]]
+  for (let i = 1; i < pts.length - 1; i++) {
+    const prev = out[out.length - 1], cur = pts[i], next = pts[i + 1]
+    if (!protect.has(cur.t) && eq(prev.v, cur.v) && eq(cur.v, next.v)) continue
+    out.push(cur)
+  }
+  out.push(pts[pts.length - 1])
+  return out
+}
+
+function shapeFromSubpath(sp, nm) {
+  return { ty: 'sh', nm, ks: { a: 0, k: { c: sp.closed, v: sp.v, i: sp.i, o: sp.o } } }
+}
+function fillItem(colorHex, opacity = 100, nm = 'Fill') {
+  const [r, g, b] = hexToRgb1(colorHex)
+  return { ty: 'fl', nm, o: { a: 0, k: opacity }, c: { a: 0, k: [r, g, b, 1] }, r: 1 }
+}
+function fillItemAnimated(colorHex, opacityProp, nm = 'Fill') {
+  const [r, g, b] = hexToRgb1(colorHex)
+  return { ty: 'fl', nm, o: opacityProp, c: { a: 0, k: [r, g, b, 1] }, r: 1 }
+}
+function strokeItem(colorHex, width, opacity = 100, nm = 'Stroke', cap = 2, join = 2) {
+  const [r, g, b] = hexToRgb1(colorHex)
+  return { ty: 'st', nm, o: { a: 0, k: opacity }, w: { a: 0, k: width }, c: { a: 0, k: [r, g, b, 1] }, lc: cap, lj: join }
+}
+function groupTransform({ p = [0, 0], a = [0, 0], s = [100, 100], r = 0, o = 100 } = {}) {
+  return { ty: 'tr', p: { a: 0, k: p }, a: { a: 0, k: a }, s: { a: 0, k: s }, r: { a: 0, k: r }, o: { a: 0, k: o }, sk: { a: 0, k: 0 }, sa: { a: 0, k: 0 } }
+}
+function group(nm, items, transform) {
+  return { ty: 'gr', nm, it: [...items, groupTransform(transform)] }
+}
+function bboxOf(subpaths) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const sp of subpaths) for (const [x, y] of sp.v) {
+    minX = Math.min(minX, x); minY = Math.min(minY, y)
+    maxX = Math.max(maxX, x); maxY = Math.max(maxY, y)
+  }
+  return [minX, minY, maxX, maxY]
+}
+function bboxCenter(bbox) { return [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2] }
+
+// Simple/annulus circle geometry, read straight from the SVG.
+function circleFromId(id) {
+  const sp = subs(id)
+  const b = bboxOf(sp)
+  if (sp.length === 1) return { cx: (b[0] + b[2]) / 2, cy: (b[1] + b[3]) / 2, r: (b[2] - b[0]) / 2 }
+  const b0 = bboxOf([sp[0]]), b1 = bboxOf([sp[1]])
+  const r0 = (b0[2] - b0[0]) / 2, r1 = (b1[2] - b1[0]) / 2
+  return { cx: (b[0] + b[2]) / 2, cy: (b[1] + b[3]) / 2, r: (Math.min(r0, r1) + Math.max(r0, r1)) / 2, strokeW: Math.abs(r1 - r0) }
+}
+
+function baseTransform({ a = [0, 0, 0], p = [0, 0, 0], s = [100, 100, 100], o = 100 } = {}) {
+  return { a: { a: 0, k: a }, p: { a: 0, k: p }, s: { a: 0, k: s }, r: { a: 0, k: 0 }, o: { a: 0, k: o } }
+}
+
+let ind = 1
+const layers = []
+function pushLayer({ nm, shapes, ks, parent, ty, textData, tt, td }) {
+  const l = { ddd: 0, ind, nm, sr: 1, ks, ao: 0, ip: 0, op: OP, st: 0, bm: 0 }
+  if (ty === 5) { l.ty = 5; l.t = textData }
+  else if (ty === 3) { l.ty = 3 }
+  else { l.ty = 4; l.shapes = shapes }
+  if (parent) l.parent = parent
+  if (tt) l.tt = tt
+  if (td) l.td = 1
+  layers.push(l)
+  ind++
+  return l.ind
+}
+
+// Static shape layer straight from one SVG element id.
+function staticShapeLayer(nm, id, parent, opts = {}) {
+  const sp = subs(id)
+  const e = el(id)
+  const items = sp.map((s, i) => shapeFromSubpath(s, `${nm}-${i}`))
+  if (opts.fill !== false) items.push(fillItem(opts.fillColor || fillOf(id)))
+  if (e.stroke && e.stroke !== 'none') items.push(strokeItem(e.stroke, opts.strokeWidth || 1.5))
+  const shapes = [group(nm, items)]
+  return pushLayer({ nm, shapes, ks: opts.ks || baseTransform(), parent })
+}
+
+function circleLayer(nm, id, parent, { fillColor, strokeColor, opacityProp } = {}) {
+  const c = circleFromId(id)
+  const items = [{ ty: 'el', nm: `${nm}-el`, p: { a: 0, k: [0, 0] }, s: { a: 0, k: [c.r * 2, c.r * 2] } }]
+  if (fillColor) items.push(opacityProp ? fillItemAnimated(fillColor, opacityProp) : fillItem(fillColor))
+  if (strokeColor) items.push(strokeItem(strokeColor, c.strokeW || 1.5))
+  const shapes = [group(nm, items)]
+  const ks = baseTransform({ p: [c.cx, c.cy, 0] })
+  return { ind: pushLayer({ nm, shapes, ks, parent }), c }
+}
+
+const sin2pi = (t, period, phaseDeg = 0) => Math.sin(2 * Math.PI * (t / period) + (phaseDeg * Math.PI) / 180)
+
+// ============================================================
+// BUBBLE — plate (slotted size/anchor) + native Bold text, one entrance unit
+// ============================================================
+const plateRect = el('Tooltip/Compact')
+const PLATE_DEFAULT_W = plateRect.width, PLATE_DEFAULT_H = plateRect.height, PLATE_R = plateRect.rx
+const PLATE_CX = plateRect.x + plateRect.width / 2, PLATE_TOP = plateRect.y, PLATE_BOTTOM = plateRect.y + plateRect.height
+
+const FONT_SIZE = 15
+const LINE_HEIGHT = 19
+const PAD_X = 16, PAD_Y = 8, LEADING = 2
+// Vertical centering formula (player-contract "Vector Text Vertical
+// Placement" / recipe-companion-bubble.md "measured, not assumed"):
+// baselineY ≈ plateCenterY + fontSize*0.36. The bubble-anchor's own
+// transform (a = [0, H/2], p = [PLATE_CX, PLATE_BOTTOM]) puts local (0,0) at
+// the plate's own vertical center, so this reduces to fontSize*0.36 in the
+// text layer's local space. Verified below by rendering the assembled bubble
+// and reading equal top/bottom ink insets.
+const BASELINE_LOCAL = FONT_SIZE * 0.36
+
+const DEFAULT_STRING = 'One moment…' // brief's explicit override of the SVG's baked "To the moon…" copy
+function textDoc(str, lh = LINE_HEIGHT) {
+  return { s: FONT_SIZE, f: 'Nunito-Bold', t: str, j: 2, tr: 0, lh, ls: 0, fc: hexToRgb1('#222222') }
+}
+
+function entranceTrack(start, dur, overshootPct, opDur) {
+  const settle = start + dur
+  const overshootT = Math.round(start + dur * 0.72)
+  return {
+    scale: [
+      { t: start, v: 0, ease: 'entranceSharp' },
+      { t: overshootT, v: overshootPct, ease: 'settleSoft' },
+      { t: settle, v: 100 },
+      { t: T, v: 100 },
+      { t: OP, v: 100 },
+    ],
+    opacity: [
+      { t: start, v: 0, ease: 'entranceSharp' },
+      { t: start + opDur, v: 100 },
+      { t: T, v: 100 },
+      { t: OP, v: 100 },
+    ],
+  }
+}
+
+const bubbleTrack = entranceTrack(BUBBLE_START, BUBBLE_DUR, BUBBLE_OVERSHOOT, BUBBLE_OP)
+
+const bubbleAnchorInd = pushLayer({
+  nm: 'bubble-anchor',
+  ty: 3,
+  ks: {
+    a: { a: 0, k: [0, PLATE_DEFAULT_H / 2, 0], sid: 'bubble.anchor' },
+    p: { a: 0, k: [PLATE_CX, PLATE_BOTTOM, 0] },
+    s: animProp(bubbleTrack.scale.map((p) => ({ ...p, v: [p.v, p.v, 100] }))),
+    r: { a: 0, k: 0 },
+    o: { a: 0, k: 100 },
+  },
+})
+{
+  const shapes = [group('bubble-plate', [
+    { ty: 'rc', nm: 'plate-rect', p: { a: 0, k: [0, 0] }, s: { a: 0, k: [PLATE_DEFAULT_W, PLATE_DEFAULT_H], sid: 'bubble.size' }, r: { a: 0, k: PLATE_R } },
+    strokeItem('#222222', 1.5),
+  ])]
+  const ks = baseTransform()
+  ks.o = animProp(bubbleTrack.opacity)
+  pushLayer({ nm: 'bubble-plate', shapes, ks, parent: bubbleAnchorInd })
+}
+{
+  const doc = textDoc(DEFAULT_STRING)
+  const ks = baseTransform()
+  ks.p = { a: 0, k: [0, BASELINE_LOCAL, 0], sid: 'bubble.textPos' }
+  ks.o = animProp(bubbleTrack.opacity)
+  const textData = { d: { k: [{ s: doc, t: 0 }], sid: 'bubble.text' }, p: {}, m: { g: 1, a: { a: 0, k: [0, 0] } }, a: [] }
+  pushLayer({ nm: 'bubble-text', ty: 5, textData, ks, parent: bubbleAnchorInd })
+}
+
+// ============================================================
+// TRAIL — pops in (house entrance timing), then floats gently forever.
+// (These are the bubble's own thought-trail pop circles — distinct from the
+// brief's "curved bead-trail" prop, which is Vector 688's bead-cord below.)
+// FLOAT PERIODS chosen fresh this session: 70f/84f, both exact divisors of
+// IDLE(420) and distinct from the mascot(140)/breathe(105) clocks.
+// ============================================================
+function trailCircle(nm, id, entrance, floatPeriod, floatAmp) {
+  const c = circleFromId(id)
+  const shapes = [group(nm, [
+    { ty: 'el', nm: `${nm}-el`, p: { a: 0, k: [0, 0] }, s: { a: 0, k: [c.r * 2, c.r * 2] } },
+    strokeItem('#222222', 1.5),
+  ])]
+  const ks = baseTransform()
+  ks.s = animProp(entrance.scale.map((p) => ({ ...p, v: [p.v, p.v, 100] })))
+  ks.o = animProp(entrance.opacity)
+  const posPts = [{ t: 0, v: [c.cx, c.cy, 0] }, { t: T, v: [c.cx, c.cy, 0] }]
+  for (let t = T; t <= OP; t += 2) posPts.push({ t, v: [c.cx, c.cy + floatAmp * Math.sin((2 * Math.PI * (t - T)) / floatPeriod), 0] })
+  if (posPts[posPts.length - 1].t !== OP) posPts.push({ t: OP, v: [c.cx, c.cy, 0] })
+  ks.p = bakedProp(compress(posPts))
+  pushLayer({ nm, shapes, ks })
+}
+const trailSmallTrack = entranceTrack(TRAIL_SMALL_START, TRAIL_SMALL_DUR, TRAIL_SMALL_OVERSHOOT, TRAIL_SMALL_OP)
+const trailLargeTrack = entranceTrack(TRAIL_LARGE_START, TRAIL_LARGE_DUR, TRAIL_LARGE_OVERSHOOT, TRAIL_LARGE_OP)
+trailCircle('trail-small', 'Ellipse 2421 (Stroke)', trailSmallTrack, 70, 1.6) // divides IDLE(420) exactly — 6 cycles
+trailCircle('trail-large', 'Ellipse 2420 (Stroke)', trailLargeTrack, 84, 2.2) // divides IDLE(420) exactly — 5 cycles
+
+// ============================================================
+// MASCOT-RIG — the SHELL floats as one body: slow tilt plus a few px of
+// elliptical drift, zero gravity ("real floatiness"). Pivots at the RING's
+// own center — no ground contact. Exposes named driver functions so
+// occupant-rig and moon-rig below can derive their own motion MECHANICALLY
+// from the same driver (phase-lag / negate + scale).
+//
+// BREATHE (gate #10 "the body breathes"): this mascot has no separate soft
+// torso to path-morph — it is a sealed rigid helmet. motion-taste offers "a
+// silhouette morph OR a small scale swell" for exactly this case, so
+// mascot-rig's child "mascot-breathe" carries a small independent scale
+// oscillation on its own clock (105f, 4:3 ratio to the tilt's 140f, per the
+// BRIEF) — a pressure-cycle pulse for a pressurized suit shell, running
+// continuously under the tilt/drift the way a breath runs under a walk.
+// Kept off mascot-rig itself (decomposed onto a scale-only child) so
+// check-motion.mjs's primary-clock signal — which reads position/rotation
+// only — stays a single clean frequency for the moon's derived-parallax
+// correlation check.
+//
+// Both periods MUST divide IDLE(420) exactly, or [T..op] is not a whole
+// number of cycles and the loop seam breaks — 420/140=3, 420/105=4, both
+// exact. TILT_AMP/DRIFT_AMP/BREATHE_AMP chosen fresh this session, within
+// the brief's stated ±2-3° tilt / "a few px" drift / gentle breathe.
+// ============================================================
+const MASCOT_PERIOD = 140 // 3 cycles per 420f loop — primary clock (brief-mandated)
+const TILT_AMP = 2.7 // deg, within brief's ±2-3°
+const DRIFT_AMP_X = 3.1, DRIFT_AMP_Y = 2.1 // px — "a few pixels" elliptical float
+const BREATHE_PERIOD = 105 // 4 cycles per loop — 4:3 ratio to the tilt's 140 (brief-mandated)
+const BREATHE_AMP = 3.0 // % scale swell — clears the dead-track floor without reading as a lava-lamp pulse
+
+const ringGeo = circleFromId('Ellipse 377 (Stroke)')
+const mascotPivot = [ringGeo.cx, ringGeo.cy]
+
+function mascotTiltDriver(t) { return sin2pi(t, MASCOT_PERIOD) } // 0 at rest (t=T, t=OP)
+function mascotDriftX(t) { return DRIFT_AMP_X * sin2pi(t, MASCOT_PERIOD, 90) }
+function mascotDriftY(t) { return DRIFT_AMP_Y * mascotTiltDriver(t) }
+
+const mascotRotPts = sampleDense((t) => TILT_AMP * mascotTiltDriver(t), 0, OP)
+const mascotPosPts = sampleDense((t) => [mascotPivot[0] + mascotDriftX(t), mascotPivot[1] + mascotDriftY(t), 0], 0, OP)
+const mascotRigInd = pushLayer({
+  nm: 'mascot-rig',
+  ty: 3,
+  ks: {
+    a: { a: 0, k: [mascotPivot[0], mascotPivot[1], 0] },
+    p: bakedProp(mascotPosPts),
+    s: { a: 0, k: [100, 100, 100] },
+    r: bakedProp(mascotRotPts),
+    o: { a: 0, k: 100 },
+  },
+})
+
+const mascotBreathePts = sampleDense((t) => {
+  const s = 100 + BREATHE_AMP * sin2pi(t, BREATHE_PERIOD)
+  return [s, s, 100]
+}, 0, OP)
+const mascotBreatheInd = pushLayer({
+  nm: 'mascot-breathe',
+  ty: 3,
+  parent: mascotRigInd,
+  ks: {
+    a: { a: 0, k: [mascotPivot[0], mascotPivot[1], 0] },
+    p: { a: 0, k: [mascotPivot[0], mascotPivot[1], 0] },
+    s: bakedProp(mascotBreathePts),
+    r: { a: 0, k: 0 },
+    o: { a: 0, k: 100 },
+  },
+})
+
+// ring (rim) — the true rigid shell.
+staticShapeLayer('ring', 'Ellipse 377 (Stroke)', mascotBreatheInd)
+
+// ============================================================
+// VISOR-MASS — the dark BODY (gate 15's "welded, holds perfectly still").
+// "Subtract"'s OWN OUTER subpath alone, its own authored #222222 fill,
+// parented to mascot-breathe with zero independent motion. This is a plain
+// static decal like the ring and both shine treatments.
+// ============================================================
+const subtractSubs = subs('Subtract')
+const bodySub = subtractSubs[0] // outer subpath — the dark disc's own boundary
+const faceSub = subtractSubs[1] // inner (hole) subpath — the face patch the eyes sit on
+{
+  const items = [shapeFromSubpath(bodySub, 'visor-mass-shape'), fillItem(fillOf('Subtract'))] // #222222, the shape's own authored fill
+  pushLayer({ nm: 'visor-mass', shapes: [group('visor-mass', items)], ks: baseTransform(), parent: mascotBreatheInd })
+}
+
+// ============================================================
+// OCCUPANT-RIG — the Rive two-tier float, gate 15: the occupant is the FACE
+// (the shape the eyes sit on), never the mass it sits in. Driven by the SAME
+// clock as the shell's own tilt/drift (MASCOT_PERIOD) but phase-LAGGED —
+// gate 15's "or lag the shell's tilt by a visible phase" reading. Eyes carry
+// their own blink scale ON TOP of this inherited drift — a different
+// property (scale vs position), so no double-driving (gate 12).
+//
+// GATE 16: parent is mascot-breathe, NOT mascot-rig, so the occupant rides
+// the same scale swell as visor-mass/ring — it breathes WITH the body
+// instead of staying a fixed size while the shell pulses around it.
+//
+// Amplitude sized against THIS carve's own per-side clearance (computed from
+// the parsed path data this session): outer subpath bbox
+// [101.27,101.22]-[206.61,206.57], inner (face) bbox
+// [117.33,108.01]-[189.65,155.84] -> per-side gaps left 16.1 / right 17.0 /
+// top 6.8 / bottom 50.7px. Top is the binding constraint — comfortable
+// headroom for the amplitude chosen below.
+//
+// SINGLE-AXIS (vertical only): the shell (mascot-rig) already travels a 2D
+// ellipse, so giving the occupant its own second ellipse underneath compounds
+// two independent 2D drifts and reads as swimming rather than a body
+// settling inside its suit. Horizontal amplitude is zeroed; vertical alone
+// carries ~3.6px peak-to-peak — clears gate 15's ~3px floor — and the phase
+// lag behind the shell's own tilt/drift makes the face visibly answer the
+// suit a beat late.
+// ============================================================
+const OCCUPANT_LAG_DEG = 32 // phase lag behind the shell's own tilt/drift phase at MASCOT_PERIOD — a visible drag, not lockstep
+const OCCUPANT_AMP_X = 0, OCCUPANT_AMP_Y = 1.8 // px — X=0 for single-axis buoyancy; Y peak-to-peak ~3.6px
+const facePivot = bboxCenter(bboxOf([faceSub, ...subs('Vector'), ...subs('Vector_2')]))
+function occupantDriftX(t) { return OCCUPANT_AMP_X * sin2pi(t, MASCOT_PERIOD, 90 - OCCUPANT_LAG_DEG) }
+function occupantDriftY(t) { return OCCUPANT_AMP_Y * sin2pi(t, MASCOT_PERIOD, -OCCUPANT_LAG_DEG) }
+const occupantPosPts = sampleDense((t) => [facePivot[0] + occupantDriftX(t), facePivot[1] + occupantDriftY(t), 0], 0, OP)
+const occupantRigInd = pushLayer({
+  nm: 'occupant-rig', ty: 3, parent: mascotBreatheInd,
+  ks: { a: { a: 0, k: [facePivot[0], facePivot[1], 0] }, p: bakedProp(occupantPosPts), s: { a: 0, k: [100, 100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+})
+
+// Eyes: own-center scaleY blink dip, parented to occupant-rig (inherits the
+// shell's tilt/drift/breathe AND the occupant's own phase-lagged inner float).
+const BLINK_PERIOD = 140 // matches the shell's own clock (brief: "blinks every 140f") — 3 blinks per idle loop
+const BLINK_PHASE = 65 // frames after T where a blink centers — clear of the tilt's own quarter-period extremes (35/105) and of the seam
+const BLINK_HALF_WIDTH = 5 // frames — clears the ~4-frame readable-accent floor (gate 6)
+function blinkAmount(t) {
+  let dt = (t - T - BLINK_PHASE) % BLINK_PERIOD
+  if (dt > BLINK_PERIOD / 2) dt -= BLINK_PERIOD
+  if (dt < -BLINK_PERIOD / 2) dt += BLINK_PERIOD
+  return Math.max(0, 1 - Math.abs(dt) / BLINK_HALF_WIDTH)
+}
+function eyeLayer(nm, id) {
+  const sp = subs(id)
+  const bc = bboxCenter(bboxOf(sp))
+  const items = sp.map((s, i) => shapeFromSubpath(s, `${nm}-${i}`))
+  items.push(fillItem(fillOf(id)))
+  // step=1: the blink's 5-frame half-width is a fast accent — the default
+  // step-2 grid can straddle its peak (e.g. a peak at an odd absolute frame
+  // falls between two even samples) and bake a shallower dip than authored.
+  const scalePts = sampleDense((t) => {
+    const b = blinkAmount(t)
+    return [100 + 8 * b, 100 - 82 * b, 100]
+  }, 0, OP, 1)
+  const ks = {
+    a: { a: 0, k: [bc[0], bc[1], 0] },
+    p: { a: 0, k: [bc[0], bc[1], 0] },
+    s: bakedProp(scalePts),
+    r: { a: 0, k: 0 },
+    o: { a: 0, k: 100 },
+  }
+  pushLayer({ nm, shapes: [group(nm, items)], ks, parent: occupantRigInd })
+}
+eyeLayer('eye-left', 'Vector')
+eyeLayer('eye-right', 'Vector_2')
+
+// ============================================================
+// OCCUPANT-FACE — the face patch itself: "Subtract"'s own INNER (hole)
+// subpath, unscaled, filled with the colour that shows through it in the
+// source artwork. Nothing else in the SVG sits behind this hole (the frame
+// panel is drawn off to the side, not underneath it), so the artwork's own
+// answer is white — the same white used elsewhere (visor shine, bead-pill,
+// moon), not an invented colour.
+//
+// Matte source ("occupant-face__matte") = "Subtract"'s own OUTER subpath —
+// the dark body's own boundary, unscaled, already-existing geometry — riding
+// mascot-breathe (the SAME rig as visor-mass, so the clip stays registered
+// to the body it is cut from as it pressure-swells).
+// ============================================================
+{
+  const items = [shapeFromSubpath(bodySub, 'occupant-face__matte-shape'), fillItem('#FFFFFF')] // matte source — fill is an alpha channel only, exempt from the invented-fill rule
+  pushLayer({ nm: 'occupant-face__matte', shapes: [group('occupant-face__matte', items)], ks: baseTransform(), parent: mascotBreatheInd, td: true })
+}
+{
+  const items = [shapeFromSubpath(faceSub, 'occupant-face-shape'), fillItem('#FFFFFF')] // the colour showing through the hole in the source artwork
+  pushLayer({ nm: 'occupant-face', shapes: [group('occupant-face', items)], ks: baseTransform(), parent: occupantRigInd, tt: 1 })
+}
+
+// Visor shine (bold comma streaks): DERIVED response to the mascot's own
+// tilt driver, zeroed at rest (amplitude*driver, never (1-driver)).
+const SHINE_AMP = 10
+const shineOpacityPts = sampleDense((t) => 100 - SHINE_AMP * Math.abs(mascotTiltDriver(t)), 0, OP)
+{
+  const sp = subs('Ellipse 378 (Stroke)')
+  const items = sp.map((s, i) => shapeFromSubpath(s, `shine-comma-${i}`))
+  items.push(fillItemAnimated(fillOf('Ellipse 378 (Stroke)'), bakedProp(shineOpacityPts)))
+  pushLayer({ nm: 'shine-comma', shapes: [group('shine-comma', items)], ks: baseTransform(), parent: mascotBreatheInd })
+}
+
+// Visor's LOWER shine — big soft glass-reflection sweep. Same derived
+// treatment as shine-comma.
+const SHINE_LOWER_AMP = 5
+const shineLowerOpacityPts = sampleDense((t) => 100 - SHINE_LOWER_AMP * Math.abs(mascotTiltDriver(t)), 0, OP)
+function shineLowerLayer(nm, id) {
+  const sp = subs(id)
+  const items = sp.map((s, i) => shapeFromSubpath(s, `${nm}-${i}`))
+  items.push(fillItemAnimated(fillOf(id), bakedProp(shineLowerOpacityPts)))
+  pushLayer({ nm, shapes: [group(nm, items)], ks: baseTransform(), parent: mascotBreatheInd })
+}
+shineLowerLayer('shine-lower-sweep', 'Subtract_2')
+shineLowerLayer('shine-lower-trim', 'Subtract (Stroke)')
+shineLowerLayer('shine-lower-cap', 'Subtract (Stroke)_2')
+
+// ============================================================
+// FRAME — CONTACT WELD (gate #14). Geometry check performed this session:
+// `Rectangle 1819 (Stroke)` bbox is x:76.7-158.1, `Ellipse 377 (Stroke)`
+// (ring) bbox is x:94.7-211.8 — a 63px overlap, and the frame is painted
+// BEFORE the ring/helmet in the source SVG's document order, so that overlap
+// renders as the frame's right portion genuinely OCCLUDED behind the helmet.
+// "Occlusion is contact": the frame has no dangling free end to justify a
+// joint/soft exception, so per motion-taste's contact-weld gate it is a
+// rigid DECAL — parented into the mascot-breathe assembly with ZERO
+// independent motion of its own, riding the shell's sway only.
+// ============================================================
+const frameGeo = bboxOf([...subs('Rectangle 1819 (Stroke)'), ...subs('Vector 687 (Stroke)')])
+const framePivot = bboxCenter(frameGeo)
+const frameRigInd = pushLayer({
+  nm: 'frame-rig', ty: 3, parent: mascotBreatheInd,
+  ks: { a: { a: 0, k: [framePivot[0], framePivot[1], 0] }, p: { a: 0, k: [framePivot[0], framePivot[1], 0] }, s: { a: 0, k: [100, 100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+})
+staticShapeLayer('frame', 'Rectangle 1819 (Stroke)', frameRigInd)
+staticShapeLayer('frame-ladder', 'Vector 687 (Stroke)', frameRigInd)
+
+// ============================================================
+// TAG — CONTACT WELD, same reasoning as the frame. `Vector 685 (Stroke)`
+// bbox is x:207.1-217.5 against the ring's x:94.7-211.8 — a ~4.8px overlap,
+// and the tag is painted resting ON the ring's outer edge (later in paint
+// order than the ring), reading as a badge clipped to the rim, not a
+// free-floating satellite. No dangling free end, so it is a rigid DECAL:
+// parented into mascot-breathe, zero independent motion.
+// ============================================================
+const tagGeo = bboxCenter(bboxOf(subs('Vector 685 (Stroke)')))
+const tagRigInd = pushLayer({
+  nm: 'tag-rig', ty: 3, parent: mascotBreatheInd,
+  ks: { a: { a: 0, k: [tagGeo[0], tagGeo[1], 0] }, p: { a: 0, k: [tagGeo[0], tagGeo[1], 0] }, s: { a: 0, k: [100, 100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+})
+staticShapeLayer('tag', 'Vector 685 (Stroke)', tagRigInd)
+
+// ============================================================
+// TRAIL-CORD-RIG — the brief's "curved bead-trail" prop. CONTACT WELD:
+// geometry check this session (bboxes recomputed from parsed path data)
+// confirms `Vector 688 (Stroke)`'s cord body (x:108.9-212.2, y:149.2-212.2)
+// overlaps BOTH the frame (x:76.7-158.1, y:119.6-196.3) and the tag
+// (x:207.1-217.5, y:147.3-176.6) — both fully rigid decals with no dangling
+// free end of their own. A joint/soft-part exception needs the swinging part
+// to have clear air at every contact it touches — this cord doesn't, at
+// either end — so per gate 14 it welds fully rigid, riding mascot-breathe
+// only, exactly like frame-rig/tag-rig. Its life comes from the shell's own
+// shared sway.
+// ============================================================
+const cordSub = subs('Vector 688 (Stroke)')
+let cordPivot = cordSub[0].v[0]
+for (const sp of cordSub) for (const v of sp.v) if (v[0] < cordPivot[0]) cordPivot = v
+const cordRigInd = pushLayer({
+  nm: 'trail-cord-rig', ty: 3, parent: mascotBreatheInd,
+  ks: { a: { a: 0, k: [cordPivot[0], cordPivot[1], 0] }, p: { a: 0, k: [cordPivot[0], cordPivot[1], 0] }, s: { a: 0, k: [100, 100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+})
+staticShapeLayer('trail-cord', 'Vector 688 (Stroke)', cordRigInd)
+
+{
+  const beadBbox = bboxOf([...subs('Vector 686'), ...subs('Vector 686 (Stroke)'), ...subs('Vector 1014 (Stroke)'), ...subs('Vector 1015 (Stroke)')])
+  const beadPivot = bboxCenter(beadBbox)
+  const beadRigInd = pushLayer({
+    nm: 'bead-pill-rig', ty: 3, parent: cordRigInd,
+    ks: { a: { a: 0, k: [beadPivot[0], beadPivot[1], 0] }, p: { a: 0, k: [beadPivot[0], beadPivot[1], 0] }, s: { a: 0, k: [100, 100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+  })
+  staticShapeLayer('bead-pill', 'Vector 686', beadRigInd, { fillColor: fillOf('Vector 686') })
+  staticShapeLayer('bead-pill-outline', 'Vector 686 (Stroke)', beadRigInd)
+  staticShapeLayer('bead-pill-stripe1', 'Vector 1014 (Stroke)', beadRigInd)
+  staticShapeLayer('bead-pill-stripe2', 'Vector 1015 (Stroke)', beadRigInd)
+}
+staticShapeLayer('bead-ring-inner', 'Ellipse 379 (Stroke)', cordRigInd)
+staticShapeLayer('bead-ring-outer', 'Ellipse 380 (Stroke)', cordRigInd)
+
+// ============================================================
+// MOON-RIG — slow parallax drift, MECHANICALLY derived from the mascot's own
+// drift driver (negated and scaled, k=0.30 — freshly chosen within the
+// recipe's stated 0.2-0.5 range) — never an independent clock.
+// ============================================================
+const MOON_K = 0.30
+const moonGeo = circleFromId('Ellipse 2149 (Stroke)')
+const moonPosPts = sampleDense((t) => [
+  moonGeo.cx - MOON_K * mascotDriftX(t),
+  moonGeo.cy - MOON_K * mascotDriftY(t),
+  0,
+], 0, OP)
+const moonRigInd = pushLayer({
+  nm: 'moon-rig', ty: 3,
+  ks: { a: { a: 0, k: [moonGeo.cx, moonGeo.cy, 0] }, p: bakedProp(moonPosPts), s: { a: 0, k: [100, 100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+})
+circleLayer('moon-disc', 'Ellipse 2149 (Stroke)', moonRigInd, { fillColor: '#FFFFFF', strokeColor: '#222222' })
+circleLayer('crater-1', 'Ellipse 2152 (Stroke)', moonRigInd, { fillColor: '#FFFFFF', strokeColor: '#222222' })
+circleLayer('crater-2', 'Ellipse 2153 (Stroke)', moonRigInd, { fillColor: '#FFFFFF', strokeColor: '#222222' })
+circleLayer('crater-3', 'Ellipse 2154 (Stroke)', moonRigInd, { fillColor: '#FFFFFF', strokeColor: '#222222' })
+
+// Stars: independent whole-cycle twinkle (opacity), phase-offset so they
+// never dim in unison — "never in unison" (brief). Periods (60/42/35f) are
+// exact divisors of IDLE(420), chosen fresh this session, distinct from the
+// mascot(140)/breathe(105)/trail(70/84) clocks.
+function starLayer(nm, id, period, dipTo, phaseDeg) {
+  const opPts = sampleDense((t) => 100 - (100 - dipTo) * (0.5 + 0.5 * sin2pi(t, period, phaseDeg)), 0, OP)
+  const c = circleFromId(id)
+  const shapes = [group(nm, [
+    { ty: 'el', nm: `${nm}-el`, p: { a: 0, k: [0, 0] }, s: { a: 0, k: [c.r * 2, c.r * 2] } },
+    fillItemAnimated(fillOf(id), bakedProp(opPts)),
+  ])]
+  const ks = baseTransform({ p: [c.cx, c.cy, 0] })
+  pushLayer({ nm, shapes, ks, parent: moonRigInd })
+}
+starLayer('star-1', 'Ellipse 2155', 60, 40, 35) // divides IDLE(420) — 7 cycles
+starLayer('star-2', 'Ellipse 2156', 42, 46, 190) // divides IDLE(420) — 10 cycles
+starLayer('star-3', 'Ellipse 2157', 35, 35, 300) // divides IDLE(420) — 12 cycles
+
+// ============================================================
+// Reorder to front-to-back paint order (source SVG document order, reversed,
+// with the occupant-face/matte pair inserted directly in front of the shell
+// they clip, per the canonical recipe-character-rig.md order: eyes, matte,
+// occupant-mass, then shell — visor-mass, the welded dark body, sits where
+// the shell itself used to be in that same slot).
+// ============================================================
+const FRONT_TO_BACK = [
+  'star-3', 'star-2', 'star-1',
+  'crater-3', 'crater-2', 'crater-1', 'moon-disc', 'moon-rig',
+  'shine-lower-cap',
+  'bead-ring-outer', 'bead-ring-inner',
+  'trail-cord', 'trail-cord-rig',
+  'frame-ladder',
+  'bead-pill-stripe2', 'bead-pill-stripe1', 'bead-pill-outline', 'bead-pill', 'bead-pill-rig',
+  'tag', 'tag-rig',
+  'shine-lower-trim', 'shine-lower-sweep',
+  'shine-comma', 'ring', 'eye-right', 'eye-left', 'occupant-face__matte', 'occupant-face', 'occupant-rig',
+  'visor-mass', 'mascot-breathe', 'mascot-rig',
+  'frame', 'frame-rig',
+  'trail-small', 'trail-large',
+  'bubble-plate', 'bubble-text', 'bubble-anchor',
+]
+layers.sort((a, b) => FRONT_TO_BACK.indexOf(a.nm) - FRONT_TO_BACK.indexOf(b.nm))
+const unplaced = layers.filter((l) => !FRONT_TO_BACK.includes(l.nm))
+if (unplaced.length) throw new Error('Unplaced layers in paint order: ' + unplaced.map((l) => l.nm).join(', '))
+
+const doc = {
+  v: '5.9.0', fr: FPS, ip: 0, op: OP, w: W, h: H, nm: 'Live Onboarding Companion (szpq)',
+  ddd: 0,
+  assets: [],
+  layers,
+  markers: [
+    { cm: 'intro', tm: 0, dr: T },
+    { cm: 'loop', tm: T, dr: OP - T },
+  ],
+  fonts: { list: [{ fName: 'Nunito-Bold', fFamily: 'Nunito', fStyle: 'Bold', ascent: 75 }] },
+  slots: {
+    'bubble.text': { p: { k: [{ s: textDoc(DEFAULT_STRING), t: 0 }] } },
+    'bubble.size': { p: { a: 0, k: [PLATE_DEFAULT_W, PLATE_DEFAULT_H] } },
+    'bubble.textPos': { p: { a: 0, k: [0, BASELINE_LOCAL, 0] } },
+    'bubble.anchor': { p: { a: 0, k: [0, PLATE_DEFAULT_H / 2, 0] } },
+  },
+}
+
+mkdirSync(OUT_DIR, { recursive: true })
+writeFileSync(OUT, JSON.stringify(doc))
+copyFileSync(join(__dirname, '../assets/fonts/Nunito-Bold.ttf'), join(OUT_DIR, 'Nunito-Bold.ttf'))
+const totalKeyframes = layers.reduce((sum, l) => {
+  let n = 0
+  for (const prop of [l.ks?.p, l.ks?.s, l.ks?.o, l.ks?.a, l.ks?.r]) if (prop?.a === 1) n += prop.k.length
+  return sum + n
+}, 0)
+console.log(`Wrote ${OUT} — ${layers.length} layers, ${totalKeyframes} animated keyframes, T=${T}/IDLE=${IDLE}/OP=${OP} @ ${FPS}fps`)
+
+// ── autoFit max: derived from THIS scene's stage margin + pinned geometry ──
+const MARGIN = W * 0.03 // 7.2 — Render-Aware Motion safety margin
+const AUTOFIT_MAX_W = Math.min(2 * (PLATE_CX - MARGIN), 2 * (W - PLATE_CX - MARGIN))
+const maxLinesFit = Math.floor((PLATE_BOTTOM - MARGIN - PAD_Y * 2) / LINE_HEIGHT)
+const AUTOFIT_MAX_H = Math.max(1, maxLinesFit) * LINE_HEIGHT + 2 * PAD_Y
+
+const controls = {
+  controls: [
+    { sid: 'bubble.text', label: 'Bubble text' },
+    { sid: 'bubble.size', label: 'Bubble size', autoFit: { text: 'bubble.text', padding: [PAD_X, PAD_Y], min: [90, PLATE_DEFAULT_H], max: [AUTOFIT_MAX_W, AUTOFIT_MAX_H], leading: LEADING } },
+    { sid: 'bubble.textPos', label: 'Bubble text position', internal: true },
+    { sid: 'bubble.anchor', label: 'Bubble anchor', internal: true },
+  ],
+  layerControls: [
+    { target: 'mascot-rig', kind: 'amount', property: 'rotation', label: 'Helmet sway', description: 'How far the helmet tilts as it floats in zero gravity.' },
+    { target: 'mascot-rig', kind: 'amount', property: 'position', label: 'Float drift', description: 'How far the mascot drifts against the frame each cycle.' },
+    { target: 'occupant-rig', kind: 'amount', property: 'position', label: 'Inner float', description: 'How much the mascot’s face drifts inside its own helmet, separate from the shell.' },
+    { target: 'moon-rig', kind: 'amount', property: 'position', label: 'Moon parallax', description: 'How far the moon drifts opposite the mascot.' },
+    { target: 'bubble-anchor', kind: 'amount', property: 'scale', label: 'Bubble pop', description: 'How much the speech bubble overshoots as it arrives.' },
+  ],
+}
+writeFileSync(join(OUT_DIR, 'controls.json'), JSON.stringify(controls, null, 2))
+console.log(`Wrote ${join(OUT_DIR, 'controls.json')} — autoFit max=[${AUTOFIT_MAX_W},${AUTOFIT_MAX_H}] (maxLinesFit=${maxLinesFit})`)

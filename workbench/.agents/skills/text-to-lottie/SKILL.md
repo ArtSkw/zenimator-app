@@ -165,6 +165,20 @@ Before finishing:
    failure away. Read its CLOCKS report too: a backdrop claiming parallax
    must correlate ±0.9 or better with the subject's own track (a near-zero
    correlation means an independent clock wearing a parallax comment).
+   Rigid welds are the DEFAULT, not the only truth — a bending joint, a
+   shadow answering the body, a glint sweeping a lens are relative motion the
+   other gates positively require. When the motion is genuinely intended,
+   DECLARE it in the scene's `controls.json` rather than weakening the rig:
+
+   ```json
+   "motionExceptions": [
+     { "a": "fist", "b": "bicep", "reason": "elbow bends on the flex — gate 8" }
+   ]
+   ```
+
+   Every entry needs a reason: the point is to state intent where a reviewer
+   can see it, never to mute the gate. A scene whose exceptions outnumber its
+   welds is usually a rig that was never assembled.
 8. **Run the Aliveness Contract** in `references/motion-taste.md` — the
    completion gate for whether the scene is actually alive: nothing inert,
    amplitude measured rather than assumed, held objects parented and carrying

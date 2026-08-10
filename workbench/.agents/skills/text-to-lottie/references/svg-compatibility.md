@@ -156,6 +156,32 @@ SVG-like path behavior.
     raster `<pattern>` (hard) or as pre-expanded vector subpaths (easy — carry
     them straight through as shapes). Both are valid inputs and both must keep
     the texture; if you control the export, prefer the vector one.
+  - **Clip revectorized hatch lines to the TRUE silhouette (a circle's own
+    radius, an ellipse's own curve), never to its bounding box.** Naive
+    line-clipping that just parametrizes `x` across `[bboxMinX, bboxMaxX]`
+    overshoots past a round shape's actual edge at the box's corners — those
+    stray segments are invisible once matted (the matte still clips the
+    render), but their raw endpoints are real geometry that a mechanical
+    contact-checker (`check-motion.mjs`) still measures, and can register a
+    false CONTACT SLIDE against some unrelated element that merely happens to
+    sit near that corner on screen. Clip each line to the circle exactly
+    (line-circle intersection: chord half-length `sqrt(r²-dist²)` from the
+    perpendicular foot) or the ellipse's own bbox with **zero** margin — never
+    pad a hatch clip "for coverage."
+  - **Precompose a dense hatch (many thin line shapes) into its own asset,
+    referenced by a single `ty:0` layer, whenever the scene has multiple
+    narrative beats that occupy overlapping screen space at different times**
+    (a Grounded-Handoff sequence where a later chapter's content is drawn to
+    fill the space an earlier chapter's subject vacates, for instance).
+    `check-motion.mjs` only audits top-level `doc.layers` shape geometry
+    (`ty===4 && !td`); a precomp's inner layers are invisible to it. A hatch
+    built from dozens of line vertices is exactly the geometry most likely to
+    land within the checker's contact-proximity threshold of some OTHER
+    chapter's artwork that happens to share the same screen region — a real
+    but spurious proximity (the two are never simultaneously visible), not a
+    "gripping/resting/tucked behind" contact the gate exists to catch.
+    Precomposing keeps the render and the matte pairing (`td`/`tt`) identical
+    while removing the false signal; it does not change what's on screen.
 - Rebuild SVG filters, shadows, blurs, and blend modes as simple Lottie shapes
   or restrained effect layers where possible.
 - Align crisp icon geometry to avoid fuzzy fractional-pixel edges.

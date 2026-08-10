@@ -1,7 +1,0 @@
-[
-  {
-    "v": 1,
-    "at": 1786111660811,
-    "note": "Entrance timing regression — fix this scene and note WHY it happened, because the cause matters.\n\nMEASURED: this scene's bubble scale-in runs frames 16→44 = 28 frames (467ms) with a 118% overshoot, in"
-  }
-]
