@@ -6,7 +6,7 @@ import { castFromControls, type CastMember } from '@/engine/controls/cast'
 import { labelsFromDoc } from '@/engine/studio/studioClient'
 import { sceneLayers } from '@/engine/lottie/sceneRoot'
 import { applySlotOverride, SLOT_OVERRIDE_PREFIX } from '@/engine/lottie/slots'
-import { fitCompToContent } from '@/engine/lottie/fitFrame'
+import { fitFrame } from '@/engine/lottie/portable/fitFrame'
 import type { Skeleton } from '@/engine/legacy/skeleton'
 import { useStudioFeed, DRAFT_CHANNEL } from '@/store/studioFeedStore'
 
@@ -385,7 +385,7 @@ function bakeFrom(lottieJson: string | null, controls: ControlManifest | null, s
     // wrapped translation grows upward and the player crops it. Open the frame
     // to fit instead of truncating the string; a no-op unless something
     // actually overflows, so the default scene stays byte-identical.
-    fitCompToContent(doc)
+    fitFrame(doc)
     result = JSON.stringify(doc)
   } catch {
     result = lottieJson

@@ -1,138 +1,23 @@
 import type { FrameworkDef, SlotFit } from '../types'
+// The pack ships the studio's OWN modules, compiled — not copies of them. See
+// the `portableSource` plugin in vite.config.ts.
+import APPLY_SLOTS_SRC from '@/engine/lottie/portable/applySlots.ts?portable'
+import FIT_FRAME_SRC from '@/engine/lottie/portable/fitFrame.ts?portable'
+import TEXT_FIT_SRC from '@/engine/lottie/portable/textFit.ts?portable'
 
 // Versions verified against npm 2026-07-16 — re-pin when they move.
 const LOTTIE_WEB_VERSION = '5.13.x'
 const DOTLOTTIE_WEB_VERSION = '0.56.x'
 
-/** `applySlots` ships in both the full helper and the stub — one source. */
-const APPLY_SLOTS_SRC = `export function applySlots(animation, slots) {
-  if (!animation || !animation.slots) return animation
-  for (const sid of Object.keys(slots)) {
-    if (sid in animation.slots) animation.slots[sid] = slots[sid]
-  }
-  return animation
-}`
-
-/** MIRROR of `fitCompToContent` in app/src/engine/lottie/fitFrame.ts — see that
- *  file for why the frame gives way instead of the text. Shipped so a locale
- *  swapped at runtime in the product gets the same frame the studio showed;
- *  without it a wrapped string grows past y=0 and the player crops it. */
-const FIT_FRAME_SRC = `export function fitFrame(animation) {
-  const d = animation
-  if (!d || !Array.isArray(d.layers) || !(d.w > 0) || !(d.h > 0)) return null
-  // A slot-driven property's authority is the slots table, not its inline k.
-  const live = (p) => (p && p.sid && d.slots && d.slots[p.sid] ? d.slots[p.sid].p : p)
-  const samples = (p) => {
-    if (!p || typeof p !== 'object') return []
-    const k = p.k
-    if (p.a === 1 && Array.isArray(k)) {
-      const out = []
-      for (const kf of k) {
-        if (kf && Array.isArray(kf.s)) out.push(kf.s)
-        if (kf && Array.isArray(kf.e)) out.push(kf.e)
-      }
-      return out
-    }
-    if (typeof k === 'number') return [[k]]
-    if (Array.isArray(k) && k.every((n) => typeof n === 'number')) return [k]
-    return []
-  }
-  const ext = (p, i, fb) => {
-    const v = samples(p).map((s) => s[i]).filter((n) => typeof n === 'number' && isFinite(n))
-    return v.length ? { lo: Math.min.apply(null, v), hi: Math.max.apply(null, v) } : { lo: fb, hi: fb }
-  }
-  const mul = (e, s) => {
-    const c = [e.lo * s.lo, e.lo * s.hi, e.hi * s.lo, e.hi * s.hi]
-    return { lo: Math.min.apply(null, c), hi: Math.max.apply(null, c) }
-  }
-  const xform = (b, t) => {
-    if (!t) return b
-    const ax = ext(live(t.a), 0, 0), ay = ext(live(t.a), 1, 0)
-    let x = { lo: b.x.lo - ax.hi, hi: b.x.hi - ax.lo }
-    let y = { lo: b.y.lo - ay.hi, hi: b.y.hi - ay.lo }
-    const r = ext(live(t.r), 0, 0)
-    if (r.lo !== 0 || r.hi !== 0) {
-      const rad = Math.hypot(Math.max(Math.abs(x.lo), Math.abs(x.hi)), Math.max(Math.abs(y.lo), Math.abs(y.hi)))
-      x = { lo: -rad, hi: rad }; y = { lo: -rad, hi: rad }
-    }
-    const sx = ext(live(t.s), 0, 100), sy = ext(live(t.s), 1, 100)
-    x = mul(x, { lo: sx.lo / 100, hi: sx.hi / 100 })
-    y = mul(y, { lo: sy.lo / 100, hi: sy.hi / 100 })
-    const px = ext(live(t.p), 0, 0), py = ext(live(t.p), 1, 0)
-    return { x: { lo: x.lo + px.lo, hi: x.hi + px.hi }, y: { lo: y.lo + py.lo, hi: y.hi + py.hi } }
-  }
-  const rectsOf = (items, depth) => {
-    const out = []
-    if (!Array.isArray(items) || depth > 64) return out
-    let outset = 0
-    for (const it of items) if (it && it.ty === 'st') outset = Math.max(outset, ext(live(it.w), 0, 0).hi / 2)
-    for (const it of items) {
-      if (it && it.ty === 'rc' && it.s && it.s.sid) {
-        const size = live(it.s)
-        const w = ext(size, 0, 0).hi, h = ext(size, 1, 0).hi
-        const cx = ext(live(it.p), 0, 0), cy = ext(live(it.p), 1, 0)
-        out.push({
-          x: { lo: cx.lo - w / 2 - outset, hi: cx.hi + w / 2 + outset },
-          y: { lo: cy.lo - h / 2 - outset, hi: cy.hi + h / 2 + outset },
-        })
-      } else if (it && it.ty === 'gr' && Array.isArray(it.it)) {
-        const tr = it.it.filter((x) => x && x.ty === 'tr')[0]
-        for (const b of rectsOf(it.it, depth + 1)) out.push(xform(b, tr))
-      }
-    }
-    return out
-  }
-  const byInd = new Map()
-  for (const l of d.layers) if (typeof l.ind === 'number') byInd.set(l.ind, l)
-  let x0 = 0, y0 = 0, x1 = d.w, y1 = d.h, measured = false
-  for (const layer of d.layers) {
-    for (const rect of rectsOf(layer.shapes || [], 0)) {
-      let b = rect, cur = layer, guard = 0
-      while (cur) {
-        b = xform(b, cur.ks)
-        if (cur.parent == null || ++guard > d.layers.length) break
-        cur = byInd.get(cur.parent)
-      }
-      if (!b || !isFinite(b.x.lo) || !isFinite(b.y.lo)) continue
-      measured = true
-      x0 = Math.min(x0, b.x.lo); y0 = Math.min(y0, b.y.lo)
-      x1 = Math.max(x1, b.x.hi); y1 = Math.max(y1, b.y.hi)
-    }
-  }
-  if (!measured) return null
-  const grow = (over) => (over > 0 ? Math.ceil(over + 1) : 0)
-  const dx = grow(-x0), dy = grow(-y0), right = grow(x1 - d.w), bottom = grow(y1 - d.h)
-  if (!dx && !dy && !right && !bottom) return null
-  // Growth past 4x the authored size is corruption, not a translation.
-  if (dx + right > d.w * 4 || dy + bottom > d.h * 4) return null
-  const move = (p, deltas) => {
-    const t = (p && p.sid && d.slots && d.slots[p.sid]) ? d.slots[p.sid].p : p
-    if (!t || typeof t !== 'object') return
-    const bump = (v) => {
-      if (!Array.isArray(v)) return
-      for (let i = 0; i < deltas.length; i++) if (typeof v[i] === 'number') v[i] += deltas[i]
-    }
-    if (t.a === 1 && Array.isArray(t.k)) for (const kf of t.k) { bump(kf && kf.s); bump(kf && kf.e) }
-    else bump(t.k)
-  }
-  for (const l of d.layers) {
-    if (l.parent != null || !l.ks) continue
-    if (l.ks.p && l.ks.p.s === true) { move(l.ks.px, [dx]); move(l.ks.py, [dy]) }
-    else move(l.ks.p, [dx, dy])
-  }
-  d.w += dx + right
-  d.h += dy + bottom
-  return { dx: dx, dy: dy, w: d.w, h: d.h }
-}`
-
-/** The localization helper the pack ships: measure → wrap → slot overrides.
- *  Generated with the scene's real numbers baked in so the file works with
- *  zero configuration next to `animation.json` and `fonts/`.
+/** The localization helper the pack ships: measure → wrap → slot overrides,
+ *  then grow the frame so the result can't be cropped. Generated with the
+ *  scene's real numbers baked in, so the file works with zero configuration
+ *  next to `animation.json` and `fonts/`.
  *
- *  MIRROR of `measureSlotText`/`wrapSlotText`/`layoutSlotText` in
- *  app/src/engine/lottie/slots.ts — the shipped file must size a string
- *  exactly as the in-app rehearsal does, and it can't import app code, so any
- *  change to the fit algorithm lands in BOTH places. */
+ *  Everything algorithmic here is INLINED FROM THE STUDIO'S OWN MODULES
+ *  (`engine/lottie/portable/*`), compiled by the `?portable` plugin. Only the
+ *  glue — font loading and the slot object — is written here, so there is no
+ *  second implementation that can drift away from what the app rehearsed. */
 function bubbleHelper(fit: SlotFit, loop: boolean): string {
   const font = JSON.stringify({
     family: fit.fontFamily,
@@ -200,25 +85,6 @@ export function ensureFont(fontUrl) {
   return fontReady
 }
 
-function measure(ctx, text) {
-  const base = ctx.measureText(text).width
-  return base + (FONT.tracking / 1000) * FONT.size * Math.max(0, text.length - 1)
-}
-
-function wrapText(ctx, text, maxInnerW) {
-  const words = text.split(/\\s+/).filter(Boolean)
-  if (words.length === 0) return [text.trim()]
-  const lines = []
-  let line = words[0]
-  for (const word of words.slice(1)) {
-    const candidate = line + ' ' + word
-    if (measure(ctx, candidate) <= maxInnerW) line = candidate
-    else { lines.push(line); line = word }
-  }
-  lines.push(line)
-  return lines
-}
-
 /**
  * Size the bubble for a localized string.
  * Returns a Lottie "slots" object: pass it to lottie-web's loadAnimation
@@ -233,45 +99,39 @@ export async function fitBubble(text, opts) {
   const ctx = document.createElement('canvas').getContext('2d')
   ctx.font = FONT.size + 'px "' + FONT.family + '"'
 
-  const maxW = opts.maxWidth || (PLATE.max ? PLATE.max[0] : null)
-  const str = String(text)
-  const lines = maxW ? wrapText(ctx, str, maxW - 2 * PLATE.padding[0]) : [str]
-  // Wrapped lines get extra leading; a single line keeps the design's spec.
-  const lineHeight = lines.length > 1 ? FONT.lineHeight + (PLATE.leading || 0) : FONT.lineHeight
-
-  let widest = 0
-  for (const line of lines) widest = Math.max(widest, measure(ctx, line))
-  const w = Math.max(PLATE.min[0], Math.min(maxW || Infinity, Math.round(widest + 2 * PLATE.padding[0])))
-  // Same height rule as the app's layoutSlotText: only a single line WITHOUT a
-  // wrap threshold keeps the authored height — with one, height follows the
-  // measured content, so the shipped bubble matches the in-app rehearsal.
-  const h = lines.length === 1 && !maxW
-    ? PLATE.defaultSize[1]
-    : Math.max(PLATE.min[1], Math.round(2 * PLATE.padding[1] + lineHeight * lines.length))
+  const max = opts.maxWidth ? [opts.maxWidth, 0] : PLATE.max
+  const layout = layoutText(ctx, FONT, {
+    defaultSize: PLATE.defaultSize,
+    padding: PLATE.padding,
+    min: PLATE.min,
+    max: max,
+    leading: PLATE.leading,
+  }, String(text))
 
   const withY = function (value, y) { var out = value.slice(); out[1] = y; return out }
 
   const slots = {}
   slots[PLATE.textSlot] = {
-    p: { k: [{ s: Object.assign({}, BASE_DOC, { t: lines.join('\\r'), lh: lineHeight }), t: 0 }] },
+    p: { k: [{ s: Object.assign({}, BASE_DOC, { t: layout.text, lh: layout.lineHeight }), t: 0 }] },
   }
-  slots[PLATE.sizeSlot] = { p: { a: 0, k: [w, h] } }
+  slots[PLATE.sizeSlot] = { p: { a: 0, k: [layout.w, layout.h] } }
   // Extra lines grow DOWN from the first baseline while the plate grows from
-  // its center — the scene's textPos slot lifts the block half a lineHeight
-  // per extra line so it stays vertically centered. (Text-doc "ls" looks like
-  // the tool for this, but Skottie ignores it — don't be tempted.)
+  // its center — the scene's textPos slot lifts the block so it stays centered.
   if (PLATE.textPos) {
-    const dy = -((lines.length - 1) * lineHeight) / 2
-    slots[PLATE.textPos.sid] = { p: { a: 0, k: withY(PLATE.textPos.value, PLATE.textPos.value[1] + dy) } }
+    slots[PLATE.textPos.sid] = { p: { a: 0, k: withY(PLATE.textPos.value, PLATE.textPos.value[1] + layout.dy) } }
   }
   // The anchor slot pins the plate's BOTTOM edge (anchor y = height / 2), so a
   // taller bubble grows upward instead of closing the gap to whatever sits
   // below it — the thought trail keeps the spacing the artwork authored.
   if (PLATE.anchor) {
-    slots[PLATE.anchor.sid] = { p: { a: 0, k: withY(PLATE.anchor.value, h / 2) } }
+    slots[PLATE.anchor.sid] = { p: { a: 0, k: withY(PLATE.anchor.value, layout.h / 2) } }
   }
   return slots
 }
+
+/** Measure, wrap, and size the plate — the studio's own module, compiled.
+ *  This is why a translation gets the same bubble here as in the app. */
+${TEXT_FIT_SRC}
 
 /** Bake slot overrides into a Lottie document (players without \`slots\`
  *  config, or server-side per-locale pre-baking). Mutates and returns it. */

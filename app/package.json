@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "check:controls": "node scripts/check-controls.mjs",
     "preview": "vite preview",
-    "postinstall": "node scripts/copy-canvaskit.mjs"
+    "postinstall": "node scripts/copy-canvaskit.mjs",
+    "verify:pack": "node scripts/verify-pack.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
