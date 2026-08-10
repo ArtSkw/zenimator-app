@@ -172,6 +172,14 @@ who is on stage at each beat — then honor it literally:
   across beats (clouds, waves, traffic, rain) drift from the very first frame
   at constant velocity, on the FIRST asset as much as the last, and stop only
   by the deceleration the brief names — braking to zero across a stated beat,
-  frozen exactly when the payoff needs the background still. Wrap teleports
-  happen fully offscreen at both keys (`check-motion.mjs` fails a wrap in
-  view).
+  frozen exactly when the payoff needs the background still. Author the drift
+  by TILING copies one lap apart, never by teleporting one copy back across
+  the canvas: see recipe-camera-scene-motion, "Ambient Scroll". A steady
+  drift never reverses (`check-motion.mjs`: AMBIENT DRIFT REVERSES, WRAP IS
+  INTERPOLATABLE).
+- **A loop marker never contains the entrance.** When a scene has both a
+  staged arrival and a segment runtimes will repeat, the repeatable marker
+  starts AFTER the arrival settles — otherwise every cycle replays the jump.
+  Three beats means three markers (`entry` 0..E, the loopable one E..T, the
+  payoff T..op), and only the middle one has to match its own first and last
+  frame.
