@@ -75,6 +75,10 @@
       "a": "body",
       "b": "shadow",
       "reason": "ground shadow answers the body's float, widening and lightening on the same driver \u2014 'the world responds'"
+    },
+    {
+      "layer": "eye",
+      "reason": "this mascot's eyes are drawn as CLOSED happy arcs, so the dip is an expression squeeze, not a lid \u2014 there is nothing to shut"
     }
   ]
 }
