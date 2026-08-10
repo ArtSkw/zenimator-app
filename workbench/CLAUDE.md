@@ -7,8 +7,10 @@ the text-to-lottie skill prescribes.
 
 ## Non-negotiables
 
-1. **Read `skills/text-to-lottie/SKILL.md` FIRST** (also installed at
-   `.claude/skills/text-to-lottie`), route the task, and load only the
+1. **Read `skills/text-to-lottie/SKILL.md` FIRST** (`.claude/skills/text-to-lottie`
+   and `.agents/skills/text-to-lottie` are SYMLINKS to it — one real copy, so a
+   learning you promote through any of those paths lands in the tracked source
+   instead of a gitignored duplicate). Route the task, and load only the
    references it points to. Follow its workflow end to end.
 2. **Output contract**: write the scene to
    `public/projects/<project>/<scene-N>/lottie.json` using the project slug
