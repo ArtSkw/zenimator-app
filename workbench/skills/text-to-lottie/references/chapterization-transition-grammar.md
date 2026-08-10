@@ -151,3 +151,27 @@ brief describes ONE continuous story across them.
   between endpoints you authored yourself with matched vertex counts.
 - You may author connective tissue (a wipe shape, a particle accent, a
   trail) in the source's visual language.
+
+### Cast staging (who is on stage, per beat)
+
+The brief's beat list is a CAST LIST, and it is law. Before keyframing, write
+who is on stage at each beat — then honor it literally:
+
+- **Frame 0 shows exactly beat 1's cast.** If the brief opens on "just the
+  clouds" and the character arrives afterwards, the character is fully
+  OFFSCREEN at frame 0 — not waiting at 0% opacity, not parked at scale 0.
+  Render frame 0 and read it against the brief's opening sentence: they must
+  describe the same picture. (Observed failure: a brief staged clouds-first
+  with the mascot leaping in, and the build opened with the mascot already
+  floating mid-frame — the whole entrance beat silently deleted.)
+- **Arrivals are ENTRANCES.** A staged arrival enters with energy the brief
+  implies — a leap from below, a slide from a wing, a drop that bounces — and
+  the settle hands off into the idle so the entrance CAUSES the float, walk,
+  or hover that follows. One axis rings on the landing; two reads as wobble.
+- **Ambient fields run until told to stop.** Elements the brief keeps moving
+  across beats (clouds, waves, traffic, rain) drift from the very first frame
+  at constant velocity, on the FIRST asset as much as the last, and stop only
+  by the deceleration the brief names — braking to zero across a stated beat,
+  frozen exactly when the payoff needs the background still. Wrap teleports
+  happen fully offscreen at both keys (`check-motion.mjs` fails a wrap in
+  view).

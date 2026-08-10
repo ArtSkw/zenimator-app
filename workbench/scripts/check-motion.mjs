@@ -544,6 +544,125 @@ for (const eye of doc.layers.filter((l) => EYE_RE.test(l.nm ?? '') && l.ks?.s?.a
   }
 }
 
+// ── Scale pivots ON its artwork ──────────────────────────────────────────────
+// Any layer whose SCALE animates pivots at its ANCHOR — and the anchor must
+// sit on the layer's own geometry. A misplaced anchor turns every scale
+// change into travel: a pop slides in along the anchor-to-artwork ray, a
+// breathe wanders. The classic authoring slip is anchor = position over
+// origin-space geometry — the two cancel and the artwork paints at the
+// canvas corner instead of its home. Seen live TWICE (a checkmark's pen-down
+// dot, then a thought-trail bubble parked at the corner); this gate exists
+// so there is no third. Rotation-only layers are exempt — an external
+// rotation pivot is a legitimate pendulum, and the house pattern carries
+// those on nulls anyway.
+for (const l of shapeLayers) {
+  const s = l.ks?.s
+  if (s?.a !== 1) continue
+  const keys = (s.k ?? []).map((k) => k?.s).filter(Array.isArray)
+  if (!keys.length) continue
+  const bb = bboxOf(l)
+  if (!bb) continue
+  const a = evalProp(l.ks.a, 0, [0, 0])
+  const padX = (bb.x1 - bb.x0) * 0.5 + 12, padY = (bb.y1 - bb.y0) * 0.5 + 12
+  const onArtwork = a[0] >= bb.x0 - padX && a[0] <= bb.x1 + padX && a[1] >= bb.y0 - padY && a[1] <= bb.y1 + padY
+  const ok = declaredLayer(l.nm ?? '')
+  const isPop = Math.min(...keys.map((v) => Math.max(Math.abs(v[0] ?? 100), Math.abs(v[1] ?? 100)))) <= 15
+  if (!onArtwork && !ok) {
+    fail(
+      `${isPop ? 'POP' : 'SCALE'} PIVOTS OFF THE ARTWORK  ${l.nm} animates scale around anchor (${a[0].toFixed(0)}, ${a[1].toFixed(0)}) but its geometry spans (${bb.x0.toFixed(0)}..${bb.x1.toFixed(0)}, ${bb.y0.toFixed(0)}..${bb.y1.toFixed(0)}) — every scale change becomes travel${isPop ? '; the pop slides in from the anchor instead of growing in place' : ''}`,
+      "Anchor scale on the layer's own artwork: geometry at shape-space origin takes anchor [0,0] with only the position carrying it home; absolute geometry takes anchor = its own center. Anchor = position over origin-space shapes cancels the transform and paints the artwork at the canvas corner. A deliberate remote pivot may declare { layer, reason } in controls.json.",
+    )
+  } else if (ok && !onArtwork) {
+    allowed.push(`${l.nm} scales around a remote anchor — declared: ${ok.reason}`)
+  }
+}
+
+// ── Draw-ons follow the pen ──────────────────────────────────────────────────
+// A hand-drawn tick is HANDWRITING: the stroke travels left to right, pen-down
+// to pen-up. Source exports routinely author the path from the RIGHT tip, and
+// a straight trim then draws the tick backwards — instantly wrong to anyone
+// who has watched a checkbox. The reveal's origin (path start for e:0→100,
+// path end for s:100→0) must not sit right of where the reveal finishes.
+const TICK_RE = /check|tick|tail/i
+function firstTrim(items) {
+  for (const it of items ?? []) {
+    if (it.ty === 'tm') return it
+    if (it.ty === 'gr') { const t = firstTrim(it.it); if (t) return t }
+  }
+  return null
+}
+function firstPathVerts(items) {
+  for (const it of items ?? []) {
+    if (it.ty === 'sh') { const p = it.ks?.a ? it.ks.k?.[0]?.s : it.ks?.k; if (p?.v?.length) return p.v }
+    if (it.ty === 'gr') { const v = firstPathVerts(it.it); if (v) return v }
+  }
+  return null
+}
+for (const l of doc.layers.filter((x) => x.ty === 4 && TICK_RE.test(x.nm ?? ''))) {
+  // A ring/circle sweep has no handwriting order — either direction reads as
+  // drawing. The pen rule governs the tick STROKE itself.
+  if (/ring|circle|oval|halo|loop/i.test(l.nm ?? '')) continue
+  const tm = firstTrim(l.shapes)
+  if (!tm) continue
+  const eAnim = tm.e?.a === 1, sAnim = tm.s?.a === 1
+  if (!eAnim && !sAnim) continue
+  const v = firstPathVerts(l.shapes)
+  if (!v || v.length < 2) continue
+  const fromStart = eAnim && !sAnim
+  const origin = fromStart ? v[0] : v[v.length - 1]
+  const finish = fromStart ? v[v.length - 1] : v[0]
+  const ok = declaredLayer(l.nm ?? '')
+  if (origin[0] > finish[0] + 8 && !ok) {
+    fail(
+      `DRAW-ON AGAINST THE PEN  ${l.nm} reveals from (${origin[0].toFixed(0)}, ${origin[1].toFixed(0)}) toward (${finish[0].toFixed(0)}, ${finish[1].toFixed(0)}) — right to left, backwards handwriting`,
+      'Reverse the path (vertices reversed, in/out tangents swapped) so trim-from-start IS pen order: a tick draws left to right, always. A deliberate reverse reveal may declare { layer, reason } in controls.json.',
+    )
+  } else if (ok && origin[0] > finish[0] + 8) {
+    allowed.push(`${l.nm} reveals right-to-left — declared: ${ok.reason}`)
+  }
+}
+
+// ── Wrap teleports happen offscreen ──────────────────────────────────────────
+// An ambient field (clouds, traffic, waves) wraps by TELEPORTING back across
+// the canvas between two near-coincident keys. Legitimate only while nobody
+// can see it: at BOTH keys the layer's artwork must sit fully outside the
+// frame, else the jump flashes across the picture for a frame.
+{
+  const wraps = []
+  for (const l of shapeLayers) {
+    const p = l.ks?.p
+    if (p?.a !== 1) continue
+    const k = p.k ?? []
+    const bb = bboxOf(l)
+    if (!bb) continue
+    for (let i = 1; i < k.length; i++) {
+      if (!Array.isArray(k[i]?.s) || !Array.isArray(k[i - 1]?.s)) continue
+      const dt = k[i].t - k[i - 1].t
+      if (dt > 1.5) continue
+      const jump = Math.hypot(k[i].s[0] - k[i - 1].s[0], k[i].s[1] - k[i - 1].s[1])
+      if (jump < 40) continue
+      let visible = false
+      for (const tEval of [k[i - 1].t, k[i].t]) {
+        const m = worldMatrix(l, tEval)
+        const xs = [], ys = []
+        for (const [x, y] of [[bb.x0, bb.y0], [bb.x1, bb.y0], [bb.x0, bb.y1], [bb.x1, bb.y1]]) {
+          const q = apply(m, [x, y]); xs.push(q[0]); ys.push(q[1])
+        }
+        if (Math.max(...xs) > 0 && Math.min(...xs) < (doc.w ?? 0) && Math.max(...ys) > 0 && Math.min(...ys) < (doc.h ?? 0)) visible = true
+      }
+      if (visible && !declaredLayer(l.nm ?? '')) {
+        fail(
+          `WRAP TELEPORTS IN VIEW  ${l.nm} jumps ${jump.toFixed(0)}px in ${dt.toFixed(2)}f at t=${k[i].t.toFixed(1)} while its artwork is inside the frame`,
+          'A wrap teleport is legal only fully offscreen: keep drifting until the artwork clears the frame edge (plus margin), teleport there, and re-enter from beyond the far edge.',
+        )
+        break
+      }
+      if (!visible) wraps.push(`${l.nm} wraps at t=${k[i].t.toFixed(1)} (${jump.toFixed(0)}px, offscreen)`)
+    }
+  }
+  if (wraps.length) console.log(`\nOffscreen wraps: ${wraps.length}\n  ` + wraps.slice(0, 6).join('\n  '))
+}
+
 // Axis split, reported whether or not the occupant touches anything: the
 // shell already travels 2D, so an occupant with real amplitude on BOTH axes
 // compounds two ellipses and reads as swimming rather than as a body settling

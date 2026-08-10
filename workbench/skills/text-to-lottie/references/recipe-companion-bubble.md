@@ -217,6 +217,16 @@ The plate's scale is the slow one — 900 ms of soft settle — while its
 opacity resolves in ~270 ms (early-opacity/late-settle, so it reads legible
 long before it stops moving). Keep the overshoot gentle at ~112%; 118% and
 a half-length scale-in is the snappy UI-toast feel this pattern is not.
+
+**Every one of these pops pivots ON its own artwork.** The trail circles and
+the plate scale in around anchors that sit on their own geometry: an ellipse
+authored at shape-space origin takes anchor `[0,0]` with only the POSITION
+carrying it home; absolute geometry takes anchor = its own center. Setting
+anchor = position over origin-space geometry cancels the transform and
+paints the circle at the canvas CORNER — observed live as a trail bubble
+parked as a crescent at the frame's top-left while its twin floated
+correctly. `check-motion.mjs` fails this (SCALE/POP PIVOTS OFF THE ARTWORK);
+author it right rather than declaring it.
 The intro marker `T` must sit a few frames AFTER the entrance settles, so
 the bubble is provably motionless before the loop begins — size `T` to the
 entrance, never the entrance to `T` (measured failure: a scene whose intro
