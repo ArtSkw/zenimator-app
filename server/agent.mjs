@@ -178,7 +178,11 @@ const LIVING_MOTION_CONTRACT =
   `idle. Ambient fields the brief keeps moving (clouds, waves, traffic, rain) drift ` +
   `from the very first frame at constant velocity and stop only by the deceleration ` +
   `the brief names — frozen exactly when the payoff needs a still background, never ` +
-  `stopped by omission. Wrap teleports happen fully offscreen at both keys. Render ` +
+  `stopped by omission, and NEVER reversing direction. Author that drift by TILING ` +
+  `copies one lap apart on a single linear translation (recipe-camera-scene-motion, ` +
+  `"Ambient Scroll"), never by teleporting one copy back across the canvas: a ` +
+  `teleport's jump is a real value change that anything resampling or rescaling time ` +
+  `can land inside and DRAW, sweeping the field backwards across frame. Render ` +
   `frame 0 and READ it against the brief's opening sentence: same picture, or the ` +
   `entrance beat was silently deleted.\n` +
   `  - Ink follows the pen. A hand-drawn tick strokes LEFT to right, pen-down to pen-up ` +

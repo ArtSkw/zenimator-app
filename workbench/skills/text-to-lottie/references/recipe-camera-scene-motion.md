@@ -48,8 +48,66 @@ hero pushes, product screenshot tours, and animated scene framing.
 - If the final frame feels like an accidental crop, revise the layout or camera
   endpoint before adding more movement.
 
+## Ambient Scroll (clouds, waves, traffic, rain, skyline)
+
+A field that streams steadily across frame — the single most-requested
+background behaviour, and the one most often authored as something that
+LOOKS like a scroll for a few seconds and then visibly breaks.
+
+**Author it by TILING, never by teleporting.** Build N copies of the field
+spaced exactly one lap apart, and give every copy the SAME single linear
+translation across the whole timeline. As copy A leaves the left edge, copy B
+is exactly where A began. There is no jump anywhere in the data, so nothing
+downstream can interpolate one.
+
+```js
+// One lap = the field's own width + the gap that makes it read as continuous.
+const lap = fieldBbox.width + gap
+const copies = Math.ceil((pxPerFrame * OP) / lap) + 1   // enough to cover the run
+for (let i = 0; i < copies; i++) {
+  // Copy i starts one lap to the RIGHT of copy i-1 and drifts left forever.
+  pushLayer({
+    nm: `cloud-near-${i}`,
+    shapes,
+    ks: { ...baseTransform(), p: bakedProp(
+      sampleDense((t) => [i * lap - pxPerFrame * travelled(t), 0, 0], 0, OP)
+    ) },
+  })
+}
+```
+
+`travelled(t)` is the field's own distance curve: `t` while it runs, then the
+brake's integral once the brief stops it. Speed lives in ONE constant per
+depth layer (`pxPerFrame`); parallax is the RATIO between layers (a far layer
+at half the near layer's speed), never a second unrelated clock.
+
+Why not the wrap-teleport that looks so much simpler — drift left, then jump
+back to the right between two near-coincident keyframes:
+
+- The jump is a real value change in the data. It stays invisible only while
+  every consumer samples exactly on the frames you assumed. Anything that
+  RESAMPLES or RESCALES time — a duration control, a speed control, a player
+  running at display refresh rather than composition frames — can land inside
+  the jump and DRAW it: the field sweeps the whole canvas backwards in a blink,
+  then resumes. Reported from the field twice, described as "it goes left to
+  right and then back, chaotically".
+- Tiling has no jump to land inside. It survives every one of those.
+
+If a teleport is genuinely unavoidable, the pre-jump keyframe MUST be a HOLD
+key (`h: 1`) so no interpolation is possible, and both keys must place the
+artwork fully outside the frame. `check-motion.mjs` fails a wrap that is
+visible or interpolatable.
+
+**A steady drift never reverses.** When the brief says one direction, the
+field travels that direction only, at constant speed, from the frame the brief
+starts it until the beat the brief brakes it — then decelerates to a full stop
+and holds. Any sustained travel against that direction is a defect, not
+variety (`check-motion.mjs`: AMBIENT DRIFT REVERSES).
+
 ## Common Failure Modes
 
+- Ambient field authored as a wrap-teleport, and the jump becomes visible.
+- Ambient field oscillating back and forth instead of streaming one way.
 - Camera crops the hero subject or text.
 - Parallax layers move without a clear depth hierarchy.
 - Motion sickness from too much scale/position change.

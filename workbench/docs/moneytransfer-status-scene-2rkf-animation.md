@@ -146,3 +146,25 @@ clause so the next sequence build cannot repeat them:
    pen-order clause in recipe-loaders-icons.
 Also: the 24-frame smoothstep squint replaced with the canonical 2-2-4 blink
 that closes to 0% (gate 17 caught it on rebuild).
+
+## Ambient scroll rebuilt as TILING (2026-08-10, second team test)
+
+The team's fresh generation showed the sky "going left to right and then back,
+chaotically". That is a wrap teleport being DRAWN. The old pattern kept one
+cloud copy and jumped it back across the canvas between two near-coincident
+keys; the jump is a real 540px value change, invisible only while every
+consumer samples exactly on the frames the author assumed. Anything that
+resamples or rescales time — the app's duration/speed controls, a player
+running on display refresh — can land inside it and render the sweep.
+
+Rebuilt with no teleport at all: each cloud set is emitted as N copies spaced
+one lap apart, every copy on the SAME monotonic leftward translation
+(`travelled(t)` = constant speed, then the integral of a quadratic brake).
+Largest single step is now 4.4px versus 540px, and reverse travel is 0px —
+verified stable through the app's own control bake at default, duration ±,
+and halved layer speed, which is where the old pattern broke.
+
+Gates added so this cannot ship again: AMBIENT DRIFT REVERSES (a steady field
+that travels >15% against its own net direction) and WRAP IS INTERPOLATABLE
+(any offscreen jump left on smooth interpolation rather than a hold key).
+Both were proven red against a replica of the old pattern.

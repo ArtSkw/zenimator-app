@@ -622,6 +622,46 @@ for (const l of doc.layers.filter((x) => x.ty === 4 && TICK_RE.test(x.nm ?? ''))
   }
 }
 
+// ── A steady drift never reverses ────────────────────────────────────────────
+// An ambient field (clouds, waves, traffic, rain) streams ONE way at constant
+// speed until the brief brakes it. Reported twice from the field as "it goes
+// left to right and then back, chaotically" — which is either an oscillation
+// authored instead of a scroll, or a wrap teleport that a resampling consumer
+// landed inside and DREW. Both look identical on screen and both are caught
+// here: measure net travel per direction, excluding legal offscreen wraps.
+const AMBIENT_RE = /cloud|wave|traffic|rain|sky|skyline|star|snow|leaf|bubble-bg|backdrop|parallax/i
+for (const l of shapeLayers.filter((x) => AMBIENT_RE.test(x.nm ?? ''))) {
+  const p = l.ks?.p
+  if (p?.a !== 1) continue
+  const k = (p.k ?? []).filter((x) => Array.isArray(x?.s))
+  if (k.length < 3) continue
+  let fwd = 0, back = 0, netSign = 0
+  const steps = []
+  for (let i = 1; i < k.length; i++) {
+    const dx = k[i].s[0] - k[i - 1].s[0]
+    const dt = k[i].t - k[i - 1].t
+    // A wrap is a big move in ~no time; it is not travel, it is a jump.
+    if (dt < 1.5 && Math.abs(dx) > 40) continue
+    steps.push(dx)
+    netSign += dx
+  }
+  if (!steps.length) continue
+  const dir = Math.sign(netSign) || 1
+  for (const dx of steps) { if (Math.sign(dx) === dir) fwd += Math.abs(dx); else back += Math.abs(dx) }
+  if (fwd < 8) continue // essentially still — a different gate's business
+  const ratio = back / fwd
+  const ok = declaredLayer(l.nm ?? '')
+  console.log(`\nAmbient drift: ${l.nm} travels ${fwd.toFixed(0)}px ${dir < 0 ? 'left' : 'right'}, ${back.toFixed(0)}px back (${(ratio * 100).toFixed(0)}%)`)
+  if (ratio > 0.15 && !ok) {
+    fail(
+      `AMBIENT DRIFT REVERSES  ${l.nm} travels ${fwd.toFixed(0)}px ${dir < 0 ? 'left' : 'right'} but ${back.toFixed(0)}px back the other way — a steady stream became an oscillation`,
+      'Author an ambient scroll by TILING copies one lap apart on a single linear translation (recipe-camera-scene-motion, "Ambient Scroll") — one direction, constant speed, from the frame the brief starts it until the beat that brakes it to a stop.',
+    )
+  } else if (ok && ratio > 0.15) {
+    allowed.push(`${l.nm} reverses — declared: ${ok.reason}`)
+  }
+}
+
 // ── Wrap teleports happen offscreen ──────────────────────────────────────────
 // An ambient field (clouds, traffic, waves) wraps by TELEPORTING back across
 // the canvas between two near-coincident keys. Legitimate only while nobody
@@ -653,11 +693,22 @@ for (const l of doc.layers.filter((x) => x.ty === 4 && TICK_RE.test(x.nm ?? ''))
       if (visible && !declaredLayer(l.nm ?? '')) {
         fail(
           `WRAP TELEPORTS IN VIEW  ${l.nm} jumps ${jump.toFixed(0)}px in ${dt.toFixed(2)}f at t=${k[i].t.toFixed(1)} while its artwork is inside the frame`,
-          'A wrap teleport is legal only fully offscreen: keep drifting until the artwork clears the frame edge (plus margin), teleport there, and re-enter from beyond the far edge.',
+          'A wrap teleport is legal only fully offscreen: keep drifting until the artwork clears the frame edge (plus margin), teleport there, and re-enter from beyond the far edge. Better: author the scroll by TILING and have no teleport at all (recipe-camera-scene-motion, "Ambient Scroll").',
         )
         break
       }
-      if (!visible) wraps.push(`${l.nm} wraps at t=${k[i].t.toFixed(1)} (${jump.toFixed(0)}px, offscreen)`)
+      // Offscreen is not enough on its own: a jump left INTERPOLATABLE can be
+      // drawn by anything that resamples or rescales time (a duration or speed
+      // control, a player running on display refresh). A hold key makes that
+      // impossible — or drop the teleport entirely and tile.
+      if (!visible && k[i - 1].h !== 1 && !declaredLayer(l.nm ?? '')) {
+        fail(
+          `WRAP IS INTERPOLATABLE  ${l.nm} jumps ${jump.toFixed(0)}px at t=${k[i].t.toFixed(1)} across a ${dt.toFixed(2)}f gap with smooth interpolation — a consumer that resamples or rescales time will DRAW the sweep across the canvas`,
+          'Tile the field instead of teleporting it (recipe-camera-scene-motion, "Ambient Scroll") — no jump, nothing to interpolate. If a teleport is truly unavoidable, mark the pre-jump keyframe as a HOLD key (h: 1).',
+        )
+        break
+      }
+      if (!visible) wraps.push(`${l.nm} wraps at t=${k[i].t.toFixed(1)} (${jump.toFixed(0)}px, offscreen, hold key)`)
     }
   }
   if (wraps.length) console.log(`\nOffscreen wraps: ${wraps.length}\n  ` + wraps.slice(0, 6).join('\n  '))

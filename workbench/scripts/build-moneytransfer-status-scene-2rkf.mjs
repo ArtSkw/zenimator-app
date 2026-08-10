@@ -627,59 +627,49 @@ layers[layers.length - 2].ks.o = bakedProp(shadowOpPts) // matte fades too, so t
 // loop closes with no rounding-drift risk. SUCCESS continues at that same
 // exit velocity (continuity across the T seam) then brakes to a stop.
 // ============================================================
-// Constant right-to-left drift at a stated px/frame — the sky is moving on
-// the very first frame and never pauses mid-run. Wraps TELEPORT the group
-// back to the right, but only between two keys whose values are BOTH fully
-// offscreen (a teleport with either end in view flashes across the canvas
-// for a frame — the failure the offscreen rule exists to prevent). Keys sit
-// on integer frames a whole frame apart: nothing fragile about the times,
-// and the crossing happens where no one can see it.
-// From CLOUD_DECEL_START the drift brakes quadratically — velocity matches
-// the run at the start, zero at the end — and the sky holds dead still while
-// the checkmark draws, exactly the final source artwork's frozen state.
-function driftTrack({ exit, enter, pxPerFrame }) {
-  const pts = [{ t: 0, v: [0, 0, 0] }]
-  let pos = 0
-  for (let t = 1; t <= CLOUD_DECEL_START; t++) {
-    pos -= pxPerFrame
-    if (pos <= exit) {
-      pts.push({ t: t - 1 + 0.4, v: [exit, 0, 0] })  // fully off the left edge…
-      pts.push({ t: t - 1 + 0.6, v: [enter, 0, 0] }) // …reappears fully off the right
-      pos = enter - pxPerFrame * 0.4
-    }
-    pts.push({ t, v: [pos, 0, 0] })
-  }
-  let prevT = CLOUD_DECEL_START
-  for (let t = CLOUD_DECEL_START + 1; t <= CLOUD_DECEL_START + CLOUD_DECEL_DUR; t++) {
-    const u = clamp01((t - CLOUD_DECEL_START) / CLOUD_DECEL_DUR)
-    pos -= pxPerFrame * (1 - u) * (1 - u) * (t - prevT) // quadratic brake
-    prevT = t
-    pts.push({ t, v: [pos, 0, 0] })
-  }
-  return [...pts, { t: OP, v: [pos, 0, 0] }]
+// TILED SCROLL — no teleport anywhere in the data (recipe-camera-scene-motion,
+// "Ambient Scroll"). Each cloud set is emitted as N copies spaced exactly one
+// lap apart, every copy carrying the SAME monotonic leftward translation: as
+// one copy leaves the left edge the next is already where it began. A wrap
+// teleport would be simpler to write, but its jump is a real value change that
+// anything resampling or rescaling time (the app's duration/speed controls, a
+// player running on display refresh) can land inside and DRAW — reported from
+// the field as the sky sweeping backwards across the canvas. Tiling has no
+// jump to land inside.
+//
+// travelled(t): constant speed until CLOUD_DECEL_START, then the integral of a
+// quadratic brake — velocity matches the run at the seam and reaches exactly
+// zero, after which the sky holds dead still while the checkmark draws.
+function travelled(t, pxPerFrame) {
+  if (t <= CLOUD_DECEL_START) return pxPerFrame * t
+  const run = pxPerFrame * CLOUD_DECEL_START
+  const u = clamp01((t - CLOUD_DECEL_START) / CLOUD_DECEL_DUR)
+  // ∫v(1-u)² du · DUR = v·DUR·(1-(1-u)³)/3
+  return run + pxPerFrame * CLOUD_DECEL_DUR * (1 - Math.pow(1 - u, 3)) / 3
 }
-function cloudLayer(nm, ids, wrap) {
+function cloudLayer(nm, ids, pxPerFrame) {
   const bumpSp = subs(ids.bump)[0]
   const dashL = subs(ids.dashL)[0], dashR = subs(ids.dashR)[0]
   const dashLC = bboxCenter(bboxOf([dashL])), dashRC = bboxCenter(bboxOf([dashR]))
   const stretchPts = sampleDense((t) => { const b = bump(t, DASH_STRETCH_START, DASH_STRETCH_DUR); return [100 + 170 * Math.pow(b, 1.3), 100, 100] }, 0, OP)
-  const shapes = [
-    group(`${nm}-bump`, [shapeFromSubpath(bumpSp, `${nm}-bump-path`), strokeItem('#222222', 2)]),
-    group(`${nm}-dash-l`, [shapeFromSubpath(dashL, `${nm}-dash-l-path`), strokeItem('#222222', 2)], { p: dashLC, a: dashLC, s: bakedProp(stretchPts) }),
-    group(`${nm}-dash-r`, [shapeFromSubpath(dashR, `${nm}-dash-r-path`), strokeItem('#222222', 2)], { p: dashRC, a: dashRC, s: bakedProp(stretchPts) }),
-  ]
-  pushLayer({ nm, shapes, ks: { ...baseTransform(), p: bakedProp(wrap) } })
+  const bbox = bboxOf([bumpSp, dashL, dashR])
+  const lap = (bbox[2] - bbox[0]) + 44 // own width + the gap that reads as continuous sky
+  const copies = Math.ceil(travelled(OP, pxPerFrame) / lap) + 1
+  for (let i = 0; i < copies; i++) {
+    const shapes = [
+      group(`${nm}-bump`, [shapeFromSubpath(bumpSp, `${nm}-bump-path`), strokeItem('#222222', 2)]),
+      group(`${nm}-dash-l`, [shapeFromSubpath(dashL, `${nm}-dash-l-path`), strokeItem('#222222', 2)], { p: dashLC, a: dashLC, s: bakedProp(stretchPts) }),
+      group(`${nm}-dash-r`, [shapeFromSubpath(dashR, `${nm}-dash-r-path`), strokeItem('#222222', 2)], { p: dashRC, a: dashRC, s: bakedProp(stretchPts) }),
+    ]
+    const pts = sampleDense((t) => [i * lap - travelled(t, pxPerFrame), 0, 0], 0, OP)
+    pushLayer({ nm: `${nm}-${i}`, shapes, ks: { ...baseTransform(), p: bakedProp(pts) } })
+  }
 }
-const nearBumpBbox = bboxOf([...subs('Vector'), ...subs('Vector_2'), ...subs('Vector_3')])
-const farBumpBbox = bboxOf([...subs('Vector_4'), ...subs('Vector_5'), ...subs('Vector_6')])
 // Calm register: the near layer crosses the sky in ~2.8s, the far layer at
-// half that speed — parallax from the ratio, not from frantic laps. (This
-// scene is an ENTRY: it plays once, so the drift needs no whole-lap closure.)
+// half that speed — parallax is the RATIO between the two, one constant each.
 const NEAR_V = 2.2, FAR_V = 1.1 // px/frame
-cloudLayer('cloud-near', { bump: 'Vector', dashL: 'Vector_2', dashR: 'Vector_3' },
-  driftTrack({ exit: -(nearBumpBbox[2] + 10), enter: (W - nearBumpBbox[0]) + 10, pxPerFrame: NEAR_V }))
-cloudLayer('cloud-far', { bump: 'Vector_4', dashL: 'Vector_6', dashR: 'Vector_5' },
-  driftTrack({ exit: -(farBumpBbox[2] + 10), enter: (W - farBumpBbox[0]) + 10, pxPerFrame: FAR_V }))
+cloudLayer('cloud-near', { bump: 'Vector', dashL: 'Vector_2', dashR: 'Vector_3' }, NEAR_V)
+cloudLayer('cloud-far', { bump: 'Vector_4', dashL: 'Vector_6', dashR: 'Vector_5' }, FAR_V)
 
 // ============================================================
 // Markers, doc assembly
