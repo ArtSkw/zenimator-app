@@ -25,7 +25,13 @@ states, warning alerts, empty states, and compact status animations.
 - `orbital-loader`: rotating dots or marks with seamless timing.
 - `stroke-trace`: icon stroke draws, holds briefly, then resets or loops.
 - `pulse-badge`: compact scale/opacity pulse around a status symbol.
-- `check-complete`: path draw plus short settle for success states.
+- `check-complete`: path draw plus short settle for success states. The tick
+  is HANDWRITING — it strokes LEFT to right, pen-down at the left tip, up-right
+  to finish (source exports routinely author the path from the right tip;
+  reverse it — vertices reversed, in/out tangents swapped — so trim-from-start
+  IS pen order). A surrounding ring may sweep either way. Decorative ink marks
+  (pen-down dots, end blobs) pop IN PLACE, anchored on their own artwork —
+  `check-motion.mjs` fails both a backwards tick and an off-artwork pivot.
 - `error-shake`: brief x/alert emphasis, controlled and not frantic.
 - `warning-pulse`: triangle/badge reveal with restrained attention pulse.
 - `scan-progress`: linear or radial progress sweep with controlled repetition.

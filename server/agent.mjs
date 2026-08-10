@@ -171,6 +171,26 @@ const LIVING_MOTION_CONTRACT =
   `(max / median-while-moving under ~3x; entrances and deliberate accents exempt).\n` +
   `  - Accents must be readable: a signature micro-motion needs a half-cycle of at least ` +
   `~4 frames at 60fps (~0.4s round trip), or it reads as a glitch rather than a beat.\n` +
+  `  - The brief's beat list is a CAST LIST — stage it literally. Frame 0 shows exactly ` +
+  `the opening beat's cast: an element the brief stages as arriving LATER is fully ` +
+  `OFFSCREEN at frame 0 (never parked at 0% opacity or scale) and ENTERS with the ` +
+  `energy the brief implies — a leap, a slide, a drop whose bounce hands off into the ` +
+  `idle. Ambient fields the brief keeps moving (clouds, waves, traffic, rain) drift ` +
+  `from the very first frame at constant velocity and stop only by the deceleration ` +
+  `the brief names — frozen exactly when the payoff needs a still background, never ` +
+  `stopped by omission. Wrap teleports happen fully offscreen at both keys. Render ` +
+  `frame 0 and READ it against the brief's opening sentence: same picture, or the ` +
+  `entrance beat was silently deleted.\n` +
+  `  - Ink follows the pen. A hand-drawn tick strokes LEFT to right, pen-down to pen-up ` +
+  `(reverse an export path authored from the right tip; a ring/circle sweep is exempt).\n` +
+  `  - Scale pivots ON its artwork. ANY element whose scale animates — a pop-in dot, a ` +
+  `thought-trail bubble, a badge, a plate, a breathe — pivots at its anchor, and that ` +
+  `anchor sits on the element's own geometry: origin-space geometry takes anchor [0,0] ` +
+  `with only the position carrying it home; absolute geometry takes anchor = its own ` +
+  `center. Anchor = position over origin-space shapes cancels the transform and paints ` +
+  `the artwork at the CANVAS CORNER, and animating scale around a misplaced anchor ` +
+  `slides the element across the canvas instead of growing it in place — a detached ` +
+  `crescent at the frame's top-left corner is this bug, every time.\n` +
   `Any scene with a character, figure, creature or mascot:\n` +
   `  - Articulate the PARTS — a limb that only travels is a stick. Joints bend, ` +
   `extremities lead or lag the mass they hang from, and at least half the nameable parts ` +
@@ -597,10 +617,15 @@ function proposePrompt(slug, assets = []) {
     `      strictly as a negated, scaled copy of the subject's own track — never on an independent clock.\n` +
     `  This section is what stops a rig from animating the wrong element, so make each call explicitly; if a\n` +
     `  piece is ambiguous, say which reading you chose and why.\n` +
-    `- BEATS: numbered, each with a rough timing (~seconds), what moves, what deliberately does NOT, and how\n` +
+    `- BEATS: numbered, each with a rough timing (~seconds), WHO IS ON STAGE (beat 1's cast IS the first\n` +
+    `  frame — an element arriving later is offscreen until its entrance, and the brief says where it\n` +
+    `  enters from and with what energy), what moves, what deliberately does NOT, and how\n` +
     `  it should feel. Let beats overlap rather than queue — a settle can start while the next thing begins.\n` +
     `  For a LOOPING idle, state the cycle lengths so they divide the loop a whole number of times, and keep\n` +
-    `  different details on different clocks so nothing peaks in unison.\n` +
+    `  different details on different clocks so nothing peaks in unison. Ambient fields that persist across\n` +
+    `  beats (clouds, waves, traffic) get a stated velocity from frame 0 and a stated STOP — which beat\n` +
+    `  brakes them, and what state they freeze in. Any hand-drawn mark states its pen order (a tick strokes\n` +
+    `  left to right; ink dots pop in place).\n` +
     `- FIDELITY MUSTS: one line per thing step 1 turned up, written as an instruction, using the real ids,\n` +
     `  filenames, colours and coordinates from the file.\n` +
     `- How it ends: ENTRY settles exactly on the final artwork, LOOP's first frame equals its last. Say which,\n` +
