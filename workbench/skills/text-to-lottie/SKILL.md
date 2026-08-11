@@ -179,14 +179,22 @@ Before finishing:
    Every entry needs a reason: the point is to state intent where a reviewer
    can see it, never to mute the gate. A scene whose exceptions outnumber its
    welds is usually a rig that was never assembled.
-8. **Run the Aliveness Contract** in `references/motion-taste.md` — the
+8. **If the scene declares a repeatable marker segment, run
+   `node scripts/check-loop-seam.mjs <slug>` — it must exit 0.** It renders the
+   segment's first and last frame and DIFFS THE PICTURES. Comparing keyframes
+   instead is actively misleading for a scrolling field: each tile ends one
+   whole lap along, standing in for the one ahead of it, so the numbers differ
+   by design on a perfectly clean seam. A failure prints the diff's bounding
+   box — go and render that box rather than guessing.
+
+9. **Run the Aliveness Contract** in `references/motion-taste.md` — the
    completion gate for whether the scene is actually alive: nothing inert,
    amplitude measured rather than assumed, held objects parented and carrying
    their own secondary motion, bodies breathing, parts articulating, effort
    phase-locked, accents slow enough to resolve. Report it as a table (track ·
    amplitude · active span · verdict), not as prose. A scene that renders
    cleanly but fails this gate is not finished.
-9. Finish only when the animation renders cleanly and feels intentional.
+10. Finish only when the animation renders cleanly and feels intentional.
 
 ## Maintenance Evals
 

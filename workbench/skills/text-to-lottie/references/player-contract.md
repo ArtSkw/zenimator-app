@@ -275,6 +275,27 @@ top-level Lottie markers — names are contract, lowercase:
   true rest value shortly before the anticipation begins, so only the last
   few frames before it show motion — the long gap in between stays truly
   flat regardless of how many cycles are echoed.
+- **A boundary value must come from evaluating the SAME function at that
+  boundary, never from a second hard-pinned keyframe at the identical
+  timestamp.** A one-shot entrance handing off into a periodic idle at
+  `t=E` is tempting to cap with an explicit `{t: E, v: restValue}` —
+  but if the idle's own function is ALSO being dense-sampled starting at
+  `t=E` (as it should be, per "keyframes are its samples" above), and that
+  function's true value at `t=E` isn't the naive rest value (a phase-lagged
+  secondary wobble sampled at its parent's own zero-crossing is generally
+  NOT zero there), the array ends up with two keyframes at the identical
+  timestamp with conflicting values. Some read paths silently prefer one
+  over the other, so the bug doesn't always show as an obvious jump — it
+  showed up only as a small angle discontinuity indistinguishable from
+  correct secondary motion in a single-frame render. Caught by diffing every
+  animated track's INTERPOLATED value at the two ends of a loop-repeatable
+  segment (not eyeballing frames): a track that reads one value at the
+  segment's start and a different one at its end has this bug, an
+  entry-handoff mismatch, or a genuine seam break — diff first, don't guess
+  which. Fix: drop the hard-pinned boundary keyframe and let the entrance
+  curve ease directly into the idle function's own computed value at that
+  boundary (compute it, never hand-type it, so the handoff cannot drift out
+  of sync with the idle function later).
 
 ## Native Text
 

@@ -104,6 +104,35 @@ starts it until the beat the brief brakes it — then decelerates to a full stop
 and holds. Any sustained travel against that direction is a defect, not
 variety (`check-motion.mjs`: AMBIENT DRIFT REVERSES).
 
+**If the field must also close a REPEATABLE marker segment (an idle/float
+loop the app replays until a trigger), the seam is the ENSEMBLE's, not any
+one tile's.** Exact numeric equality of one tile's keyframe value at the
+segment's start and end is neither necessary nor — for a continuously
+scrolling field — possible without reintroducing a teleport. What actually
+makes the loop read clean:
+
+- Size each tile's speed so the loop span (`T - E`) crosses an exact whole
+  number of laps: `speed = k * lap / (T - E)` for a small integer `k`
+  (usually 1). This makes every tile's own position differ between the
+  segment's start and end by exactly `k * lap` — not equal, but the tile
+  that scrolled off is standing in for the one ahead of it, so the rendered
+  picture is identical even though no single tile's own value matches.
+- Extend the tile range to NEGATIVE indices (one-plus lap to the left of the
+  native/`i=0` position), not just `0..copies-1`. Without this, a screen
+  strip that only becomes covered by a tile's own leftward drift LATER in
+  the timeline is simply blank EARLIER — nothing has drifted there yet at
+  the segment's start, while the segment's end shows a tile sitting exactly
+  there (measured: a ~440px patch missing from the start frame, found by
+  pixel-diffing the segment's start and end frames and reading the diff's
+  bounding box, not by eye — it reads as a small isolated defect, not an
+  obviously missing cloud).
+- Verify with a direct `anim.seekFrame()` pixel diff of the segment's start
+  and end frames (`ck.LTRBRect`, per the player-contract gotcha), never by
+  comparing individual layer keyframes — the per-tile numeric "mismatch"
+  (each tile off by exactly its own lap) is expected and correct on a
+  passing scene, and only a picture-level diff tells that apart from a real
+  seam break.
+
 ## Common Failure Modes
 
 - Ambient field authored as a wrap-teleport, and the jump becomes visible.
