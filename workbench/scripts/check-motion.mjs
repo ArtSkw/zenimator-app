@@ -629,8 +629,12 @@ for (const l of doc.layers.filter((x) => x.ty === 4 && TICK_RE.test(x.nm ?? ''))
 // authored instead of a scroll, or a wrap teleport that a resampling consumer
 // landed inside and DREW. Both look identical on screen and both are caught
 // here: measure net travel per direction, excluding legal offscreen wraps.
-const AMBIENT_RE = /cloud|wave|traffic|rain|sky|skyline|star|snow|leaf|bubble-bg|backdrop|parallax/i
-for (const l of shapeLayers.filter((x) => AMBIENT_RE.test(x.nm ?? ''))) {
+// A vocabulary is the fast path for a SINGLE drifting layer that has no
+// siblings to compare against; tiled fields are found structurally below and
+// need no name at all.
+const AMBIENT_RE = /cloud|wave|traffic|rain|sky|skyline|star|snow|leaf|bird|grass|hill|mountain|building|confetti|bunting|dust|bubble-bg|backdrop|parallax/i
+const structuralAmbient = new Set()
+for (const l of shapeLayers.filter((x) => AMBIENT_RE.test(x.nm ?? '') || structuralAmbient.has(x.nm))) {
   const p = l.ks?.p
   if (p?.a !== 1) continue
   const k = (p.k ?? []).filter((x) => Array.isArray(x?.s))
@@ -669,15 +673,44 @@ for (const l of shapeLayers.filter((x) => AMBIENT_RE.test(x.nm ?? ''))) {
 // handed over. The valid window is [W, W + fieldWidth] — the lower bound keeps
 // it sparse, the upper bound keeps a gap from opening. Parallax comes from
 // SPEED, never from giving one depth layer a shorter lap.
+/** Tiled scrolling fields, found by STRUCTURE rather than by name.
+ *
+ *  Every ambient rule here was first written against clouds, and keying them
+ *  to a vocabulary (/cloud|wave|rain|.../) means the next brief that scrolls
+ *  buildings, grass, birds, bunting or confetti gets none of them — the whole
+ *  defect family returns, silently, on artwork nobody thought to name. What
+ *  actually makes something a tiled field is observable: sibling layers of the
+ *  SAME artwork, holding a CONSTANT offset from each other, all translating.
+ *  Detect that and the rules apply to any subject at all. */
 function tiledAmbientGroups() {
-  const groups = new Map()
+  const byBase = new Map()
   for (const l of shapeLayers) {
     const m = /^(.*?)-(-?\d+)$/.exec(l.nm ?? '')
-    if (!m || !AMBIENT_RE.test(m[1]) || l.ks?.p?.a !== 1) continue
-    if (!groups.has(m[1])) groups.set(m[1], [])
-    groups.get(m[1]).push({ layer: l, i: Number(m[2]) })
+    if (!m || l.ks?.p?.a !== 1) continue
+    if (!byBase.has(m[1])) byBase.set(m[1], [])
+    byBase.get(m[1]).push({ layer: l, i: Number(m[2]) })
   }
-  for (const tiles of groups.values()) tiles.sort((a, b) => a.i - b.i)
+  const groups = new Map()
+  for (const [base, tiles] of byBase) {
+    if (tiles.length < 2) continue
+    tiles.sort((a, b) => a.i - b.i)
+    // Same artwork: identical vertex count and matching bbox extents.
+    const sig = (l) => {
+      const bb = bboxOf(l)
+      if (!bb) return null
+      return `${collectPoints(l.shapes, []).length}:${(bb.x1 - bb.x0).toFixed(1)}x${(bb.y1 - bb.y0).toFixed(1)}`
+    }
+    const first = sig(tiles[0].layer)
+    if (!first || tiles.some((t) => sig(t.layer) !== first)) continue
+    // Same track: the offset between two tiles never changes — a rigid convoy,
+    // not two things that merely happen to move.
+    const off = (t) => evalProp(tiles[1].layer.ks.p, t, [0, 0])[0] - evalProp(tiles[0].layer.ks.p, t, [0, 0])[0]
+    const base0 = off(times[0])
+    if (!Number.isFinite(base0) || Math.abs(base0) < 1) continue
+    if (times.some((t) => Math.abs(off(t) - base0) > 0.5)) continue
+    // Named like an ambient field, or proven to be one by behaviour.
+    groups.set(base, tiles)
+  }
   return groups
 }
 {
@@ -721,17 +754,8 @@ function tiledAmbientGroups() {
 // multiple of that span. (Measured on a generated scene that closed its loop
 // perfectly and still rested 106px and 135px off source.)
 {
-  const tiled = new Map()
-  for (const l of shapeLayers) {
-    const m = /^(.*?)-(-?\d+)$/.exec(l.nm ?? '')
-    if (!m || !AMBIENT_RE.test(m[1]) || l.ks?.p?.a !== 1) continue
-    if (!tiled.has(m[1])) tiled.set(m[1], [])
-    tiled.get(m[1]).push({ layer: l, i: Number(m[2]) })
-  }
   const last = doc.op ?? 0
-  for (const [base, tiles] of tiled) {
-    if (tiles.length < 2) continue
-    tiles.sort((a, b) => a.i - b.i)
+  for (const [base, tiles] of tiledAmbientGroups()) {
     const x = (t, l) => evalProp(l.ks.p, t, [0, 0])[0]
     const lap = (x(0, tiles[1].layer) - x(0, tiles[0].layer)) / (tiles[1].i - tiles[0].i)
     if (!Number.isFinite(lap) || Math.abs(lap) < 1) continue

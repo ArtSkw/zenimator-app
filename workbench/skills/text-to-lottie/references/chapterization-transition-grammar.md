@@ -136,6 +136,42 @@ Inspect the two boundary frames per seam:
 When several source SVGs arrive (`assets/<project>.svg`, `-2`, `-3`, …), the
 brief describes ONE continuous story across them.
 
+### The sequence checklist
+
+Two artworks or four, the same things decide whether the result is the
+designer's drawing in motion or a plausible-looking approximation of it. Work
+this list before authoring; every line below was written after a specific
+scene shipped without it.
+
+1. **Diff the assets first.** Elements at identical coordinates across files
+   are ONE element that persists — build it once and keep it alive for the
+   whole timeline. Never rebuild it per chapter, and never crossfade between
+   two copies of the same artwork.
+2. **The first frame is the first artwork.** Whoever the brief stages as
+   arriving later is fully offscreen at frame 0, not hidden at zero opacity.
+   Render frame 0 and read it against the brief's opening sentence.
+3. **The last frame is the LAST artwork.** This is the one most often missed,
+   because everything moving looks correct in isolation. Anything that comes
+   to rest must rest where its source file draws it — a scrolling field halts
+   on a lap boundary (`AMBIENT RESTS OFF-SOURCE`), a subject settles on its
+   authored transform, a draw-on ends fully drawn.
+4. **Persistent fields run their own beat, not the chapter's.** A sky that
+   the brief keeps moving does not pause because a chapter boundary passed;
+   it runs from frame 0 at constant velocity and stops only where the brief
+   brakes it. Author it by tiling (recipe-camera-scene-motion, "Ambient
+   Scroll"); its lap is the CANVAS width; parallax is the lap-count ratio.
+5. **Every repeatable segment must close on the PICTURE.** Each clock's
+   period divides that segment's span — not `op`, not the whole comp — and
+   `check-loop-seam.mjs` pixel-diffs the boundary frames to prove it.
+6. **Read the written intent as beats, and stage them literally.** The brief's
+   beat list is a cast list; if it says the clouds move first and the
+   character jumps in after, that ordering is the deliverable, not a mood.
+
+The mechanical gates cover 3, 4 and 5 for any subject: `check-motion.mjs`
+finds tiled fields by STRUCTURE — sibling layers of the same artwork holding a
+constant offset — so the rules apply to scrolling buildings, bunting, birds or
+confetti exactly as they do to clouds, with no vocabulary to keep updated.
+
 - Sequence follows the brief's narrative; attachment order is the default
   when the brief doesn't say. Confirm each asset's role by reading it.
 - Every supplied artwork gets the full SVG-fidelity treatment; never redraw
