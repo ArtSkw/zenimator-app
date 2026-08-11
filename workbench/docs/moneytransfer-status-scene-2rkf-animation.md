@@ -211,3 +211,25 @@ boundary frames: keyframe comparison is actively misleading here, because a
 clean scrolling seam has every tile one whole lap along, standing in for the
 one ahead of it. Tolerance is 40/255 — a passing scene shows AA jitter up to
 21 on a few edge pixels, a real break measures ~200 across hundreds.
+
+## Landing the frozen sky ON the source artwork (2026-08-11)
+
+A generated scene closed its float loop perfectly and still rested 106px
+(near) / 135px (far) from where the third source file draws the clouds — the
+right composition with the sky in the wrong place.
+
+Loop closure and source-landing are TWO conditions. Speed derived as
+`lapsPerLoop * lap / S` closes the repeatable segment but says nothing about
+where the field stops. The total distance is `speed * D`, where `D` is the
+brake's distance-time (`decelStart + decelDur/3` for a cubic brake), so the
+field halts on a lap boundary only when `lapsPerLoop * D / S` is an integer.
+Guaranteeing that for any lap count means `D = k * S`.
+
+The consequence worth internalising: **the loop span is derived from where the
+sky stops, not chosen first.** Neither the lap count nor the lap distance can
+fix a bad `D/S` ratio — both cancel out of the condition. Only the brake
+profile has slack (`(1-u)^n` integrates to `decelDur/(n+1)`). In this scene
+`D = 273 + 45/3 = 288 = 2 x 144`, so both sets rest 0.00px from native.
+
+Gate: AMBIENT RESTS OFF-SOURCE, which infers each tiled group's lap from its
+sibling spacing and only applies to fields that actually come to rest.
