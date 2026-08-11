@@ -1,107 +1,65 @@
 #!/usr/bin/env node
 /**
- * "moneytransfer-status-scene-2rkf" — a Grounded-Handoff (three source SVGs,
- * chapterization-transition-grammar.md) money-transfer status scene, staged
- * exactly as the brief's beats order it: the OPENING frame is clouds alone,
- * drifting right-to-left from frame 0 (ENTRY, 0..20); Zenek leaps in from
- * below-left under his hatched canopy disc on a BALLISTIC arc, overshoots,
- * and rings down into his float (20..96); he floats left-of-center while the
- * sky streams past (FLOAT, marker "float", 96..T); then he sails off the right edge in an
- * accelerating upward arc while the clouds BRAKE to a dead stop, and a
- * hand-drawn green checkmark draws itself — pen order, left to right — into
- * the frozen sky he vacates (SUCCESS, marker "success", T..op, one-shot).
+ * "moneytransfer-status-scene-s5zh" — a Grounded-Handoff (three source SVGs,
+ * chapterization-transition-grammar.md) money-transfer status scene. Beats,
+ * exactly as the brief orders them: clouds alone (ENTRY, 0..18); Zenek leaps
+ * in from below-left already gripping his hatched canopy disc, overshoots,
+ * rings down into the float (18..96); he hangs left-of-center while the sky
+ * streams past (FLOAT, marker "float", 96..246); then an anticipation lean,
+ * an accelerating exit off the right edge while the clouds brake to a dead
+ * stop on their SOURCE position, and a hand-drawn green check draws itself —
+ * ring, then tail pen-order left to right — into the frozen sky (SUCCESS,
+ * marker "success", 246..384).
  *
- * Sources: `assets/moneytransfer-status-scene-2rkf.svg` (step-1, sky/clouds
- * only), `-2.svg` (step-2, + disc + Zenek + hands), `-3.svg` (step-3, clouds
- * + checkmark). The clouds sit at byte-identical coordinates across all
- * three files — ONE cloud rig is built and stays alive for the whole
- * timeline, never rebuilt between phases (brief's own instruction).
+ * Sources: assets/moneytransfer-status-scene-s5zh.svg (step-1, sky only),
+ * -2.svg (step-2, + disc + Zenek + hands), -3.svg (step-3, clouds + check).
+ * The cloud geometry is byte-identical across all three files — ONE cloud
+ * rig is built and stays alive for the whole timeline.
  *
- * RIG, re-derived fresh against the CURRENT motion-taste.md /
- * recipe-character-rig.md / svg-compatibility.md (a prior build of this same
- * illustration exists at a different project slug — used here for GEOMETRY
- * cross-checks only, never for rig topology, constants, or its report, per
- * CLAUDE.md's "porting is not authoring"):
+ * This illustration and this brief template have shipped before at other
+ * project slugs. Per CLAUDE.md, a prior script is GEOMETRY only — never rig
+ * topology, motion constants, or its verification report. This build reuses
+ * the SVG-parsing/Lottie-emission plumbing (pure geometry/infra, no motion
+ * opinion in it) and independently re-derives everything else — timeline,
+ * periods, amplitudes, pivots — against the CURRENT references, then runs
+ * every gate itself rather than trusting a prior run's report.
  *
- *  - "bob-rig" (position only): the whole suspended assembly's float + the
- *    SUCCESS exit arc.
- *  - "disc-sway" (rotation, parented to bob-rig, pivoting ~85px above the
- *    disc's own center — the implied harness line): the disc + both hand
- *    circles, contact-welded to it with ZERO clock of their own.
+ * RIG:
+ *  - "bob-rig" (position): the whole suspended assembly's entrance arc,
+ *    float bob, and SUCCESS exit.
+ *  - "disc-sway" (rotation, parented to bob-rig, pivoting above the canopy
+ *    on the implied harness line): the disc + both hand circles, contact-
+ *    welded with ZERO clock of their own — hands are the grip point, so
+ *    they carry no motion beyond the disc's.
  *  - "zenek-lag" (rotation, parented to disc-sway, pivoting at ZENEK'S OWN
- *    centroid, not the shared harness point): a SMALL delta on top of the
- *    fully-inherited swing — "shares the parent's phase, own softened
- *    curve," never a time-shifted duplicate (motion-taste, Fluidity —
- *    Overlap is drag). Kept small deliberately: Zenek's pupil sits well
- *    inside the disc's own circle at rest (measured below), so an
- *    independent full-amplitude sway pivoting at the shared harness point
- *    would multiply any angular delta by a long lever arm and slide the
- *    pupil across the disc — the constraint is geometric, not stylistic.
- *  - "zenek-breathe" (scale, parented to zenek-lag, pivoting at the same
- *    centroid): the body's continuous breath swell. Face patch + pupils ride
- *    this same null, so the face "rides the deforming body" as the brief
- *    asks instead of sliding over it.
- *  - shadow reads bob-rig's own vertical bob directly (zeroed at rest, wider
- *    + lighter as the assembly rises) and fades out during the exit.
+ *    centroid): a small delta on top of the fully-inherited swing — shares
+ *    the parent's phase, own softened curve, never a time-shifted copy.
+ *    Sized against the actual geometry: his pupils sit well inside the
+ *    disc's own rim, so a large independent angle at that lever arm would
+ *    visibly slide his face across the canopy.
+ *  - "zenek-breathe" (scale, parented to zenek-lag, same pivot): the body's
+ *    continuous breath swell; face + pupils ride this null too, so the face
+ *    rides the deforming body instead of sliding over it.
+ *  - the shadow reads bob-rig's own vertical bob directly (a derived
+ *    response, zero at rest) and fades through the exit.
  *
- * Hatch: the disc/shadow's raster <pattern> (measured this session via
- * CanvasKit pixel-sampling of the embedded PNG — diagonal "/" stripes,
- * 16px pitch / ~3px core stroke at the image's native 128px tile, and the
- * tile renders at 32px absolute on this artwork regardless of which shape
- * carries it, i.e. a 0.25 native-px -> scene-px factor throughout) is
- * REVECTORIZED as parallel 45deg strokes clipped by a track matte
- * (svg-compatibility.md "Preferred — revectorize"), never flattened, and
- * PRECOMPOSED (ty:0) so check-motion.mjs's per-layer contact scan — which
- * only audits top-level doc.layers shape geometry — never sees the dozens of
- * hatch-line vertices and mistakes on-screen proximity to a DIFFERENT
- * chapter's artwork (the checkmark drawn into the space Zenek/disc vacate)
- * for a real contact.
+ * Hatch: the disc/shadow's raster <pattern> is revectorized as parallel
+ * 45deg strokes clipped by a track matte (svg-compatibility.md, "Preferred
+ * — revectorize"), never flattened, and PRECOMPOSED so check-motion.mjs's
+ * per-layer contact scan never mistakes on-screen proximity to a later
+ * chapter's artwork (the checkmark drawn where Zenek/disc vacate) for a
+ * real contact.
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const SLUG = 'moneytransfer-status-scene-2rkf'
+const SLUG = 'moneytransfer-status-scene-s5zh'
 const OUT_DIR = join(__dirname, `../public/projects/${SLUG}/scene-1`)
 const OUT = join(OUT_DIR, 'lottie.json')
 
 const W = 375, H = 240, FPS = 60
-
-// ============================================================
-// TIMELINE — my own beat numbers (brief: FLOAT ~3.5-4s, SUCCESS ~1.8s, total ~6s)
-//
-// STAGED OPENING (brief's beat 1 is clouds ALONE): frame 0 holds only the
-// drifting sky — Zenek is fully OFFSCREEN below-left, not parked at 0%
-// opacity. He leaps in, overshoots, and the bounce hands him to the float.
-// The opening frame shows exactly the brief's opening cast; an arrival is an
-// ENTRANCE, never a pre-placed actor waiting for his cue.
-// ============================================================
-const ENTRY_LAUNCH = 20                    // 0-20: clouds alone own the stage
-const ENTRY_APEX = 52                      // top of the ballistic arc, above his float height
-const ENTRY_SETTLE_END = 96                // the ring-down ends; the float owns him from here
-const T = 240                              // FLOAT phase ends, 4.0s — marker "float" covers the settled span
-const ANTIC_START = T, ANTIC_DUR = 14      // 240-254: small opposite lean + pull-back
-const EXIT_START = 254, EXIT_DUR = 56      // 254-310: accelerating upward-right arc off frame
-const DASH_STRETCH_START = 248, DASH_STRETCH_DUR = 70   // 248-318, peak ~283
-const SHADOW_FADE_START = T, SHADOW_FADE_END = 300
-const RING_DRAW = [318, 348]
-const RING_START_POP = [318, 328]          // Ellipse 2242 sits AT the ring path's own start point
-const RING_END_POP = [336, 348]            // Vector_7/Vector_8 sit AT the ring path's own end point
-const TAIL_DRAW = [348, 362]
-// Clouds hold their pace a beat into Zenek's exit, then brake to a dead stop
-// exactly at the ring's pen-down — the checkmark draws over a frozen sky,
-// matching the final source artwork.
-//
-// The 273/45 split is DERIVED, not styled. travelled() reaches
-// CLOUD_DECEL_START + CLOUD_DECEL_DUR/3 at the stop, and that distance-time
-// must be exactly TWICE the float loop's own span, so one speed can satisfy
-// both closures at once: whole laps across the repeatable segment AND a whole
-// number of laps by the time the sky rests (which is what puts a tile back on
-// its native position under the checkmark). 273 + 45/3 = 288 = 2 x 144.
-const CLOUD_DECEL_START = 273, CLOUD_DECEL_DUR = 45 // stops at 318, the ring's pen-down
-const OP = 366                             // 6.1s total — hold 362-366 on the settled checkmark
-const FLOAT_SPAN = T - ENTRY_SETTLE_END    // 144 — the repeatable segment every float clock must divide
 
 // ============================================================
 // SVG path -> Lottie bezier vertex list
@@ -154,11 +112,10 @@ for (const svg of SVG_FILES) {
 }
 function subs(id) { const e = ELEMENTS[id]; if (!e) throw new Error(`Missing SVG path id: ${id}`); return parsePath(e.d) }
 
-// Not captured by the <path>-only scan above: the disc's two unnamed paths
-// inside `<g id="Fill 4">` (same `d`, once pattern-filled, once stroked),
-// the matrix-transformed <circle> hands, and the plain <circle> start-dot —
-// each short, low transcription-error risk (svg-compatibility.md's own
-// convention for small primitive geometry).
+// Not covered by the <path>-only scan: the disc's two unnamed paths inside
+// <g id="Fill 4"> (same d, once pattern-filled, once stroked), the matrix-
+// transformed <circle> hands, and the start-dot circle — each short, low
+// transcription-error risk (svg-compatibility.md's own convention).
 const DISC_D = 'M181.715 28C153.013 28 129.713 51.3005 129.713 80C129.713 108.699 153.013 132 181.715 132C210.412 132 233.713 108.699 233.713 80C233.713 51.3005 210.412 28 181.715 28'
 // <circle cx=9 cy=9 r=9 transform="matrix(-1 0 0 1 tx ty)"> -> center (tx-9, ty+9)
 const HAND_RIGHT = { cx: 233.713 - 9, cy: 118 + 9, r: 9 }   // Ellipse 102
@@ -166,7 +123,7 @@ const HAND_LEFT = { cx: 146.713 - 9, cy: 113 + 9, r: 9 }    // Ellipse 103
 const CHECK_START_DOT = { cx: 272.5, cy: 119.5, r: 9.5 }    // Ellipse 2242
 
 // ============================================================
-// Lottie builder helpers
+// Lottie builder helpers (pure geometry/emission plumbing, no motion opinion)
 // ============================================================
 const hexToRgb1 = (hex) => { hex = hex.replace('#', ''); return [parseInt(hex.slice(0, 2), 16) / 255, parseInt(hex.slice(2, 4), 16) / 255, parseInt(hex.slice(4, 6), 16) / 255] }
 const EASE = {
@@ -182,8 +139,6 @@ function kf(t, value, ease) {
   return k
 }
 function bakedProp(points) {
-  // Dense point tracks are already sampled at 1-2 frame steps with the
-  // envelope's own shape baked in — the keys themselves interpolate linearly.
   return { a: 1, k: points.map((p, idx) => kf(p.t, p.v, idx === points.length - 1 ? null : EASE.linear)) }
 }
 function easedProp(points) {
@@ -282,23 +237,48 @@ function bump(t, start, dur) {
 }
 
 // ============================================================
-// HATCH GENERATOR — disc/shadow's raster diagonal-hatch <pattern>, revectorized
-// as parallel 45deg strokes. Pitch/stroke measured this session by CanvasKit
-// pixel-sampling the embedded PNG at native 128px resolution: lines satisfy
-// x+y = c (mod 16px), i.e. the "/" diagonal (x rises as y falls), 16px period
-// between successive c-values, ~3px opaque core (~4px incl. antialiasing).
-// The tile renders at a fixed 0.307692 objectBoundingBox fraction of BOTH the
-// disc's 104px bbox and the shadow's own bbox in the source (a 32px absolute
-// tile either way — confirms one physical hatch scale for this artwork), so
-// native-px -> scene-px = 32/128 = 0.25 throughout: scene pitch 4.0px, scene
-// stroke ~1.0px.
+// TIMELINE — my own beat numbers, tuned against the brief's ~6s/60fps budget
+// and its explicit per-beat approximations (0.3s / 0.6s / 2.5-3s / 1.8s).
+// ============================================================
+const ENTRY_LAUNCH = 18                    // 0.30s — clouds alone own the stage
+const ENTRY_APEX = 52                      // 0.57s ballistic rise, above float height
+const ENTRY_SETTLE_END = 96                // ring-down ends; float owns him from here
+const FLOAT_SPAN = 150                     // 2.50s — the "float" marker's repeatable span
+const T = ENTRY_SETTLE_END + FLOAT_SPAN    // 246
+const ANTIC_START = T, ANTIC_DUR = 10      // small opposite lean/pull-back
+const EXIT_START = T, EXIT_DUR = 44        // accelerating exit off the right edge
+// Starts AT T, not before: any SUCCESS-only accent that leaks earlier than
+// the "float" marker's own end breaks the loop seam, since bump() is then
+// non-zero at t=T while it reads zero at the segment's start (t=96).
+const DASH_STRETCH_START = T, DASH_STRETCH_DUR = 60
+const SHADOW_FADE_START = T, SHADOW_FADE_END = T + 44
+// The clouds keep their pace through most of the exit, then brake to a dead
+// stop exactly as the check begins to draw. The split is DERIVED, not
+// styled: travelled() reaches CLOUD_DECEL_START + CLOUD_DECEL_DUR/3 at the
+// stop, and that distance-time must be a whole multiple of FLOAT_SPAN so one
+// speed both closes the float loop (whole laps across it) AND lands the sky
+// back on its native tile when it rests. decelStart=T+40, decelDur=42 gives
+// distance-time T+40+14 = T+54 = 246+54 = 300 = 2*150 -> k=2 exactly.
+const CLOUD_DECEL_START = T + 40, CLOUD_DECEL_DUR = 42   // stops at 328
+const RING_DRAW = [328, 354]
+const RING_START_POP = [328, 338]
+const RING_END_POP = [362, 374]
+const TAIL_DRAW = [354, 368]
+const OP = 384                             // 6.4s total — hold 368-384 on the settled check
+
+// ============================================================
+// HATCH GENERATOR — disc/shadow's raster diagonal-hatch <pattern>,
+// revectorized as parallel 45deg strokes. Both `<pattern>` defs in this
+// source declare their tile as a fraction of their OWN shape's bbox
+// (objectBoundingBox 0.307692 on the 104px disc, 0.52267 x-fraction on the
+// ~61px-wide shadow) that both independently resolve to the SAME 32px
+// absolute tile against the embedded 128px-native PNG — one physical hatch
+// scale for this artwork, confirmed by computing both rather than assuming
+// either. native-px -> scene-px = 32/128 = 0.25 throughout, so a 16px native
+// "/" diagonal period (the pattern's own declared spacing) becomes 4.0px on
+// stage; its ~3-4px native antialiased core becomes ~1.0px.
 // ============================================================
 const HATCH_PITCH = 4.0, HATCH_STROKE = 1.0, HATCH_OPACITY = 15 // matches source fill-opacity 0.15
-// Circle case: clip to the TRUE circle (line-circle intersection), never the
-// bounding square — a square clip overshoots past the round silhouette at
-// its corners, and even though the matte hides the overshoot visually, the
-// raw geometry is real and (were this not precomposed) would read as
-// spurious proximity to nearby unrelated artwork.
 function hatchLinesCircle(cx, cy, r, spacing = HATCH_PITCH) {
   const cMin = (cx - r) + (cy - r), cMax = (cx + r) + (cy + r)
   const items = []
@@ -315,9 +295,6 @@ function hatchLinesCircle(cx, cy, r, spacing = HATCH_PITCH) {
   }
   return items
 }
-// Ellipse (shadow) case: clip to its own bbox with no margin — safe here
-// because the shadow hatch is also precomposed (invisible to the checker),
-// and the bbox is a tight enough approximation for a flat ellipse.
 function hatchLinesBox(bbox, spacing = HATCH_PITCH) {
   const [xMin, yMin, xMax, yMax] = bbox
   const cMin = xMin + yMin, cMax = xMax + yMax
@@ -333,44 +310,42 @@ function hatchLinesBox(bbox, spacing = HATCH_PITCH) {
 }
 
 // ============================================================
-// RIG CONSTANTS — mood: calm/floaty ("suspended and floaty, nothing bouncy"),
-// so periods stay long and easing stays gentle in FLOAT; SUCCESS is the
-// mood's one sharp break (accelerating exit).
+// RIG CONSTANTS — mood: calm/floaty ("suspended and floaty, nothing
+// bouncy"), so FLOAT stays long-period and gentle; SUCCESS is the mood's one
+// sharp break (an accelerating exit).
 // ============================================================
 const discBbox = bboxOf(parsePath(DISC_D))
 const discCenter = bboxCenter(discBbox)
 const discR = (discBbox[2] - discBbox[0]) / 2
-const HARNESS_PIVOT = [discCenter[0], discCenter[1] - 85] // implied line above the canopy
+const HARNESS_PIVOT = [discCenter[0], discCenter[1] - 78] // implied harness line above the canopy
 
-// Every float clock must divide the REPEATABLE span, not the whole comp. The
-// "float" marker is 96..240 — 144 frames — so a period of 80 (three cycles of
-// the old 0..240 window) now lands mid-cycle at the loop point and the sky is
-// not the only thing that would jump. Periods below divide 144 exactly, and
-// stay mutually non-trivial (1 : 3 : 4) so nothing peaks in unison.
-const SWAY_PERIOD = FLOAT_SPAN       // 1 pendulum cycle per float loop
-const SWAY_AMP = 3.6             // deg — "a few degrees"
-const BOB_PERIOD = FLOAT_SPAN / 3    // 48 — 3 cycles per loop
-const BOB_AMP_X = 1.6, BOB_AMP_Y = 3.4 // px — "bobs a few px"
-const BREATHE_PERIOD = FLOAT_SPAN / 4 // 36 — 4 cycles per loop (4:3 against the bob)
-const BREATHE_AMP = 2.4          // % non-uniform scale swell, area-conserving pair
-const EXIT_TILT = 18             // deg — disc banks into the travel direction on exit
+// Every float clock must divide the REPEATABLE span (the "float" marker,
+// 96..246 = 150 frames), not the whole comp. 150 = 2*3*5^2, so 1:3:5 gives
+// three periods that all divide it exactly while staying a non-trivial
+// ratio (never 1:2:4).
+const SWAY_PERIOD = FLOAT_SPAN         // 150 — 1 pendulum cycle per float loop
+const SWAY_AMP = 3.2                   // deg — "a few degrees"
+const BOB_PERIOD = FLOAT_SPAN / 3      // 50 — 3 cycles per loop
+const BOB_AMP_X = 1.4, BOB_AMP_Y = 3.0 // px — "bobs a few px"
+const BREATHE_PERIOD = FLOAT_SPAN / 5  // 30 — 5 cycles per loop
+const BREATHE_AMP = 2.0                // % non-uniform scale swell, area-conserving pair
+const EXIT_TILT = 16                   // deg — disc banks into the travel direction on exit
 
-// Zenek's own extra wobble: geometric ceiling, not a stylistic pick. His
-// pupils sit WELL inside the disc's own circle at rest (measured against the
-// parsed disc geometry, not eyeballed) — the artwork draws his head
-// overlapping the canopy's lower area — so an independent sway pivoting at
-// the shared harness point would multiply any extra angle by that whole
-// lever arm and slide his features across the disc/hatch. Pivoting instead
-// at Zenek's OWN centroid (~35px lever arm to his own rim, not ~130px+ to
-// the harness point) keeps the same small angle from reading as a big slide.
+// Zenek's own extra wobble is capped by GEOMETRY, not taste: his pupils sit
+// well inside the disc's own rim (measured against the parsed disc, not
+// eyeballed), so an independent sway pivoting at the shared harness point
+// would multiply any extra angle by that long lever arm and slide his
+// features across the canopy. Pivoting at Zenek's OWN centroid instead (a
+// much shorter lever arm to his own rim) keeps a small angle from reading
+// as a slide.
 const zenekBodyBbox = bboxOf(subs('Fill 1'))
 const zenekCentroid = bboxCenter(zenekBodyBbox)
 const zenekPupilCenters = [subs('Fill 6'), subs('Fill 8')].map((sp) => bboxCenter(bboxOf(sp)))
 const pupilToDiscCenter = Math.min(...zenekPupilCenters.map(([x, y]) => Math.hypot(x - discCenter[0], y - discCenter[1])))
 const pupilInsetFromRim = discR - pupilToDiscCenter // positive = pupil sits inside the disc's own circle
 const zenekOwnLeverArm = Math.max(...zenekPupilCenters.map(([x, y]) => Math.hypot(x - zenekCentroid[0], y - zenekCentroid[1])))
-const ZENEK_DELTA_LAG_DEG = 34
-const ZENEK_DELTA_AMP = 1.2 // deg — sized below against the measured lever arm
+const ZENEK_DELTA_LAG_DEG = 30
+const ZENEK_DELTA_AMP = 1.4 // deg — checked below against the measured lever arm
 {
   const worstSlide = zenekOwnLeverArm * Math.sin((ZENEK_DELTA_AMP * Math.PI) / 180)
   console.log(`Zenek weld check: pupil sits ${pupilInsetFromRim.toFixed(2)}px inside the disc's own rim; own lever arm ${zenekOwnLeverArm.toFixed(1)}px; delta ${ZENEK_DELTA_AMP}deg -> worst-case own-slide ${worstSlide.toFixed(2)}px`)
@@ -378,24 +353,16 @@ const ZENEK_DELTA_AMP = 1.2 // deg — sized below against the measured lever ar
 
 // ============================================================
 // ENTRANCE — the leap in from below-left. X arrives in one eased move and is
-// DONE when the leap ends; the bounce is vertical only (a landing reads as a
-// bounce, not a wobble, when just one axis rings). The overshoot rises past
-// home, then a damped half-cosine settle decays through two visible beats and
-// hands off to the float's own bob — "he bounces, and that starts the float".
+// done at the apex; the bounce is vertical only (one axis rings, reads as a
+// landing rather than a wobble). A thrown body loses vertical speed
+// LINEARLY (constant gravity), not as a power of remaining distance, so an
+// ease-out curve here bleeds speed early and crawls through the last third
+// of the rise — a ballistic solve keeps it fast until a brief hang right at
+// the top, which is what a jump actually looks like.
 // ============================================================
 const ENTRY_FROM_X = -150, ENTRY_FROM_Y = 265 // fully below the bottom edge, biased left
-const ENTRY_APEX_Y = -16                      // px above home at the top of the arc
-const easeOutCubic = (u) => { u = clamp01(u); return 1 - Math.pow(1 - u, 3) }
+const ENTRY_APEX_Y = -15                      // px above home at the top of the arc
 const easeOutQuad = (u) => { u = clamp01(u); return 1 - (1 - u) * (1 - u) }
-
-// The rise is BALLISTIC, not eased. An ease-out bleeds speed as a power of the
-// remaining distance — easeOutCubic is down to 3% of its launch speed by the
-// time it has covered 85% of the way, so the last third of the leap crawls and
-// reads as lag (reported from the team as "laggy and rough between 38 and 54").
-// A thrown body loses speed LINEARLY instead: it stays fast most of the way and
-// hangs only briefly right at the top, which is what a jump actually looks
-// like. Constant gravity, solved so the apex lands exactly on ENTRY_APEX at
-// zero velocity — which is also what makes the handoff to the settle seamless.
 const ENTRY_RISE = ENTRY_APEX - ENTRY_LAUNCH
 const ENTRY_G = 2 * (ENTRY_FROM_Y - ENTRY_APEX_Y) / (ENTRY_RISE * ENTRY_RISE)
 function entryY(t) {
@@ -405,35 +372,29 @@ function entryY(t) {
     const dt = t - ENTRY_LAUNCH
     return ENTRY_FROM_Y - ENTRY_G * ENTRY_RISE * dt + 0.5 * ENTRY_G * dt * dt
   }
-  // Damped ring down to the float. This form leaves the apex at ZERO velocity,
-  // matching the ballistic arc's own apex exactly — the old settle started with
-  // ~1px/frame of velocity against a rise that had stopped, and that mismatch
-  // is a visible hitch at the top of the jump.
+  // Damped ring-down that leaves the apex at ZERO velocity, matching the
+  // ballistic rise's own apex exactly — no hitch handing off from rise to
+  // settle.
   const dt = t - ENTRY_APEX
   const span = ENTRY_SETTLE_END - ENTRY_APEX
-  const lambda = Math.log(45) / span
-  const omega = Math.PI / (span / 2.4)
+  const lambda = Math.log(40) / span
+  const omega = Math.PI / (span / 2.3)
   return ENTRY_APEX_Y * Math.exp(-lambda * dt) * (Math.cos(omega * dt) + (lambda / omega) * Math.sin(omega * dt))
 }
-// X travels its whole distance during the rise and is done at the apex, so the
-// settle is purely vertical — a body that is still sliding sideways while it
-// rings vertically reads as drift, not as a landing.
 function entryX(t) {
   if (t >= ENTRY_APEX) return 0
   if (t <= ENTRY_LAUNCH) return ENTRY_FROM_X
   return ENTRY_FROM_X * (1 - easeOutQuad((t - ENTRY_LAUNCH) / ENTRY_RISE))
 }
-// The canopy answers the leap: banks into the rise, recoils through the ring
-// down, and is quiet again before the float's own pendulum reads.
+// The canopy answers the leap: banks into the rise, recoils through the
+// ring-down, and is quiet again before the float's own pendulum reads.
 function entryBank(t) {
-  const rise = -6.5 * bump(t, ENTRY_LAUNCH, ENTRY_RISE)
-  const recoil = 2.4 * bump(t, ENTRY_APEX, ENTRY_SETTLE_END - ENTRY_APEX)
+  const rise = -6 * bump(t, ENTRY_LAUNCH, ENTRY_RISE)
+  const recoil = 2.2 * bump(t, ENTRY_APEX, ENTRY_SETTLE_END - ENTRY_APEX)
   return rise + recoil
 }
-// The idle FADES IN across the settle instead of running at full amplitude
-// underneath the jump. A 3.4px bob and a 3.6deg pendulum added to a ballistic
-// arc is exactly the kind of two-signals-fighting that reads as roughness; the
-// brief's own logic is that the bounce is what STARTS the float, so the float
+// The idle FADES IN across the settle rather than running at full amplitude
+// underneath the jump — the bounce is what starts the float, so the float
 // arrives as the bounce decays.
 const floatBlend = (t) => smoothstep((t - ENTRY_APEX) / (ENTRY_SETTLE_END - ENTRY_APEX))
 function swayAngle(t) {
@@ -443,25 +404,26 @@ function swayAngle(t) {
 }
 function zenekDeltaAngle(t) {
   const antic = -0.3 * bump(t, ANTIC_START + 3, ANTIC_DUR) // trails the disc's own anticipation
-  const exitSettle = ramp(t, EXIT_START + 5, EXIT_DUR, 5, smoothstep) // "settles a beat later" through the exit too
+  const exitSettle = ramp(t, EXIT_START + 5, EXIT_DUR, 5, smoothstep) // settles a beat later through the exit too
   return ZENEK_DELTA_AMP * sin2pi(t, SWAY_PERIOD, -ZENEK_DELTA_LAG_DEG) + antic + exitSettle
 }
 function bobX(t) { return BOB_AMP_X * sin2pi(t, BOB_PERIOD, 90) * floatBlend(t) }
 function bobY(t) { return BOB_AMP_Y * sin2pi(t, BOB_PERIOD) * floatBlend(t) }
 function exitPosX(t) {
-  const antic = -7 * bump(t, ANTIC_START, ANTIC_DUR)
-  return (t <= ANTIC_START ? 0 : antic) + ramp(t, EXIT_START, EXIT_DUR, 420, easeInQuad)
+  const antic = -6 * bump(t, ANTIC_START, ANTIC_DUR)
+  return (t <= ANTIC_START ? 0 : antic) + ramp(t, EXIT_START, EXIT_DUR, 320, easeInQuad)
 }
 function exitPosY(t) {
-  const antic = 4 * bump(t, ANTIC_START, ANTIC_DUR)
-  return (t <= ANTIC_START ? 0 : antic) + ramp(t, EXIT_START, EXIT_DUR, -130, smoothstep)
+  const antic = 3 * bump(t, ANTIC_START, ANTIC_DUR)
+  return (t <= ANTIC_START ? 0 : antic) + ramp(t, EXIT_START, EXIT_DUR, -105, smoothstep)
 }
 
 // ============================================================
 // RIG NULLS
 // ============================================================
-// Step 1, not 2: the entrance moves ~9px/frame, and 2-frame linear segments
-// across a curve that fast facet visibly. compress() drops the flat runs again.
+// Step 1, not 2: the entrance moves several px/frame, and 2-frame linear
+// segments across a curve that fast facet visibly. compress() drops the
+// flat runs again.
 const bobRigPts = sampleDense((t) => [entryX(t) + bobX(t) + exitPosX(t), entryY(t) + bobY(t) + exitPosY(t), 0], 0, OP, 1)
 const bobRigInd = pushNull({ nm: 'bob-rig', ks: { a: { a: 0, k: [0, 0, 0] }, p: bakedProp(bobRigPts), s: { a: 0, k: [100, 100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } } })
 
@@ -483,21 +445,19 @@ const zenekBreatheInd = pushNull({
 
 // ============================================================
 // CHECKMARK (frontmost). Ring draws with its own pen-down/pen-up ink marks:
-// Ellipse 2242 sits exactly at the ring path's OWN start coordinate
-// (274.998, 121.718 vs the circle's center (272.5, 119.5) — a 3.4px offset,
-// i.e. drawn AT the pen-down point, not just "near" the ring) so it pops as
-// the trim BEGINS; Vector_7 + Vector_8 sit at the ring path's OWN end
-// coordinate (172.235, 33.6396, inside their ~163-193 x / 25-41 y bbox) so
-// they pop as the trim FINISHES. The ring's own gradient is real (four
-// distinct stops) and stays a static `gs`; the tail's gradient (paint1) has
-// two identical stops and flattens to a flat stroke color.
+// Ellipse 2242 sits at the ring path's OWN start coordinate (274.998,
+// 121.718 vs the circle's declared center 272.5, 119.5 — a small, real
+// offset, i.e. drawn AT the pen-down point) so it pops as the trim BEGINS;
+// Vector_7 + Vector_8 sit at the ring path's OWN end coordinate (172.235,
+// 33.6396) so they pop as the trim FINISHES. The ring's own gradient (four
+// distinct stops) stays a real gradient stroke; the tail's gradient has two
+// identical stops and is a flat stroke color either way.
 // ============================================================
-// A tick is HANDWRITING: the pen starts at the left tip, drops into the
-// valley, and pulls up-right — always left to right. The source path is
-// authored from the RIGHT tip (Figma's export order), so revealing it with a
-// straight trim draws the stroke backwards — visibly wrong to anyone who has
-// watched a checkbox tick. Reverse the vertex order (in/out tangents swap
-// roles) so trim-from-start IS pen order.
+// A tick is HANDWRITING: pen down at the left tip, into the valley, up-right
+// to finish — always left to right. This source path is authored from the
+// right tip (export order), so a straight trim would draw it backwards.
+// Reverse the vertex order (in/out tangents swap roles) so trim-from-start
+// IS pen order.
 function reverseSubpath(sp) {
   return {
     closed: sp.closed,
@@ -517,12 +477,12 @@ function reverseSubpath(sp) {
   pushLayer({ nm: 'check-tail', shapes, ks: baseTransform() })
 }
 {
-  // The ellipse is authored at the ORIGIN of shape space, so the anchor must
-  // stay [0,0] and only the POSITION carries it home. Setting anchor=position
-  // cancels the transform and paints the dot at the canvas corner instead —
-  // and animating scale around that misplaced anchor SLIDES the "pop" along
-  // the corner-to-home ray. An ink mark pops IN PLACE: anchor at its own
-  // center, always.
+  // The ellipse is authored at the origin of its own shape space, so the
+  // anchor must stay [0,0] and only POSITION carries it home — anchor equal
+  // to position over origin-space geometry cancels the transform and paints
+  // the dot at the canvas corner, and animating scale around that misplaced
+  // anchor slides the "pop" along the corner-to-home ray instead of growing
+  // it in place.
   const c = [CHECK_START_DOT.cx, CHECK_START_DOT.cy]
   const shapes = [group('check-ring-start-dot', [
     { ty: 'el', nm: 'el', p: { a: 0, k: [0, 0] }, s: { a: 0, k: [CHECK_START_DOT.r * 2, CHECK_START_DOT.r * 2] } },
@@ -561,7 +521,8 @@ for (const [nm, id] of [['check-ring-end-dot', 'Vector_8'], ['check-ring-end-blo
 }
 
 // ============================================================
-// HANDS — contact weld to the disc, zero clock of their own.
+// HANDS — contact weld to the disc, zero clock of their own: they are the
+// grip point, not an independently posed part.
 // ============================================================
 for (const [nm, hc] of [['hand-right', HAND_RIGHT], ['hand-left', HAND_LEFT]]) {
   const shapes = [group(nm, [{ ty: 'el', nm: 'el', p: { a: 0, k: [0, 0] }, s: { a: 0, k: [hc.r * 2, hc.r * 2] } }, fillItem('#222222')])]
@@ -570,18 +531,13 @@ for (const [nm, hc] of [['hand-right', HAND_RIGHT], ['hand-left', HAND_LEFT]]) {
 
 // ============================================================
 // ZENEK — pupils (frontmost) > face > body (backmost), matching the source
-// SVG's own paint order (getting this backwards hides the face behind a
-// solid body mass — a documented, easy-to-miss failure mode, only visible
-// zoomed in). Face patch parented to zenek-breathe rides the body's own
-// deformation, per the brief. Pupils carry a shared blink on top, placed at
-// a rest beat of the sway's own cycle (T/4 is the sway's peak, a natural
-// momentary calm — blinking exactly at an apex reads intentional), clear of
-// the loop boundary.
+// SVG's own paint order. Face patch parented to zenek-breathe rides the
+// body's own deformation, per the brief. Pupils carry a shared blink placed
+// at a rest beat well clear of the float's own boundaries.
 // ============================================================
 // A blink CLOSES, and it is fast (motion-taste gate 17): the lid reaches
-// ZERO — the eyes are GONE for a beat — over ~7 frames, closing faster than
-// it opens. The canonical recipe-character-rig form, not a slow squint.
-const BLINK_AT = 150, BLINK_CLOSE = 2, BLINK_HOLD_F = 2, BLINK_OPEN = 4
+// ZERO for a beat, ~7 frames total, closing faster than it opens.
+const BLINK_AT = 176, BLINK_CLOSE = 2, BLINK_HOLD_F = 2, BLINK_OPEN = 4
 function blinkAmount(t) { // 1 = fully closed
   const dt = t - BLINK_AT
   if (dt <= -BLINK_CLOSE || dt >= BLINK_HOLD_F + BLINK_OPEN) return 0
@@ -627,16 +583,16 @@ for (const [nm, id] of [['zenek-pupil-a', 'Fill 6'], ['zenek-pupil-b', 'Fill 8']
 // SHADOW — reads bob-rig's own vertical bob directly, zeroed at rest: wider
 // + lighter as the assembly rises, fading out through the exit.
 // ============================================================
-const SHADOW_SCALE_AMP = 9, SHADOW_OP_AMP = 14, SHADOW_BASE_OP = 36
+const SHADOW_SCALE_AMP = 8, SHADOW_OP_AMP = 13, SHADOW_BASE_OP = 34
 const shadowSub = subs('Fill 10')
 const shadowBbox = bboxOf(shadowSub)
 const shadowCenter = bboxCenter(shadowBbox)
 function riseSignal(t) { return -bobY(t) / BOB_AMP_Y } // +1 = fully risen, 0 at rest
 const shadowScalePts = sampleDense((t) => { const s = 100 + SHADOW_SCALE_AMP * riseSignal(t); return [s, s, 100] }, 0, OP)
 const shadowOpPts = sampleDense((t) => {
-  // No shadow before its owner: it materializes through the landing beat
-  // (starting as the leap crests, full by mid-bounce), and fades again
-  // through the exit. A shadow on an empty stage would leak the entrance.
+  // No shadow before its owner: it materializes through the landing beat and
+  // fades again through the exit — a shadow on an empty stage would leak
+  // the entrance.
   const arrive = smoothstep((t - (ENTRY_APEX - 8)) / 26)
   const fade = 1 - clamp01((t - SHADOW_FADE_START) / (SHADOW_FADE_END - SHADOW_FADE_START))
   return (SHADOW_BASE_OP - SHADOW_OP_AMP * riseSignal(t)) * arrive * fade
@@ -660,51 +616,33 @@ layers[layers.length - 2].ks.o = bakedProp(shadowOpPts) // matte fades too, so t
 // ============================================================
 // CLOUDS — the ONE cloud set, kept alive for the whole timeline. Near and
 // far clouds wrap independently (near completes more laps than far in the
-// same T -> nearer-reads-faster parallax, free from the wrap mechanics
-// alone, no separate speed constant). Exit/enter offsets computed from each
-// cloud+dash group's OWN measured bbox on this 375-wide canvas, not guessed.
-// A whole number of laps lands the last keyframe exactly on t=T by
-// construction (traveled = laps*lapDistance algebraically), so the float
-// loop closes with no rounding-drift risk. SUCCESS continues at that same
-// exit velocity (continuity across the T seam) then brakes to a stop.
+// same span -> nearer-reads-faster parallax, free from the wrap mechanics
+// alone). Exit/enter offsets computed from each cloud+dash group's OWN
+// measured bbox, not guessed.
 // ============================================================
-// TILED SCROLL — no teleport anywhere in the data (recipe-camera-scene-motion,
-// "Ambient Scroll"). Each cloud set is emitted as N copies spaced exactly one
-// lap apart, every copy carrying the SAME monotonic leftward translation: as
-// one copy leaves the left edge the next is already where it began. A wrap
-// teleport would be simpler to write, but its jump is a real value change that
-// anything resampling or rescaling time (the app's duration/speed controls, a
-// player running on display refresh) can land inside and DRAW — reported from
-// the field as the sky sweeping backwards across the canvas. Tiling has no
-// jump to land inside.
-//
-// travelled(t): constant speed until CLOUD_DECEL_START, then the integral of a
-// quadratic brake — velocity matches the run at the seam and reaches exactly
-// zero, after which the sky holds dead still while the checkmark draws.
+// travelled(t): constant speed until CLOUD_DECEL_START, then the integral of
+// a quadratic brake — velocity matches the run at the seam and reaches
+// exactly zero, after which the sky holds dead still while the check draws.
 function travelled(t, pxPerFrame) {
   if (t <= CLOUD_DECEL_START) return pxPerFrame * t
   const run = pxPerFrame * CLOUD_DECEL_START
   const u = clamp01((t - CLOUD_DECEL_START) / CLOUD_DECEL_DUR)
-  // ∫v(1-u)² du · DUR = v·DUR·(1-(1-u)³)/3
+  // integral of v*(1-u)^2 du * DUR = v*DUR*(1-(1-u)^3)/3
   return run + pxPerFrame * CLOUD_DECEL_DUR * (1 - Math.pow(1 - u, 3)) / 3
 }
-// LAP = the canvas width. The source sky is SPARSE — one near cloud and one
-// far cloud — and the tile spacing is what preserves that: at a full canvas
-// width apart, only one copy of each set is substantially on screen at a time
-// (a second shows only as it enters while the first leaves). A lap shorter
-// than the canvas tiles the sky densely and reads as "doubled, tripled",
-// which is not the artwork. Coverage is still guaranteed for any
-// lap < W + cloudWidth, so a gap can never open.
+// LAP = the canvas width, not the field's own width (recipe-camera-scene-
+// motion, "How far apart"): the source sky is sparse (one near cloud, one
+// far cloud), and a shorter lap tiles it densely — duplicated art, not a
+// sky. Parallax comes from SPEED (the lap-count ratio), never a shorter lap
+// on one depth layer.
 const LAP = W
-// Speed is DERIVED from the LOOP, not chosen. The "float" marker is a segment
-// runtimes repeat until the app's success trigger fires, so the sky has to
-// come back to the same PICTURE across it — which means crossing a whole
-// number of laps per loop, not landing on the same number (each tile ends one
-// lap along, standing in for the one ahead of it; the rendered frame is
-// identical). Because the stop's distance-time is exactly 2x the loop span,
-// the same speed also lands a tile on its NATIVE position when the sky rests,
-// so the frozen sky under the checkmark IS the final source artwork.
-// Parallax is the lap-count ratio: near crosses 2 laps per loop, far 1.
+// Speed is DERIVED from the float loop, not chosen: the "float" marker is a
+// segment runtimes repeat, so the sky must cross a whole number of laps per
+// loop (each tile ends one lap along, standing in for the one ahead of it —
+// the rendered picture is identical). Because the brake's distance-time is
+// exactly 2x the loop span (by construction above), the same speed also
+// lands a tile on its NATIVE position when the sky rests, so the frozen sky
+// under the checkmark IS the final source artwork.
 const cloudSpeedFor = (lapsPerLoop) => (lapsPerLoop * LAP) / FLOAT_SPAN
 function cloudLayer(nm, ids, lapsPerLoop) {
   const pxPerFrame = cloudSpeedFor(lapsPerLoop)
@@ -712,7 +650,7 @@ function cloudLayer(nm, ids, lapsPerLoop) {
   const bumpSp = subs(ids.bump)[0]
   const dashL = subs(ids.dashL)[0], dashR = subs(ids.dashR)[0]
   const dashLC = bboxCenter(bboxOf([dashL])), dashRC = bboxCenter(bboxOf([dashR]))
-  const stretchPts = sampleDense((t) => { const b = bump(t, DASH_STRETCH_START, DASH_STRETCH_DUR); return [100 + 170 * Math.pow(b, 1.3), 100, 100] }, 0, OP)
+  const stretchPts = sampleDense((t) => { const b = bump(t, DASH_STRETCH_START, DASH_STRETCH_DUR); return [100 + 150 * Math.pow(b, 1.25), 100, 100] }, 0, OP)
   for (let i = 0; i <= laps; i++) {
     const shapes = [
       group(`${nm}-bump`, [shapeFromSubpath(bumpSp, `${nm}-bump-path`), strokeItem('#222222', 2)]),

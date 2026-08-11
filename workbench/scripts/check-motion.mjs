@@ -773,7 +773,7 @@ function tiledAmbientGroups() {
     if (off > 2 && !ok) {
       fail(
         `AMBIENT RESTS OFF-SOURCE  ${base} comes to rest ${off.toFixed(1)}px from where the artwork drew it — the final frame is not the source composition`,
-        'Two conditions, not one: speed = laps x lap / loopSpan closes the repeatable segment, and the brake\'s DISTANCE-TIME (for a cubic brake, decelStart + decelDur/3) must be a whole multiple of that same loopSpan so the field halts on a lap boundary. Size the loop span from where the sky stops — loopSpan = distanceTime / k — rather than picking it first. See recipe-camera-scene-motion, "Ambient Scroll".',
+        'Two conditions, not one: speed = laps x lap / loopSpan closes the repeatable segment, and the brake\'s DISTANCE-TIME (for a cubic brake, decelStart + decelDur/3) must be a whole multiple of that same loopSpan so the field halts on a lap boundary. Size the loop span from where the sky stops — loopSpan = distanceTime / k — rather than picking it first. See recipe-camera-scene-motion, "Ambient Scroll". IF THE BRIEF ASKS the field to leave — drift away, empty out, scatter — then resting off-source is CORRECT: declare { layer, reason } in controls.json quoting the brief, and do not reshape the motion to satisfy this check.',
       )
     } else if (ok && off > 2) {
       allowed.push(`${base} rests ${off.toFixed(1)}px off source — declared: ${ok.reason}`)
