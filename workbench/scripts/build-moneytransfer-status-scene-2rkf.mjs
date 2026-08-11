@@ -4,9 +4,9 @@
  * chapterization-transition-grammar.md) money-transfer status scene, staged
  * exactly as the brief's beats order it: the OPENING frame is clouds alone,
  * drifting right-to-left from frame 0 (ENTRY, 0..20); Zenek leaps in from
- * below-left under his hatched canopy disc, overshoots, and bounces into his
- * float (20..92); he floats left-of-center while the sky streams past
- * (FLOAT, marker "float", 92..T); then he sails off the right edge in an
+ * below-left under his hatched canopy disc on a BALLISTIC arc, overshoots,
+ * and rings down into his float (20..96); he floats left-of-center while the
+ * sky streams past (FLOAT, marker "float", 96..T); then he sails off the right edge in an
  * accelerating upward arc while the clouds BRAKE to a dead stop, and a
  * hand-drawn green checkmark draws itself — pen order, left to right — into
  * the frozen sky he vacates (SUCCESS, marker "success", T..op, one-shot).
@@ -77,9 +77,9 @@ const W = 375, H = 240, FPS = 60
 // The opening frame shows exactly the brief's opening cast; an arrival is an
 // ENTRANCE, never a pre-placed actor waiting for his cue.
 // ============================================================
-const ENTRY_HOLD = 20                      // 0-20: clouds alone own the stage
-const ENTRY_LEAP = [20, 58]                // leap in from below-left, rising past home
-const ENTRY_SETTLE_END = 92                // bounce decays; the float owns him from here
+const ENTRY_LAUNCH = 20                    // 0-20: clouds alone own the stage
+const ENTRY_APEX = 52                      // top of the ballistic arc, above his float height
+const ENTRY_SETTLE_END = 96                // the ring-down ends; the float owns him from here
 const T = 240                              // FLOAT phase ends, 4.0s — marker "float" covers the settled span
 const ANTIC_START = T, ANTIC_DUR = 14      // 240-254: small opposite lean + pull-back
 const EXIT_START = 254, EXIT_DUR = 56      // 254-310: accelerating upward-right arc off frame
@@ -89,11 +89,19 @@ const RING_DRAW = [318, 348]
 const RING_START_POP = [318, 328]          // Ellipse 2242 sits AT the ring path's own start point
 const RING_END_POP = [336, 348]            // Vector_7/Vector_8 sit AT the ring path's own end point
 const TAIL_DRAW = [348, 362]
-// Clouds brake WHILE Zenek flies away (brief: "clouds slowly slowing down as
-// he flies"), reaching a dead stop exactly at the ring's pen-down — the
-// checkmark draws over a frozen sky, matching the final source artwork.
-const CLOUD_DECEL_START = EXIT_START, CLOUD_DECEL_DUR = RING_DRAW[0] - EXIT_START // 254-318
+// Clouds hold their pace a beat into Zenek's exit, then brake to a dead stop
+// exactly at the ring's pen-down — the checkmark draws over a frozen sky,
+// matching the final source artwork.
+//
+// The 273/45 split is DERIVED, not styled. travelled() reaches
+// CLOUD_DECEL_START + CLOUD_DECEL_DUR/3 at the stop, and that distance-time
+// must be exactly TWICE the float loop's own span, so one speed can satisfy
+// both closures at once: whole laps across the repeatable segment AND a whole
+// number of laps by the time the sky rests (which is what puts a tile back on
+// its native position under the checkmark). 273 + 45/3 = 288 = 2 x 144.
+const CLOUD_DECEL_START = 273, CLOUD_DECEL_DUR = 45 // stops at 318, the ring's pen-down
 const OP = 366                             // 6.1s total — hold 362-366 on the settled checkmark
+const FLOAT_SPAN = T - ENTRY_SETTLE_END    // 144 — the repeatable segment every float clock must divide
 
 // ============================================================
 // SVG path -> Lottie bezier vertex list
@@ -334,11 +342,16 @@ const discCenter = bboxCenter(discBbox)
 const discR = (discBbox[2] - discBbox[0]) / 2
 const HARNESS_PIVOT = [discCenter[0], discCenter[1] - 85] // implied line above the canopy
 
-const SWAY_PERIOD = T            // one full pendulum cycle per float loop
+// Every float clock must divide the REPEATABLE span, not the whole comp. The
+// "float" marker is 96..240 — 144 frames — so a period of 80 (three cycles of
+// the old 0..240 window) now lands mid-cycle at the loop point and the sky is
+// not the only thing that would jump. Periods below divide 144 exactly, and
+// stay mutually non-trivial (1 : 3 : 4) so nothing peaks in unison.
+const SWAY_PERIOD = FLOAT_SPAN       // 1 pendulum cycle per float loop
 const SWAY_AMP = 3.6             // deg — "a few degrees"
-const BOB_PERIOD = 80            // 3 cycles per float loop (T/80 = 3, non-trivial vs sway's 1)
+const BOB_PERIOD = FLOAT_SPAN / 3    // 48 — 3 cycles per loop
 const BOB_AMP_X = 1.6, BOB_AMP_Y = 3.4 // px — "bobs a few px"
-const BREATHE_PERIOD = 48        // 5 cycles per float loop (48:80 = 3:5, non-trivial)
+const BREATHE_PERIOD = FLOAT_SPAN / 4 // 36 — 4 cycles per loop (4:3 against the bob)
 const BREATHE_AMP = 2.4          // % non-uniform scale swell, area-conserving pair
 const EXIT_TILT = 18             // deg — disc banks into the travel direction on exit
 
@@ -371,44 +384,70 @@ const ZENEK_DELTA_AMP = 1.2 // deg — sized below against the measured lever ar
 // hands off to the float's own bob — "he bounces, and that starts the float".
 // ============================================================
 const ENTRY_FROM_X = -150, ENTRY_FROM_Y = 265 // fully below the bottom edge, biased left
-const ENTRY_OVERSHOOT = -14                   // px above home at the top of the leap
-const ENTRY_BOUNCE_HALF = 17                  // frames per bounce half-cycle
+const ENTRY_APEX_Y = -16                      // px above home at the top of the arc
 const easeOutCubic = (u) => { u = clamp01(u); return 1 - Math.pow(1 - u, 3) }
-function entryX(t) {
-  if (t >= ENTRY_LEAP[1]) return 0
-  if (t <= ENTRY_LEAP[0]) return ENTRY_FROM_X
-  return ENTRY_FROM_X * (1 - easeOutCubic((t - ENTRY_LEAP[0]) / (ENTRY_LEAP[1] - ENTRY_LEAP[0])))
-}
+const easeOutQuad = (u) => { u = clamp01(u); return 1 - (1 - u) * (1 - u) }
+
+// The rise is BALLISTIC, not eased. An ease-out bleeds speed as a power of the
+// remaining distance — easeOutCubic is down to 3% of its launch speed by the
+// time it has covered 85% of the way, so the last third of the leap crawls and
+// reads as lag (reported from the team as "laggy and rough between 38 and 54").
+// A thrown body loses speed LINEARLY instead: it stays fast most of the way and
+// hangs only briefly right at the top, which is what a jump actually looks
+// like. Constant gravity, solved so the apex lands exactly on ENTRY_APEX at
+// zero velocity — which is also what makes the handoff to the settle seamless.
+const ENTRY_RISE = ENTRY_APEX - ENTRY_LAUNCH
+const ENTRY_G = 2 * (ENTRY_FROM_Y - ENTRY_APEX_Y) / (ENTRY_RISE * ENTRY_RISE)
 function entryY(t) {
-  if (t <= ENTRY_LEAP[0]) return ENTRY_FROM_Y
-  if (t < ENTRY_LEAP[1]) {
-    const u = (t - ENTRY_LEAP[0]) / (ENTRY_LEAP[1] - ENTRY_LEAP[0])
-    return ENTRY_FROM_Y + (ENTRY_OVERSHOOT - ENTRY_FROM_Y) * easeOutCubic(u)
-  }
+  if (t <= ENTRY_LAUNCH) return ENTRY_FROM_Y
   if (t >= ENTRY_SETTLE_END) return 0
-  const dt = t - ENTRY_LEAP[1]
-  const decay = Math.exp(-Math.log(Math.abs(ENTRY_OVERSHOOT)) * dt / (ENTRY_SETTLE_END - ENTRY_LEAP[1]))
-  return ENTRY_OVERSHOOT * decay * Math.cos(Math.PI * dt / ENTRY_BOUNCE_HALF)
+  if (t <= ENTRY_APEX) {
+    const dt = t - ENTRY_LAUNCH
+    return ENTRY_FROM_Y - ENTRY_G * ENTRY_RISE * dt + 0.5 * ENTRY_G * dt * dt
+  }
+  // Damped ring down to the float. This form leaves the apex at ZERO velocity,
+  // matching the ballistic arc's own apex exactly — the old settle started with
+  // ~1px/frame of velocity against a rise that had stopped, and that mismatch
+  // is a visible hitch at the top of the jump.
+  const dt = t - ENTRY_APEX
+  const span = ENTRY_SETTLE_END - ENTRY_APEX
+  const lambda = Math.log(45) / span
+  const omega = Math.PI / (span / 2.4)
+  return ENTRY_APEX_Y * Math.exp(-lambda * dt) * (Math.cos(omega * dt) + (lambda / omega) * Math.sin(omega * dt))
 }
-// The canopy answers the leap: banks into the rise, recoils on the landing
-// beat, and is quiet again before the float's own pendulum reads.
+// X travels its whole distance during the rise and is done at the apex, so the
+// settle is purely vertical — a body that is still sliding sideways while it
+// rings vertically reads as drift, not as a landing.
+function entryX(t) {
+  if (t >= ENTRY_APEX) return 0
+  if (t <= ENTRY_LAUNCH) return ENTRY_FROM_X
+  return ENTRY_FROM_X * (1 - easeOutQuad((t - ENTRY_LAUNCH) / ENTRY_RISE))
+}
+// The canopy answers the leap: banks into the rise, recoils through the ring
+// down, and is quiet again before the float's own pendulum reads.
 function entryBank(t) {
-  const rise = -6.5 * bump(t, ENTRY_LEAP[0], ENTRY_LEAP[1] - ENTRY_LEAP[0])
-  const recoil = 2.4 * bump(t, ENTRY_LEAP[1], ENTRY_SETTLE_END - ENTRY_LEAP[1])
+  const rise = -6.5 * bump(t, ENTRY_LAUNCH, ENTRY_RISE)
+  const recoil = 2.4 * bump(t, ENTRY_APEX, ENTRY_SETTLE_END - ENTRY_APEX)
   return rise + recoil
 }
+// The idle FADES IN across the settle instead of running at full amplitude
+// underneath the jump. A 3.4px bob and a 3.6deg pendulum added to a ballistic
+// arc is exactly the kind of two-signals-fighting that reads as roughness; the
+// brief's own logic is that the bounce is what STARTS the float, so the float
+// arrives as the bounce decays.
+const floatBlend = (t) => smoothstep((t - ENTRY_APEX) / (ENTRY_SETTLE_END - ENTRY_APEX))
 function swayAngle(t) {
   const antic = -0.5 * SWAY_AMP * bump(t, ANTIC_START, ANTIC_DUR)
   const exitTilt = ramp(t, EXIT_START, EXIT_DUR, EXIT_TILT, easeInQuad)
-  return SWAY_AMP * sin2pi(t, SWAY_PERIOD) + entryBank(t) + antic + exitTilt
+  return SWAY_AMP * sin2pi(t, SWAY_PERIOD) * floatBlend(t) + entryBank(t) + antic + exitTilt
 }
 function zenekDeltaAngle(t) {
   const antic = -0.3 * bump(t, ANTIC_START + 3, ANTIC_DUR) // trails the disc's own anticipation
   const exitSettle = ramp(t, EXIT_START + 5, EXIT_DUR, 5, smoothstep) // "settles a beat later" through the exit too
   return ZENEK_DELTA_AMP * sin2pi(t, SWAY_PERIOD, -ZENEK_DELTA_LAG_DEG) + antic + exitSettle
 }
-function bobX(t) { return BOB_AMP_X * sin2pi(t, BOB_PERIOD, 90) }
-function bobY(t) { return BOB_AMP_Y * sin2pi(t, BOB_PERIOD) }
+function bobX(t) { return BOB_AMP_X * sin2pi(t, BOB_PERIOD, 90) * floatBlend(t) }
+function bobY(t) { return BOB_AMP_Y * sin2pi(t, BOB_PERIOD) * floatBlend(t) }
 function exitPosX(t) {
   const antic = -7 * bump(t, ANTIC_START, ANTIC_DUR)
   return (t <= ANTIC_START ? 0 : antic) + ramp(t, EXIT_START, EXIT_DUR, 420, easeInQuad)
@@ -421,15 +460,17 @@ function exitPosY(t) {
 // ============================================================
 // RIG NULLS
 // ============================================================
-const bobRigPts = sampleDense((t) => [entryX(t) + bobX(t) + exitPosX(t), entryY(t) + bobY(t) + exitPosY(t), 0], 0, OP)
+// Step 1, not 2: the entrance moves ~9px/frame, and 2-frame linear segments
+// across a curve that fast facet visibly. compress() drops the flat runs again.
+const bobRigPts = sampleDense((t) => [entryX(t) + bobX(t) + exitPosX(t), entryY(t) + bobY(t) + exitPosY(t), 0], 0, OP, 1)
 const bobRigInd = pushNull({ nm: 'bob-rig', ks: { a: { a: 0, k: [0, 0, 0] }, p: bakedProp(bobRigPts), s: { a: 0, k: [100, 100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } } })
 
-const discSwayPts = sampleDense((t) => swayAngle(t), 0, OP)
+const discSwayPts = sampleDense((t) => swayAngle(t), 0, OP, 1)
 const discSwayInd = pushNull({
   nm: 'disc-sway', parent: bobRigInd,
   ks: { a: { a: 0, k: [HARNESS_PIVOT[0], HARNESS_PIVOT[1], 0] }, p: { a: 0, k: [HARNESS_PIVOT[0], HARNESS_PIVOT[1], 0] }, s: { a: 0, k: [100, 100, 100] }, r: bakedProp(discSwayPts), o: { a: 0, k: 100 } },
 })
-const zenekLagPts = sampleDense((t) => zenekDeltaAngle(t), 0, OP)
+const zenekLagPts = sampleDense((t) => zenekDeltaAngle(t), 0, OP, 1)
 const zenekLagInd = pushNull({
   nm: 'zenek-lag', parent: discSwayInd,
   ks: { a: { a: 0, k: [zenekCentroid[0], zenekCentroid[1], 0] }, p: { a: 0, k: [zenekCentroid[0], zenekCentroid[1], 0] }, s: { a: 0, k: [100, 100, 100] }, r: bakedProp(zenekLagPts), o: { a: 0, k: 100 } },
@@ -596,7 +637,7 @@ const shadowOpPts = sampleDense((t) => {
   // No shadow before its owner: it materializes through the landing beat
   // (starting as the leap crests, full by mid-bounce), and fades again
   // through the exit. A shadow on an empty stage would leak the entrance.
-  const arrive = smoothstep((t - (ENTRY_LEAP[1] - 8)) / 26)
+  const arrive = smoothstep((t - (ENTRY_APEX - 8)) / 26)
   const fade = 1 - clamp01((t - SHADOW_FADE_START) / (SHADOW_FADE_END - SHADOW_FADE_START))
   return (SHADOW_BASE_OP - SHADOW_OP_AMP * riseSignal(t)) * arrive * fade
 }, 0, OP)
@@ -647,29 +688,48 @@ function travelled(t, pxPerFrame) {
   // ∫v(1-u)² du · DUR = v·DUR·(1-(1-u)³)/3
   return run + pxPerFrame * CLOUD_DECEL_DUR * (1 - Math.pow(1 - u, 3)) / 3
 }
-function cloudLayer(nm, ids, pxPerFrame) {
+// LAP = the canvas width. The source sky is SPARSE — one near cloud and one
+// far cloud — and the tile spacing is what preserves that: at a full canvas
+// width apart, only one copy of each set is substantially on screen at a time
+// (a second shows only as it enters while the first leaves). A lap shorter
+// than the canvas tiles the sky densely and reads as "doubled, tripled",
+// which is not the artwork. Coverage is still guaranteed for any
+// lap < W + cloudWidth, so a gap can never open.
+const LAP = W
+// Speed is DERIVED from the LOOP, not chosen. The "float" marker is a segment
+// runtimes repeat until the app's success trigger fires, so the sky has to
+// come back to the same PICTURE across it — which means crossing a whole
+// number of laps per loop, not landing on the same number (each tile ends one
+// lap along, standing in for the one ahead of it; the rendered frame is
+// identical). Because the stop's distance-time is exactly 2x the loop span,
+// the same speed also lands a tile on its NATIVE position when the sky rests,
+// so the frozen sky under the checkmark IS the final source artwork.
+// Parallax is the lap-count ratio: near crosses 2 laps per loop, far 1.
+const cloudSpeedFor = (lapsPerLoop) => (lapsPerLoop * LAP) / FLOAT_SPAN
+function cloudLayer(nm, ids, lapsPerLoop) {
+  const pxPerFrame = cloudSpeedFor(lapsPerLoop)
+  const laps = Math.round(travelled(OP, pxPerFrame) / LAP)
   const bumpSp = subs(ids.bump)[0]
   const dashL = subs(ids.dashL)[0], dashR = subs(ids.dashR)[0]
   const dashLC = bboxCenter(bboxOf([dashL])), dashRC = bboxCenter(bboxOf([dashR]))
   const stretchPts = sampleDense((t) => { const b = bump(t, DASH_STRETCH_START, DASH_STRETCH_DUR); return [100 + 170 * Math.pow(b, 1.3), 100, 100] }, 0, OP)
-  const bbox = bboxOf([bumpSp, dashL, dashR])
-  const lap = (bbox[2] - bbox[0]) + 44 // own width + the gap that reads as continuous sky
-  const copies = Math.ceil(travelled(OP, pxPerFrame) / lap) + 1
-  for (let i = 0; i < copies; i++) {
+  for (let i = 0; i <= laps; i++) {
     const shapes = [
       group(`${nm}-bump`, [shapeFromSubpath(bumpSp, `${nm}-bump-path`), strokeItem('#222222', 2)]),
       group(`${nm}-dash-l`, [shapeFromSubpath(dashL, `${nm}-dash-l-path`), strokeItem('#222222', 2)], { p: dashLC, a: dashLC, s: bakedProp(stretchPts) }),
       group(`${nm}-dash-r`, [shapeFromSubpath(dashR, `${nm}-dash-r-path`), strokeItem('#222222', 2)], { p: dashRC, a: dashRC, s: bakedProp(stretchPts) }),
     ]
-    const pts = sampleDense((t) => [i * lap - travelled(t, pxPerFrame), 0, 0], 0, OP)
+    const pts = sampleDense((t) => [i * LAP - travelled(t, pxPerFrame), 0, 0], 0, OP)
     pushLayer({ nm: `${nm}-${i}`, shapes, ks: { ...baseTransform(), p: bakedProp(pts) } })
   }
+  const perLoop = (travelled(T, pxPerFrame) - travelled(ENTRY_SETTLE_END, pxPerFrame)) / LAP
+  console.log(`${nm}: ${pxPerFrame.toFixed(2)}px/f, ${laps + 1} tiles, ${perLoop.toFixed(3)} laps per float loop, `
+    + `rests ${(laps * LAP - travelled(OP, pxPerFrame)).toFixed(2)}px from native`)
 }
-// Calm register: the near layer crosses the sky in ~2.8s, the far layer at
-// half that speed — parallax is the RATIO between the two, one constant each.
-const NEAR_V = 2.2, FAR_V = 1.1 // px/frame
-cloudLayer('cloud-near', { bump: 'Vector', dashL: 'Vector_2', dashR: 'Vector_3' }, NEAR_V)
-cloudLayer('cloud-far', { bump: 'Vector_4', dashL: 'Vector_6', dashR: 'Vector_5' }, FAR_V)
+// Near crosses two canvas widths before the sky rests, far crosses one — the
+// 2:1 lap ratio IS the parallax, and both land on their native position.
+cloudLayer('cloud-near', { bump: 'Vector', dashL: 'Vector_2', dashR: 'Vector_3' }, 2)
+cloudLayer('cloud-far', { bump: 'Vector_4', dashL: 'Vector_6', dashR: 'Vector_5' }, 1)
 
 // ============================================================
 // Markers, doc assembly

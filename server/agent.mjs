@@ -185,6 +185,7 @@ const LIVING_MOTION_CONTRACT =
   `can land inside and DRAW, sweeping the field backwards across frame. Render ` +
   `frame 0 and READ it against the brief's opening sentence: same picture, or the ` +
   `entrance beat was silently deleted.\n` +
+  `  - Every clock divides the REPEATABLE SPAN, not the composition. When a scene declares a marker segment runtimes replay (an idle/float loop), that segment — not the full op — is what each period must divide, and the segment's first and last frame must render as the SAME PICTURE. Verify with: node scripts/check-loop-seam.mjs <slug> (exit 0), never by comparing keyframes — a scrolling field's per-layer values differ across a CLEAN seam by design, each tile one whole lap along and standing in for the one ahead of it.\n` +
   `  - Ink follows the pen. A hand-drawn tick strokes LEFT to right, pen-down to pen-up ` +
   `(reverse an export path authored from the right tip; a ring/circle sweep is exempt).\n` +
   `  - Scale pivots ON its artwork. ANY element whose scale animates — a pop-in dot, a ` +

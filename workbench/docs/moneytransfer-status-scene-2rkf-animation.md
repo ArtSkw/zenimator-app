@@ -168,3 +168,46 @@ Gates added so this cannot ship again: AMBIENT DRIFT REVERSES (a steady field
 that travels >15% against its own net direction) and WRAP IS INTERPOLATABLE
 (any offscreen jump left on smooth interpolation rather than a hold key).
 Both were proven red against a replica of the old pattern.
+
+## Sky density, entrance quality, and the loop seam (2026-08-11)
+
+Team feedback: clouds read as "doubled, tripled" and too slow; the entrance
+felt "laggy and rough between frames 38 and 54".
+
+**Sky.** The tiling lap was the field's own width (188px), so 2-3 copies sat
+on a 375px canvas at once — the source sky is TWO clouds, one upper, one
+lower. Lap is now the full canvas width: at most one copy of each set is
+substantially on screen, and coverage is still guaranteed for any
+lap < W + cloudWidth, so no gap can open.
+
+Speed is now DERIVED rather than picked. Two closures have to hold at once:
+the repeatable "float" segment must cross a whole number of laps (so a
+runtime replaying it sees the same picture), and the total distance by the
+time the sky brakes must also be a whole number of laps (so a tile rests on
+its NATIVE position and the frozen sky under the checkmark IS the final
+source artwork). Both fall out of one speed once the stop's distance-time is
+exactly twice the loop span — which is what fixed CLOUD_DECEL_START/DUR at
+273/45 (273 + 45/3 = 288 = 2 x 144). Near crosses 2 laps per loop, far 1;
+that ratio is the parallax. Both rest 0.00px from native.
+
+**Entrance.** The rise was easeOutCubic, which bleeds speed as a power of the
+remaining distance: down to 3% of launch speed after covering 85% of the way,
+so the last third crawled — exactly the flagged 38-54 window. Replaced with a
+BALLISTIC rise (constant gravity, solved so the apex lands on ENTRY_APEX at
+zero velocity): speed now falls linearly 19.6 -> 0, still 7.15px/f at frame
+40. The settle is a damped ring-down whose form leaves the apex at zero
+velocity too, so the handoff has no hitch (the old one started the bounce
+with ~1px/f against a rise that had stopped). X finishes at the apex, so the
+ring-down is purely vertical. The float's own bob/sway now FADE IN across the
+settle instead of running at full amplitude underneath the jump. Sampling
+went to step 1 on every track carrying the entrance — 2-frame linear segments
+facet visibly at 9px/frame.
+
+**Loop seam.** Moving the float marker to 96..240 (span 144) left every float
+clock tuned to the OLD 0..240 window: bob period 80 divides 240 but not 144.
+All float periods now divide the span (1:3:4 — sway 144, bob 48, breathe 36).
+New `scripts/check-loop-seam.mjs` proves it by PIXEL-DIFFING the segment's
+boundary frames: keyframe comparison is actively misleading here, because a
+clean scrolling seam has every tile one whole lap along, standing in for the
+one ahead of it. Tolerance is 40/255 — a passing scene shows AA jitter up to
+21 on a few edge pixels, a real break measures ~200 across hundreds.
