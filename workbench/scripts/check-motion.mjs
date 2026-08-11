@@ -662,6 +662,55 @@ for (const l of shapeLayers.filter((x) => AMBIENT_RE.test(x.nm ?? ''))) {
   }
 }
 
+// ── A field that stops, stops ON its source position ─────────────────────────
+// A sequence built from several source artworks is meant to END on the last
+// one. When an ambient field brakes to a halt under the payoff, every tile
+// must come to rest a whole number of laps from where the artwork drew it —
+// otherwise the final frame is the right composition with the sky in the
+// wrong place, which reads as "close, but not the source file".
+//
+// Landing there needs TWO conditions, and satisfying only the first is the
+// trap: deriving speed from the loop span closes the loop but says nothing
+// about where the field stops. The brake's distance-time must ALSO be a whole
+// multiple of that span. (Measured on a generated scene that closed its loop
+// perfectly and still rested 106px and 135px off source.)
+{
+  const tiled = new Map()
+  for (const l of shapeLayers) {
+    const m = /^(.*?)-(-?\d+)$/.exec(l.nm ?? '')
+    if (!m || !AMBIENT_RE.test(m[1]) || l.ks?.p?.a !== 1) continue
+    if (!tiled.has(m[1])) tiled.set(m[1], [])
+    tiled.get(m[1]).push({ layer: l, i: Number(m[2]) })
+  }
+  const last = doc.op ?? 0
+  for (const [base, tiles] of tiled) {
+    if (tiles.length < 2) continue
+    tiles.sort((a, b) => a.i - b.i)
+    const x = (t, l) => evalProp(l.ks.p, t, [0, 0])[0]
+    const lap = (x(0, tiles[1].layer) - x(0, tiles[0].layer)) / (tiles[1].i - tiles[0].i)
+    if (!Number.isFinite(lap) || Math.abs(lap) < 1) continue
+    // Only fields that actually come to rest: still drifting at the end means
+    // there is no resting position to be right or wrong about.
+    const speedAtEnd = Math.abs(x(last, tiles[0].layer) - x(last - 2, tiles[0].layer)) / 2
+    if (speedAtEnd > 0.05) continue
+    let off = Infinity
+    for (const t of tiles) {
+      const r = ((x(last, t.layer) % lap) + Math.abs(lap)) % Math.abs(lap)
+      off = Math.min(off, r, Math.abs(lap) - r)
+    }
+    const ok = declaredLayer(base)
+    console.log(`\nAmbient rest: ${base} halts ${off.toFixed(1)}px from its source position (lap ${Math.abs(lap).toFixed(0)}px)`)
+    if (off > 2 && !ok) {
+      fail(
+        `AMBIENT RESTS OFF-SOURCE  ${base} comes to rest ${off.toFixed(1)}px from where the artwork drew it — the final frame is not the source composition`,
+        'Two conditions, not one: speed = laps x lap / loopSpan closes the repeatable segment, and the brake\'s DISTANCE-TIME (for a cubic brake, decelStart + decelDur/3) must be a whole multiple of that same loopSpan so the field halts on a lap boundary. Size the loop span from where the sky stops — loopSpan = distanceTime / k — rather than picking it first. See recipe-camera-scene-motion, "Ambient Scroll".',
+      )
+    } else if (ok && off > 2) {
+      allowed.push(`${base} rests ${off.toFixed(1)}px off source — declared: ${ok.reason}`)
+    }
+  }
+}
+
 // ── Wrap teleports happen offscreen ──────────────────────────────────────────
 // An ambient field (clouds, traffic, waves) wraps by TELEPORTING back across
 // the canvas between two near-coincident keys. Legitimate only while nobody

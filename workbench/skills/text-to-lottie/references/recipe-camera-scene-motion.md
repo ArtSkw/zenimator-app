@@ -131,7 +131,41 @@ makes the loop read clean:
   comparing individual layer keyframes — the per-tile numeric "mismatch"
   (each tile off by exactly its own lap) is expected and correct on a
   passing scene, and only a picture-level diff tells that apart from a real
-  seam break.
+  seam break. `scripts/check-loop-seam.mjs` does exactly this.
+
+**And when the field BRAKES TO A STOP under a payoff, it must halt on a lap
+boundary — its source position.** A sequence assembled from several artworks
+is supposed to end on the last one; a field that stops a third of a lap out
+gives the right composition with the sky in the wrong place. This is a SECOND
+condition, and satisfying only the loop one is the trap — a generated scene
+closed its loop perfectly and still rested 106px and 135px off source.
+
+Let `S` be the repeatable span and `D` the brake's DISTANCE-TIME: the time
+that, multiplied by the running speed, equals the total distance travelled. For
+a cubic brake (velocity ∝ `(1-u)²`) starting at `decelStart` and lasting
+`decelDur`, the integral gives
+
+```
+D = decelStart + decelDur / 3          // distance-time, in frames
+speed = lapsPerLoop * lap / S          // closes the repeatable segment
+total = speed * D = lapsPerLoop * lap * D / S
+```
+
+`total` is a whole number of laps exactly when `lapsPerLoop * D / S` is an
+integer — and the clean way to guarantee that for ANY lap count is
+
+```
+D = k * S     for a small integer k
+```
+
+Note what this means: **the loop span is derived from where the sky stops, not
+chosen first.** `S = D / k`. Picking `S` for the idle's own sake and then
+discovering `D` lands at `1.64 * S` leaves nothing to tune — the lap count
+cannot rescue a bad ratio (it multiplies both sides), and neither can the lap
+distance (it cancels). Only the brake profile offers slack: velocity ∝
+`(1-u)^n` integrates to `decelDur / (n+1)`, so `n` shifts `D` continuously if
+the beats are otherwise fixed. `check-motion.mjs` fails AMBIENT RESTS
+OFF-SOURCE.
 
 ## Common Failure Modes
 
