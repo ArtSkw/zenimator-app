@@ -233,3 +233,26 @@ profile has slack (`(1-u)^n` integrates to `decelDur/(n+1)`). In this scene
 
 Gate: AMBIENT RESTS OFF-SOURCE, which infers each tiled group's lap from its
 sibling spacing and only applies to fields that actually come to rest.
+
+## The tile lap is the CANVAS width (2026-08-11, regression)
+
+The duplicated-cloud defect came back on a fresh generation: `cloud-far` tiled
+at a 139px lap on a 375px canvas — 2.7 copies of the same cloud sharing the
+screen. `cloud-near` at 294px was borderline (1.3), which is why only the
+upper cloud looked wrong.
+
+Cause was mine. When this scene was rebuilt I changed it to `LAP = W` and
+explained the sparseness reasoning in THIS script's comments — but the recipe's
+code sample still read `const lap = fieldBbox.width + gap`. The engine followed
+the recipe, exactly as it should. A rule that lives only in one build script is
+not a rule; it is a coincidence that scene happens to satisfy.
+
+Valid window is `[W, W + fieldWidth]`: the lower bound keeps the field sparse,
+the upper keeps a gap from opening. Parallax must come from the whole-lap COUNT
+per loop, never from a shorter lap on one depth layer — which also means
+parallax ratios are ratios of small integers (2:1 here).
+
+Gate: AMBIENT TILES TOO DENSE / AMBIENT TILING LEAVES A GAP. Verified red on
+the generated scene (139px and 294px laps) and green here, where both sets run
+lap = W = 375 with 2 and 1 laps per loop and rest 0.0px from source — all four
+ambient requirements satisfied simultaneously, so none of them is a trap.

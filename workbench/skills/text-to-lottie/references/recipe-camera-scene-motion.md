@@ -61,8 +61,10 @@ is exactly where A began. There is no jump anywhere in the data, so nothing
 downstream can interpolate one.
 
 ```js
-// One lap = the field's own width + the gap that makes it read as continuous.
-const lap = fieldBbox.width + gap
+// LAP = THE CANVAS WIDTH. Not the field's own width — see "How far apart"
+// below; a lap narrower than the canvas puts the same cloud on screen two or
+// three times at once and reads as duplicated artwork, not as a sky.
+const lap = W
 const copies = Math.ceil((pxPerFrame * OP) / lap) + 1   // enough to cover the run
 for (let i = 0; i < copies; i++) {
   // Copy i starts one lap to the RIGHT of copy i-1 and drifts left forever.
@@ -80,6 +82,39 @@ for (let i = 0; i < copies; i++) {
 brake's integral once the brief stops it. Speed lives in ONE constant per
 depth layer (`pxPerFrame`); parallax is the RATIO between layers (a far layer
 at half the near layer's speed), never a second unrelated clock.
+
+### How far apart — the lap is the CANVAS width, not the field's
+
+Spacing tiles by the artwork's own width is the intuitive choice and it is
+wrong. The source sky holds a fixed number of clouds — often just two, one
+high and one low. Tile them 190px apart on a 375px canvas and three copies of
+the same cloud share the screen: the sky reads as duplicated artwork rather
+than as the drawing that was handed over. Reported twice from the field, the
+second time after this very code sample taught it.
+
+```
+lap >= W                    // no more than one copy substantially on screen
+lap <= W + fieldWidth       // coverage: a gap can never open
+```
+
+The valid window is `[W, W + fieldWidth]`, and `lap = W` is the default worth
+reaching for. The lower bound is what keeps the sky sparse; the upper bound is
+what keeps it from emptying. Note the two bounds are per FIELD, so a wide
+field and a narrow one can share `lap = W` happily.
+
+Do NOT try to buy parallax by giving one depth layer a shorter lap — that
+tiles it densely, which is the defect above. Parallax comes from SPEED
+(the lap-count ratio), and both layers keep a lap of `W`.
+`check-motion.mjs` fails AMBIENT TILES TOO DENSE.
+
+Because every layer shares `lap = W` and each must cross a WHOLE number of
+laps per loop, **parallax ratios are ratios of small integers** — 2:1 from
+lap counts 2 and 1, 3:2 from 3 and 2. That is a real constraint, not a
+limitation to design around: pick the ratio first, then the lap counts.
+
+All four requirements hold at once, so none of them is a trap — the reference
+scene runs `lap = W = 375` on both layers, 2 and 1 laps per loop (2:1
+parallax), zero reverse travel, and both sets resting 0.0px from source.
 
 Why not the wrap-teleport that looks so much simpler — drift left, then jump
 back to the right between two near-coincident keyframes:
