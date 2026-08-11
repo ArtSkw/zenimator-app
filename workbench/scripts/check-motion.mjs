@@ -662,6 +662,52 @@ for (const l of shapeLayers.filter((x) => AMBIENT_RE.test(x.nm ?? ''))) {
   }
 }
 
+// ── Tiles sit at least a canvas apart ────────────────────────────────────────
+// Spacing a scrolling field by the artwork's OWN width is the intuitive choice
+// and it duplicates the picture: three copies of the same cloud share a 375px
+// canvas at a 139px lap, and the sky stops reading as the drawing that was
+// handed over. The valid window is [W, W + fieldWidth] — the lower bound keeps
+// it sparse, the upper bound keeps a gap from opening. Parallax comes from
+// SPEED, never from giving one depth layer a shorter lap.
+function tiledAmbientGroups() {
+  const groups = new Map()
+  for (const l of shapeLayers) {
+    const m = /^(.*?)-(-?\d+)$/.exec(l.nm ?? '')
+    if (!m || !AMBIENT_RE.test(m[1]) || l.ks?.p?.a !== 1) continue
+    if (!groups.has(m[1])) groups.set(m[1], [])
+    groups.get(m[1]).push({ layer: l, i: Number(m[2]) })
+  }
+  for (const tiles of groups.values()) tiles.sort((a, b) => a.i - b.i)
+  return groups
+}
+{
+  const W = doc.w ?? 0
+  for (const [base, tiles] of tiledAmbientGroups()) {
+    if (tiles.length < 2 || !W) continue
+    const x = (t, l) => evalProp(l.ks.p, t, [0, 0])[0]
+    const lap = Math.abs((x(0, tiles[1].layer) - x(0, tiles[0].layer)) / (tiles[1].i - tiles[0].i))
+    if (!Number.isFinite(lap) || lap < 1) continue
+    const bb = bboxOf(tiles[0].layer)
+    const fieldW = bb ? bb.x1 - bb.x0 : 0
+    const ok = declaredLayer(base)
+    const perScreen = W / lap
+    console.log(`\nAmbient tiling: ${base} lap ${lap.toFixed(0)}px on a ${W}px canvas (${perScreen.toFixed(1)} copies per screen, artwork ${fieldW.toFixed(0)}px)`)
+    if (lap < W - 1 && !ok) {
+      fail(
+        `AMBIENT TILES TOO DENSE  ${base} repeats every ${lap.toFixed(0)}px on a ${W}px canvas — ${perScreen.toFixed(1)} copies of the same artwork share the screen, which reads as duplicated art, not as a sky`,
+        `Space tiles a full canvas apart (lap = ${W}), not by the field's own width. The valid window is [${W}, ${(W + fieldW).toFixed(0)}] — the lower bound keeps the field sparse, the upper keeps a gap from opening. Parallax comes from SPEED (the lap-count ratio), never from a shorter lap on one depth layer.`,
+      )
+    } else if (fieldW > 0 && lap > W + fieldW + 1 && !ok) {
+      fail(
+        `AMBIENT TILING LEAVES A GAP  ${base} repeats every ${lap.toFixed(0)}px but its artwork is only ${fieldW.toFixed(0)}px wide on a ${W}px canvas — the field empties out between copies`,
+        `Bring the lap back inside [${W}, ${(W + fieldW).toFixed(0)}]; lap = ${W} is the default.`,
+      )
+    } else if (ok && (lap < W - 1 || (fieldW > 0 && lap > W + fieldW + 1))) {
+      allowed.push(`${base} tiles at ${lap.toFixed(0)}px — declared: ${ok.reason}`)
+    }
+  }
+}
+
 // ── A field that stops, stops ON its source position ─────────────────────────
 // A sequence built from several source artworks is meant to END on the last
 // one. When an ambient field brakes to a halt under the payoff, every tile
