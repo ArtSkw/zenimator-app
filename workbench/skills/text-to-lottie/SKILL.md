@@ -179,6 +179,25 @@ Before finishing:
    Every entry needs a reason: the point is to state intent where a reviewer
    can see it, never to mute the gate. A scene whose exceptions outnumber its
    welds is usually a rig that was never assembled.
+
+   **THE BRIEF OUTRANKS EVERY GATE.** These checks encode what a scene should
+   do when the brief is SILENT — they exist to catch what you did not intend,
+   never to overrule what the designer asked for. Source fidelity is the
+   DEFAULT resting state, not a law: when the brief says something flies away,
+   fades out, walks off, scatters, or that the frame empties, then that IS the
+   correct final state and a gate objecting to it is the thing that is wrong.
+   Declare it, quoting the brief's own sentence as the reason:
+
+   ```json
+   "motionExceptions": [
+     { "layer": "cloud-far", "reason": "brief: 'the sky empties as he leaves' — the field is meant to drift out, not rest on the source position" }
+   ]
+   ```
+
+   Never quietly reshape the motion to make a gate pass. A scene that
+   satisfies every check while contradicting the brief has failed at the only
+   thing that matters; a scene that matches the brief and carries one honest
+   declaration has not.
 8. **If the scene declares a repeatable marker segment, run
    `node scripts/check-loop-seam.mjs <slug>` — it must exit 0.** It renders the
    segment's first and last frame and DIFFS THE PICTURES. Comparing keyframes
