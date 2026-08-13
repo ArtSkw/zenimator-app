@@ -17,7 +17,7 @@ import { AttachmentStrip } from '@/components/generate/AttachmentStrip'
 import { ZoomableStage } from '@/components/generate/StageZoom'
 import { useGenerateStore, useBakedLottieJson, setupSignature, type Subject, type Kind } from '@/store/generateStore'
 import { useGeneratePlayback } from '@/store/generatePlaybackStore'
-import { useStudioFeed, feedChannelFor } from '@/store/studioFeedStore'
+import { useStudioFeed } from '@/store/studioFeedStore'
 import { useStudioEditBridge } from '@/store/studioEditBridge'
 import { useProjectsStore } from '@/store/projectsStore'
 import { usePendingJobs, stopJob } from '@/store/pendingJobsStore'
@@ -307,8 +307,10 @@ export function GenerateView() {
   // an editable draft, so the composer comes back ready to re-run.
   const stoppedDraft = !!activeJob?.stopped && !lottieJson
   // Which run's activity this view is showing. Feeds live per project, so
-  // browsing away from a build and back replays that job's own history.
-  const feedChannel = feedChannelFor(activeProjectId)
+  // browsing away from a build and back replays that job's own history — and
+  // every run owns a project from its first click (auto-propose included), so
+  // there is no project-less activity to show.
+  const feedChannel = activeProjectId
 
   // Apply control overrides onto the base Lottie for live preview — each control
   // re-writes the keyframes it was derived from (duration, visibility…).
@@ -394,6 +396,25 @@ export function GenerateView() {
     if (activeSlugRef.current) void studioCancel(activeSlugRef.current)
   }
 
+  /**
+   * How a run reports progress, bound to the project it belongs to.
+   *
+   * The routing policy — status reaches the job row ALWAYS, and this view only
+   * while it's the project on screen — is what keeps a backgrounded run's
+   * progress intact without letting it write over whatever the user opened
+   * instead. One home for it, so generate and propose can't drift apart.
+   */
+  const reporterFor = (projectId: string) => {
+    const isForeground = () => useProjectsStore.getState().activeProjectId === projectId
+    return {
+      isForeground,
+      publishStage: (line: string) => {
+        usePendingJobs.getState().setStage(projectId, line)
+        if (isForeground()) setStage(line)
+      },
+    }
+  }
+
   /** Optional capabilities this run depends on — gated on the /health features
    *  handshake with a clear message, never a silent failure and never a quiet
    *  downgrade (an old engine would degrade intro-loop to a plain entry, or
@@ -419,13 +440,33 @@ export function GenerateView() {
       ? { svgs: groundings.map((g) => ({ name: g.name, svg: g.svgText })) }
       : { svg: groundings[0].svgText }
 
-  const handleGenerate = async ({ resume = false }: { resume?: boolean } = {}) => {
-    if (!canGenerate || groundings.length === 0) return
+  /**
+   * `brief` / `adopt` are the auto-propose chain: the studio has just written
+   * the brief and the run it belongs to already owns a project row and a live
+   * feed, so this call continues that run rather than starting a second one.
+   *
+   * Returns whether it took ownership of the run. Every `false` is a bail-out
+   * BEFORE any state was touched — which is what lets the chain settle a row
+   * this call declined to pick up, instead of leaving it spinning forever.
+   */
+  const handleGenerate = async ({ resume = false, brief, adopt }: {
+    resume?: boolean; brief?: string; adopt?: string
+  } = {}): Promise<boolean> => {
+    // A chained call carries its own brief: React hasn't committed setPrompt
+    // yet, so the closure's `prompt` — and with it canGenerate — is one tick
+    // stale and would refuse a perfectly valid run.
+    const intent = (brief ?? prompt).trim()
+    // canGenerate already covers artwork + a non-empty prompt, so it IS the
+    // rule on the direct path. The chained path can't use it (its brief hasn't
+    // reached the store yet) and checks the same two facts against `intent`.
+    if (adopt ? groundings.length === 0 || !intent : !canGenerate) return false
     // Preflight the engine so a disconnected teammate gets the connect modal
     // immediately, not a multi-minute run against an unreachable/unauthorized engine.
     // One /health serves both the reachability gate and the capability gate.
+    // Re-run even on the chained call: the propose that preceded it cleared
+    // this gate a minute ago, which says nothing about the engine right now.
     const { status, features } = await studioPreflight()
-    if (status !== 'ok') { useEngineConnect.getState().show(status); return }
+    if (status !== 'ok') { useEngineConnect.getState().show(status); return false }
     // Identity snapshot at CLICK time: regenerating an open project evolves
     // THAT project even if the user browses elsewhere during the run.
     const openId = useProjectsStore.getState().activeProjectId
@@ -439,33 +480,47 @@ export function GenerateView() {
     // Code session and the scene folder by it. A fresh slug would resume
     // nothing — it would silently become a normal generation in a new folder.
     const resuming = resume && !!priorJob?.stopped && !!priorJob.studioSlug
-    if (!capabilitiesReady(features, { resume: resuming })) return
+    if (!capabilitiesReady(features, { resume: resuming })) return false
     const ac = new AbortController()
     abortRef.current = ac
     startGenerating()
-    markJobStart()
-    const intent = prompt.trim()
+    // An adopted run started when its PROPOSE did. Re-stamping here would reset
+    // the heartbeat's "· 2m 10s in" to the build phase alone, leaving it
+    // disagreeing with the feed header's total on the same screen.
+    if (!adopt) markJobStart()
+    // The signature the RESULT is stamped with has to describe the brief this
+    // run actually built from. Reading the render-time closure would stamp the
+    // chained run with the empty pre-propose prompt, and the finished scene
+    // would announce itself stale the instant it landed.
+    const runSignature = setupSignature({ subject, kind, prompt: intent, groundings })
     // The project exists from this moment — named, listed and openable — so a
     // multi-minute run behaves like a chat session instead of something that
     // only materialises if you stay on the screen. `projectId` is captured
     // HERE and everything below writes to it, whatever the user opens next.
-    const projectId = evolving?.id ?? stoppedDraftId ?? crypto.randomUUID()
+    const projectId = adopt ?? evolving?.id ?? stoppedDraftId ?? crypto.randomUUID()
     const studioSlug = resuming ? priorJob!.studioSlug : studioSlugFor(deriveProjectName(intent) || 'scene')
     // The feed is this JOB's — it keeps streaming into the project's own
     // channel while the user reads another project, and is still whole when
-    // they come back.
-    beginFeed(projectId)
+    // they come back. A chained run's feed is ALREADY live and holds the
+    // propose it grew out of; restarting it here would erase that half.
+    if (!adopt) beginFeed(projectId)
     const pending = usePendingJobs.getState()
+    // The row this run continues, when it is continuing one. An adopted row is
+    // mid-flight: it was named from the artwork before a brief existed and is
+    // already showing a status line, and both must survive the phase boundary
+    // rather than flipping to "Untitled" / "Setting up the studio…" for the gap
+    // between the brief landing and the build's first event.
+    const adopted = adopt ? pending.jobs[projectId] : undefined
     pending.start({
       id: projectId,
-      name: evolving?.name ?? (deriveProjectName(intent) || 'Untitled'),
+      name: adopted?.name ?? evolving?.name ?? (deriveProjectName(intent) || 'Untitled'),
       prompt: intent,
       subject,
       kind,
       groundings: useGenerateStore.getState().groundings,
       studioSlug,
-      startedAt: Date.now(),
-      stage: null,
+      startedAt: adopted?.startedAt ?? Date.now(),
+      stage: adopted?.stage ?? null,
       error: null,
       abort: () => ac.abort(),
     })
@@ -479,13 +534,7 @@ export function GenerateView() {
         updateProject(projectId, { name: title })
       })
     }
-    /** True while the user is still looking at the project this job builds. */
-    const isForeground = () => useProjectsStore.getState().activeProjectId === projectId
-    /** Status line goes to the job row always, to this view only in front. */
-    const publishStage = (line: string) => {
-      usePendingJobs.getState().setStage(projectId, line)
-      if (isForeground()) setStage(line)
-    }
+    const { isForeground, publishStage } = reporterFor(projectId)
     try {
       const { createStudioStatusLine } = await import('@/engine/studio/studioStatus')
       const statusLine = createStudioStatusLine('generate')
@@ -522,7 +571,7 @@ export function GenerateView() {
       // that finishes while they're browsing elsewhere must not yank the
       // canvas out from under them. It lands in the project either way.
       if (isForeground()) {
-        setResult(json, signature, kind, controls, labels)
+        setResult(json, runSignature, kind, controls, labels)
         // The raw controls.json travels with the scene — slot autoFit specs
         // (padding/min/max) live only there.
         useGenerateStore.getState().setAgentControlsJson(done.controlsJson ?? null)
@@ -574,7 +623,7 @@ export function GenerateView() {
           usePendingJobs.getState().finish(projectId)
         }
         if (isForeground()) resetStatus()
-        return
+        return true
       }
       const msg = humanizeLlmError(err)
       // Keep the row so the failure is visible and readable later, rather than
@@ -587,8 +636,21 @@ export function GenerateView() {
       activeSlugRef.current = null
       finishFeed(projectId)
     }
+    // Ran, whatever the outcome — the row has been settled above either way.
+    return true
   }
 
+  /**
+   * Auto-propose is PHASE ZERO of a normal run, not a separate mode: one click
+   * on the artwork and the studio writes the brief, then builds it, without
+   * handing the user back a composer in between.
+   *
+   * So it owns a project from the first click exactly as Generate does — a row
+   * in the sidebar, the building screen, a working slug and a Stop that means
+   * it. The brief field on that screen fills in the moment the studio finishes
+   * writing it, which is also the user's cue to Stop if it read the artwork
+   * wrong. Everything after that is `handleGenerate`, adopting this run.
+   */
   const handlePropose = async () => {
     if (groundings.length === 0 || proposing || generating) return
     const { status, features } = await studioPreflight()
@@ -597,37 +659,101 @@ export function GenerateView() {
     const ac = new AbortController()
     abortRef.current = ac
     setProposing(true)
-    // A propose runs against whatever is open — a saved project's channel, or
-    // the draft channel when the composer is still blank.
-    const channel = feedChannelFor(useProjectsStore.getState().activeProjectId)
-    beginFeed(channel)
+    // `startGenerating` (not just the local flag) so the run reads as a run
+    // everywhere: the heartbeat covers the quiet stretches, and Stop has a
+    // status to reset.
+    startGenerating()
     markJobStart()
+
+    const projectId = crypto.randomUUID()
+    const proposeSlug = studioSlugFor('propose')
+    activeSlugRef.current = proposeSlug
+    // The row and the feed belong to the WHOLE run — propose and build share
+    // them, so the elapsed clock and the activity log span both phases.
+    beginFeed(projectId)
+    usePendingJobs.getState().start({
+      id: projectId,
+      // No brief exists to name this yet, so the artwork names it; studioTitle
+      // polishes it once the build phase has a brief to read.
+      name: nameFromArtwork(groundings),
+      prompt: '',
+      subject,
+      kind,
+      groundings: useGenerateStore.getState().groundings,
+      studioSlug: proposeSlug,
+      startedAt: Date.now(),
+      stage: null,
+      error: null,
+      abort: () => ac.abort(),
+    })
+    useProjectsStore.getState().setActiveProjectId(projectId)
+
+    const { isForeground, publishStage } = reporterFor(projectId)
+    publishStage(readingArtwork(groundings.length))
+
+    // Phase one — write the brief. The try covers ONLY this: once the build
+    // takes over it owns its own failures, and catching them here would settle
+    // the row twice and blame the propose for something it didn't do.
+    let brief: string
     try {
       const { createStudioStatusLine } = await import('@/engine/studio/studioStatus')
-      const statusLine = createStudioStatusLine('generate')
-      const slug = studioSlugFor('propose')
-      activeSlugRef.current = slug
-      const text = await studioPropose(
-        { slug, ...svgPayload() },
+      // 'propose', not 'generate': phase one runs for minutes on a dense SVG,
+      // and borrowing the build's vocabulary would have it claim to be rigging
+      // a puppet while it is still reading paths and typing the brief.
+      const statusLine = createStudioStatusLine('propose')
+      brief = await studioPropose(
+        { slug: proposeSlug, ...svgPayload() },
         (e) => {
           lastEventAt.current = Date.now()
-          pushFeed(channel, e)
+          pushFeed(projectId, e)
           const line = statusLine(e)
-          if (line) setStage(line)
+          if (line) publishStage(line)
         },
         ac.signal,
       )
-      setPrompt(text)
     } catch (err) {
+      // Nothing was authored yet, so there is no draft worth keeping: drop the
+      // row and hand the composer back with the artwork still attached.
+      usePendingJobs.getState().finish(projectId)
+      useStudioFeed.getState().clear(projectId)
+      if (isForeground()) {
+        useProjectsStore.getState().setActiveProjectId(null)
+        resetStatus()
+      }
       if (!ac.signal.aborted && !(err instanceof Error && err.name === 'StudioCancelled')) {
         toast.error('Could not propose a brief', { description: humanizeLlmError(err) })
       }
+      return
     } finally {
       abortRef.current = null
       activeSlugRef.current = null
       setProposing(false)
-      setStage('')
-      finishFeed(channel)
+    }
+
+    // Only paint the brief if the user is still on this project — it lands on
+    // the job row regardless (handleGenerate writes it there), so browsing away
+    // mid-propose can't have the studio type into another composer.
+    if (isForeground()) setPrompt(brief)
+    // An explicit beat for the handoff. The brief arrives all at once (the
+    // engine only emits it when the propose subprocess exits), so without a
+    // line naming that moment the two phases blur into one long wait and a slow
+    // brief is indistinguishable from a lost one.
+    publishStage('Brief ready — starting the build…')
+
+    // Phase two — the build adopts this run: same project, same feed, no stop
+    // for breath. Two ways it doesn't take: Stop landed during the handoff (the
+    // row's abort is still the propose's, so a cancel in that window arrives
+    // here rather than on the build), or the build declined it — the engine
+    // went away between the phases, or a capability check failed.
+    const started = !ac.signal.aborted && await handleGenerate({ brief, adopt: projectId })
+    if (!started) {
+      // Either way the brief IS written, so settle the row as a draft: the
+      // composer comes back holding it, one Generate away, rather than a row
+      // spinning on work nobody is doing. `stop` is a no-op on a row Stop
+      // already dropped, so this covers both without asking which happened.
+      usePendingJobs.getState().stop(projectId)
+      finishFeed(projectId)
+      if (isForeground()) resetStatus()
     }
   }
 
@@ -870,7 +996,15 @@ export function GenerateView() {
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     {subject} · {kind === 'intro-loop' ? 'Entry + loop' : kind === 'loop' ? 'Loop' : 'Entry'}
                   </p>
-                  <p className="mt-1.5 line-clamp-3 text-sm leading-relaxed text-foreground">{prompt}</p>
+                  {/* The auto-propose chain reaches this screen BEFORE a brief
+                      exists — the studio is still reading the artwork. Say so,
+                      rather than leaving a blank where the brief will be. */}
+                  <p className={cn(
+                    'mt-1.5 text-sm leading-relaxed',
+                    prompt ? 'line-clamp-3 text-foreground' : 'italic text-muted-foreground',
+                  )}>
+                    {prompt || 'Writing the brief from your artwork…'}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2.5 px-4 py-3">
                   <span className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -912,8 +1046,11 @@ export function GenerateView() {
                       onClick={() => {
                         if (!activeJob) return
                         // Keep the project as an editable draft rather than
-                        // deleting it out from under the user.
-                        stopJob(activeJob.id, { keepDraft: true, slug: activeSlugRef.current ?? undefined })
+                        // deleting it out from under the user — unless the
+                        // studio is still writing the brief, where there's
+                        // nothing authored to come back to and the composer
+                        // (which still holds the artwork) is the better landing.
+                        stopJob(activeJob.id, { keepDraft: !proposing, slug: activeSlugRef.current ?? undefined })
                         resetStatus()
                       }}
                     >
@@ -923,17 +1060,17 @@ export function GenerateView() {
                 </div>
               </div>
 
-              {/* Activity sits between the brief and the canvas — the reading
-                  order of the work: what was asked, what's happening, where it
-                  will appear. */}
-              <StudioFeed channel={feedChannel} />
-
               <CanvasPlaceholder
                 busy={!activeJob?.error}
                 title="Your animation will appear here"
                 note={activeJob?.error ? undefined : 'This takes a few minutes — you can browse other projects meanwhile.'}
               />
 
+              {/* Activity is the LAST thing on every screen it appears on —
+                  under the canvas here, under the chat box once a scene
+                  exists. It's reference material you drop to, so it must not
+                  move around between the states of one run. */}
+              {feedChannel && <StudioFeed channel={feedChannel} />}
             </div>
           ) : showFullSetup ? (
             <div className="relative space-y-4 animate-in fade-in-0 duration-300">
@@ -1042,18 +1179,20 @@ export function GenerateView() {
                     </div>
 
                     {generating || proposing ? (
-                      /* Shared busy cluster for generation AND auto-propose:
-                         min-w-0 (not shrink-0) so the status text truncates while
-                         the spinner and Stop keep their size — a long line must
-                         never push Stop out of the composer's overflow clip. */
-                      <div className="ml-auto flex min-w-0 items-center gap-2.5 pl-3">
-                        <span className="flex min-w-0 items-center gap-1.5">
+                      /* Shared busy cluster for generation AND auto-propose.
+                         flex-1 (not ml-auto) so progress reads on the LEFT with
+                         Stop on the right — the same arrangement as the brief
+                         card and the chat box. min-w-0 so the status truncates
+                         while the spinner and Stop keep their size; a long line
+                         must never push Stop out of the composer's clip. */
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5 pl-3">
+                        <span className="flex min-w-0 flex-1 items-center gap-1.5">
                           <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
                           <span
                             key={stageLine ?? 'busy'}
                             className="truncate text-xs text-muted-foreground animate-in fade-in duration-300"
                           >
-                            {stageLine ?? (proposing ? (groundings.length >= 2 ? 'Reading your artworks…' : 'Reading your artwork…') : 'Generating…')}
+                            {stageLine ?? (proposing ? readingArtwork(groundings.length) : 'Generating…')}
                           </span>
                         </span>
                         <Button
@@ -1123,9 +1262,12 @@ export function GenerateView() {
                   className="pressable mx-auto flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
                   <Sparkles size={13} />
+                  {/* Says what it now does: this starts a real run that writes
+                      the brief AND builds from it, so promising only a brief
+                      would under-sell it into a surprise. */}
                   {groundings.length >= 2
-                    ? 'Let the studio propose a story across your artworks'
-                    : 'Let the studio propose a brief from your SVG'}
+                    ? 'Let the studio write the story and animate it'
+                    : 'Let the studio write the brief and animate it'}
                 </button>
               )}
               {stale && !generating && !proposing && (
@@ -1139,13 +1281,14 @@ export function GenerateView() {
                   activity from the partial run stays readable below it. */}
               {stoppedDraft && (
                 <>
-                  <StudioFeed channel={feedChannel} />
                   <CanvasPlaceholder
                     title="Generation stopped"
                     note={canResume
                       ? 'Resume picks the studio back up where it left off — or start over for a clean take.'
                       : 'Your brief and artwork are saved — press Generate to run it again.'}
                   />
+                  {/* Same rule as the building screen: activity last. */}
+                  {feedChannel && <StudioFeed channel={feedChannel} />}
                 </>
               )}
             </div>
@@ -1284,23 +1427,15 @@ export function GenerateView() {
                       className="w-full min-h-[2.5rem] resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
                     />
                   </div>
-                  <div className="flex items-center justify-between gap-2.5 px-3 pb-3 pt-1">
-                    <div className="min-w-0">
-                      {!applying && !isPlaying && momentFrame == null && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="rounded-full gap-1.5 text-xs text-muted-foreground"
-                          onClick={() => setMomentFrame(Math.round(playFrame))}
-                          title="Pin the frame on screen so your next note targets this exact moment — the agent renders it first"
-                        >
-                          <Crosshair size={13} /> Fix this moment
-                        </Button>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2.5">
-                      {applying && (
-                        <span className="flex min-w-0 items-center gap-1.5">
+                  <div className="flex items-center gap-2.5 px-3 pb-3 pt-1">
+                    {/* Progress reads on the LEFT, Stop on the right — the same
+                        arrangement the brief card uses while a scene builds. It
+                        shares the slot with "Fix this moment", which only
+                        offers itself when nothing is running anyway. min-w-0 so
+                        a long status truncates instead of shoving Stop out. */}
+                    <div className="flex min-w-0 flex-1 items-center">
+                      {applying ? (
+                        <span className="flex min-w-0 items-center gap-1.5 pl-1">
                           <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
                           <span
                             key={stage ?? 'apply'}
@@ -1309,17 +1444,29 @@ export function GenerateView() {
                             {stage || 'Applying…'}
                           </span>
                         </span>
+                      ) : (
+                        !isPlaying && momentFrame == null && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="rounded-full gap-1.5 text-xs text-muted-foreground"
+                            onClick={() => setMomentFrame(Math.round(playFrame))}
+                            title="Pin the frame on screen so your next note targets this exact moment — the agent renders it first"
+                          >
+                            <Crosshair size={13} /> Fix this moment
+                          </Button>
+                        )
                       )}
-                      <Button
-                        size="sm"
-                        className="shrink-0 rounded-full gap-1.5 font-semibold"
-                        disabled={applying ? false : !changeText.trim()}
-                        onClick={applying ? handleStop : () => handleAskChange()}
-                      >
-                        {applying ? <Square size={13} /> : <CornerDownLeft size={13} />}
-                        {applying ? 'Stop' : 'Apply'}
-                      </Button>
                     </div>
+                    <Button
+                      size="sm"
+                      className="shrink-0 rounded-full gap-1.5 font-semibold"
+                      disabled={applying ? false : !changeText.trim()}
+                      onClick={applying ? handleStop : () => handleAskChange()}
+                    >
+                      {applying ? <Square size={13} /> : <CornerDownLeft size={13} />}
+                      {applying ? 'Stop' : 'Apply'}
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -1338,7 +1485,7 @@ export function GenerateView() {
               order, so this one stands down to avoid two activity bars. */}
           {!inProgress && !stoppedDraft && (
             <div className="mt-4">
-              <StudioFeed channel={feedChannel} />
+              {feedChannel && <StudioFeed channel={feedChannel} />}
             </div>
           )}
         </div>
@@ -1416,6 +1563,24 @@ function deriveProjectName(prompt: string): string {
     .filter((w) => w.length > 1 && !SKIP.has(w.toLowerCase()))
     .slice(0, 3)
   return words.length > 0 ? words.join(' ') : 'Untitled'
+}
+
+/** The propose phase's opening line, before the engine has sent an event of its
+ *  own to classify. Two readers — the run publishes it to the job row, and the
+ *  composer falls back to it for the tick before that lands. */
+const readingArtwork = (count: number): string =>
+  count >= 2 ? 'Reading your artworks…' : 'Reading your artwork…'
+
+/** A name for a run that has no brief yet — the auto-propose chain, where the
+ *  row appears before the studio has written a word. The artwork's filename is
+ *  the only thing the user has named, so it stands in until studioTitle
+ *  polishes the row once a brief exists. */
+function nameFromArtwork(groundings: { name: string }[]): string {
+  const base = (groundings[0]?.name ?? '')
+    .replace(/\.svg$/i, '')
+    .replace(/[-_]+/g, ' ')
+    .trim()
+  return base || 'Untitled'
 }
 
 /** Placeholder that reflects how the studio reasons about each subject + kind. */

@@ -14,6 +14,11 @@ docs/plan.md
 docs/impl-*.md
 /CLAUDE.md
 
+# Auto-propose scratch — the engine writes the drafted brief here and reads it
+# straight back out; the brief that matters travels to the app, and one of these
+# lands per propose run.
+workbench/assets/*.brief.txt
+
 # OS / editor noise
 .DS_Store
 *.log

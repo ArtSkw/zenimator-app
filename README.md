@@ -85,6 +85,10 @@ Multi-artwork scenes, living companions, and exports that speak every language.
 - **Generate in the background.** A run becomes a project the moment you press
   Generate — browse other projects while it builds, and **Resume** a stopped
   run instead of starting it over.
+- **One click from artwork to animation.** Don't feel like writing a brief?
+  Attach an SVG and let the studio write it: it reads every path, drafts the
+  brief, then carries straight on into building the scene — one run, watchable
+  and stoppable throughout, with the brief on screen as soon as it's written.
 - **Deeper exports.** Lottie JSON · HTML · dotLottie · MP4 · WebM · GIF, plus
   mobile packs for React Native, iOS, Android and Flutter.
 - **Canvas zoom + pan**, controls that reach inside nested compositions, and a

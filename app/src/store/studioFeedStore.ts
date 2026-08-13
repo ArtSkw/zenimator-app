@@ -27,6 +27,10 @@ const MAX_ENTRIES = 300
 
 export type FeedChannel = {
   entries: FeedEntry[]
+  /** Wall clock for the run's own duration. Unlike `touched` these ARE clocks:
+   *  the header reports real elapsed time, which a tick can't express. */
+  startedAt: number | null
+  endedAt: number | null
   /** A job is currently streaming into this channel. */
   live: boolean
   expanded: boolean
@@ -44,10 +48,11 @@ const MAX_IDLE_CHANNELS = 6
 
 /** Returned by reference for channels that have no run, so a selector never
  *  mints a new object per render (which would re-render on every store tick). */
-export const EMPTY_CHANNEL: FeedChannel = { entries: [], live: false, expanded: false, queuedPosition: null, touched: 0 }
+export const EMPTY_CHANNEL: FeedChannel = {
+  entries: [], startedAt: null, endedAt: null,
+  live: false, expanded: false, queuedPosition: null, touched: 0,
+}
 
-/** Runs that don't belong to a project yet — Propose from a blank composer. */
-export const DRAFT_CHANNEL = 'draft'
 
 /** Tool lines worth showing; bare tool names and stderr chatter stay out. */
 function denoise(text: string): string | null {
@@ -110,7 +115,10 @@ export const useStudioFeed = create<StudioFeedState>((set, get) => {
     // Starts collapsed — the header's live pulse says work is happening; the
     // detail stream stays one click away so the initial screen keeps its calm.
     begin: (channel) =>
-      patchAndPrune(channel, { entries: [], live: true, expanded: false, queuedPosition: null }),
+      patchAndPrune(channel, {
+        entries: [], startedAt: Date.now(), endedAt: null,
+        live: true, expanded: false, queuedPosition: null,
+      }),
 
     push: (channel, e) => {
       const current = get().channels[channel] ?? EMPTY_CHANNEL
@@ -138,7 +146,18 @@ export const useStudioFeed = create<StudioFeedState>((set, get) => {
       if (current.queuedPosition !== null) patch(channel, { queuedPosition: null })
     },
 
-    finish: (channel) => patchAndPrune(channel, { live: false, expanded: false }),
+    finish: (channel) => {
+      const current = get().channels[channel]
+      // Guard, not an optimisation: a run's `finally` must not re-mint a
+      // channel that `clear()` just deleted out from under it.
+      if (!current) return
+      patchAndPrune(channel, {
+        live: false, expanded: false,
+        // Never re-stamp a channel that already ended — the elapsed reading
+        // has to freeze where it stopped.
+        endedAt: current.endedAt ?? Date.now(),
+      })
+    },
     setExpanded: (channel, expanded) => patch(channel, { expanded }),
 
     clear: (channel) =>
@@ -155,6 +174,3 @@ export function useFeedChannel(channel: string | null | undefined): FeedChannel 
   return useStudioFeed((s) => (channel ? s.channels[channel] ?? EMPTY_CHANNEL : EMPTY_CHANNEL))
 }
 
-/** The channel a run belongs to: its project, or the draft channel for work
- *  that has no project yet (Propose from a blank composer). */
-export const feedChannelFor = (projectId: string | null | undefined): string => projectId ?? DRAFT_CHANNEL

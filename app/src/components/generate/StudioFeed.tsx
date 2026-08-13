@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Activity, ChevronDown, ChevronUp } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { formatElapsed } from '@/engine/studio/studioHeartbeat'
+import { useNow } from '@/hooks/useNow'
 import { useStudioFeed, useFeedChannel, type FeedEntry } from '@/store/studioFeedStore'
 
 /**
@@ -15,7 +17,7 @@ import { useStudioFeed, useFeedChannel, type FeedEntry } from '@/store/studioFee
  * its own history while the user browses elsewhere.
  */
 export function StudioFeed({ channel }: { channel: string }) {
-  const { entries, live, expanded, queuedPosition } = useFeedChannel(channel)
+  const { entries, startedAt, endedAt, live, expanded, queuedPosition } = useFeedChannel(channel)
   const setExpanded = useStudioFeed((s) => s.setExpanded)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -35,7 +37,7 @@ export function StudioFeed({ channel }: { channel: string }) {
   const summary =
     queuedPosition != null
       ? `Waiting for a studio slot — position ${queuedPosition}`
-      : `Studio activity · ${entries.length} steps${frames > 0 ? ` · ${frames} frames` : ''}`
+      : `Studio activity · ${entries.length} step${entries.length === 1 ? '' : 's'}${frames > 0 ? ` · ${frames} frame${frames === 1 ? '' : 's'}` : ''}`
 
   return (
     <div className="rounded-2xl border border-border bg-card/60 overflow-hidden animate-in fade-in-0 duration-300">
@@ -50,6 +52,7 @@ export function StudioFeed({ channel }: { channel: string }) {
           className={cn('shrink-0', live ? 'text-foreground animate-pulse' : 'text-muted-foreground')}
         />
         <span className="flex-1 truncate text-xs text-muted-foreground">{summary}</span>
+        <Elapsed startedAt={startedAt} endedAt={endedAt} live={live} />
         {expanded ? (
           <ChevronUp size={13} className="shrink-0 text-muted-foreground" />
         ) : (
@@ -80,6 +83,25 @@ export function StudioFeed({ channel }: { channel: string }) {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+/**
+ * The run's own clock, always on rather than only surfacing once the engine
+ * goes quiet (the heartbeat's job) — a wait you can measure is a wait you can
+ * sit through. Freezes at the finish, so it doubles as "what this scene cost".
+ *
+ * Its own component because it is the only thing that ticks: kept in the card,
+ * a 1Hz `setNow` would re-render every feed entry (up to 300 of them, none
+ * memoised) once a second to move one number.
+ */
+function Elapsed({ startedAt, endedAt, live }: { startedAt: number | null; endedAt: number | null; live: boolean }) {
+  const now = useNow(live)
+  if (startedAt === null) return null
+  return (
+    <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+      {formatElapsed((endedAt ?? now) - startedAt)}
+    </span>
   )
 }
 
