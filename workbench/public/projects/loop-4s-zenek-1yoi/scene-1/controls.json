@@ -1,0 +1,56 @@
+{
+  "layerControls": [
+    {
+      "target": "zenek-position",
+      "kind": "amount",
+      "property": "position",
+      "label": "Float height",
+      "description": "How far Zenek drifts up and down each loop."
+    },
+    {
+      "target": "zenek-bounce",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Body bounce",
+      "description": "How much Zenek squashes and stretches as he floats."
+    },
+    {
+      "target": "eyes-rig",
+      "kind": "amount",
+      "property": "position",
+      "label": "Glance distance",
+      "description": "How far Zenek's eyes travel when he looks around."
+    },
+    {
+      "target": "glass-rig",
+      "kind": "amount",
+      "property": "position",
+      "label": "Glass follow",
+      "description": "How closely the magnifying glass tracks Zenek's gaze."
+    },
+    {
+      "target": "hatch-shadow",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Shadow breathe",
+      "description": "How much the shadow widens as Zenek rises."
+    }
+  ],
+  "motionExceptions": [
+    {
+      "a": "eye",
+      "b": "face",
+      "reason": "brief: 'his two eyes glide together in small, curious saccades' — the eyes travel within the face during glances, welded only to the float, not to the face's own (static) position"
+    },
+    {
+      "a": "eye",
+      "b": "head",
+      "reason": "same saccade motion relative to the head mass — see the face exception above"
+    },
+    {
+      "a": "eye",
+      "b": "lens",
+      "reason": "brief: 'his magnifying glass also moves in his paw, according to his sight direction' — the glass now follows the eye at a softened half amplitude (held-object secondary motion), so a small relative drift between eye and lens is intentional, not a rig defect"
+    }
+  ]
+}
