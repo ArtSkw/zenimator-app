@@ -44,9 +44,42 @@ const LINES: Record<Exclude<Phase, 'start'>, string[]> = {
   working: ['Busy at the light table…', 'Flipping through the pages…'],
 }
 
-const START_LINES: Record<'generate' | 'edit', string[]> = {
+export type StatusMode = 'generate' | 'edit' | 'propose'
+
+const START_LINES: Record<StatusMode, string[]> = {
   generate: ['Opening the studio…', 'Sharpening the pencils…'],
   edit: ['Reopening your scene…', 'Back at the drawing board…'],
+  propose: ['Opening your artwork…', 'Taking a first look…'],
+}
+
+/**
+ * Per-mode overrides of LINES, for phases whose build vocabulary would be a lie
+ * in another mode. Looked up before LINES; anything absent falls through.
+ *
+ * PROPOSE is auto-propose's phase one, where the studio reads the artwork and
+ * writes a brief before any scene exists. Nothing has been rigged, rolled or
+ * rendered yet — and `Write: assets/<slug>.brief.txt` classifies as `authoring`,
+ * so without an override the screen reads "Rigging the puppet…" while the brief
+ * is still being typed. Phase one runs for MINUTES on a dense SVG: long enough
+ * to convince someone the animation is already being drawn and the brief has
+ * gone missing. Hence the animation-claiming phases are covered too, even
+ * though a propose reaching them means the agent did something off-script —
+ * an unreachable-but-wrong line is exactly the failure this table exists to
+ * prevent, and a defensive entry is cheaper than the confusion.
+ */
+const MODE_LINES: Record<StatusMode, Partial<Record<Exclude<Phase, 'start'>, string[]>>> = {
+  generate: {},
+  edit: {},
+  propose: {
+    refs: ['Checking the house style…', 'Reading the taste notes…'],
+    artwork: ['Reading every path…', 'Walking the group tree…', 'Naming the anatomy…'],
+    authoring: ['Writing the brief…', 'Shaping the story…', 'Setting the constraints…'],
+    working: ['Taking the artwork apart…', 'Inspecting the export…'],
+    building: ['Still on the artwork…'],
+    rendering: ['Taking a closer look…'],
+    reviewing: ['Looking at the artwork again…'],
+    fixing: ['Rewriting a line of the brief…'],
+  },
 }
 
 /** Within one phase, advance to the next variant only after this long — keeps
@@ -90,11 +123,14 @@ function classify(e: StudioEvent): Phase | null {
  * (state tracks the verify→fix arc: once the agent has looked at its own
  * frames, later script edits read as fixes, not first authoring).
  */
-export function createStudioStatusLine(mode: 'generate' | 'edit' = 'generate') {
+export function createStudioStatusLine(mode: StatusMode = 'generate') {
   let lastPhase: Phase | null = null
   let lastChange = 0
   let sawReview = mode === 'edit'
   const counters: Partial<Record<Phase, number>> = {}
+  // Mode is fixed for the closure's life, so resolve its table once here
+  // rather than branching on it for every event.
+  const lines = { ...LINES, ...MODE_LINES[mode] }
 
   return (e: StudioEvent): string | null => {
     let phase = classify(e)
@@ -104,7 +140,7 @@ export function createStudioStatusLine(mode: 'generate' | 'edit' = 'generate') {
 
     const now = Date.now()
     if (phase === lastPhase && now - lastChange < HOLD_MS) return null
-    const variants = phase === 'start' ? START_LINES[mode] : LINES[phase]
+    const variants = phase === 'start' ? START_LINES[mode] : lines[phase]
     const i = counters[phase] ?? 0
     counters[phase] = i + 1
     lastPhase = phase

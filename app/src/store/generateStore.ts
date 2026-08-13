@@ -8,7 +8,6 @@ import { sceneLayers } from '@/engine/lottie/sceneRoot'
 import { applySlotOverride, SLOT_OVERRIDE_PREFIX } from '@/engine/lottie/slots'
 import { fitFrame } from '@/engine/lottie/portable/fitFrame'
 import type { Skeleton } from '@/engine/legacy/skeleton'
-import { useStudioFeed, DRAFT_CHANNEL } from '@/store/studioFeedStore'
 
 export type GenStatus = 'idle' | 'generating' | 'done' | 'error'
 
@@ -246,10 +245,10 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   setError: (error) => set({ status: 'error', stage: null, error }),
   resetStatus: () => set({ status: 'idle', stage: null, error: null }),
   clearResult: () => {
-    // Home is a fresh start, so the DRAFT channel's activity (a propose run
-    // against a blank composer) goes with it. Project feeds are untouched —
-    // they belong to their run and are still there when that project reopens.
-    useStudioFeed.getState().clear(DRAFT_CHANNEL)
+    // No feed to clear: every run owns a project from its first click (auto-
+    // propose included), so activity always belongs to a project channel that
+    // survives with it. Project feeds are untouched — they belong to their run
+    // and are still there when that project reopens.
     set({
       prompt: '',
       // A fresh start returns the composer axes to their defaults too —
