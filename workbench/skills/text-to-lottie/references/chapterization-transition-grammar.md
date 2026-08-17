@@ -149,6 +149,10 @@ scene shipped without it.
    two copies of the same artwork.
 2. **The first frame is the first artwork.** Whoever the brief stages as
    arriving later is fully offscreen at frame 0, not hidden at zero opacity.
+   Offscreen is a SUBTREE property: park by the topmost/outermost geometry of
+   everything parented to the arriving rig — accessories, effect marks above
+   the head — never the focal shape's own bbox (a body parked clear by its
+   own box shipped with its accent marks peeking into the frame).
    Render frame 0 and read it against the brief's opening sentence.
 3. **The last frame is the LAST artwork.** This is the one most often missed,
    because everything moving looks correct in isolation. Anything that comes
@@ -204,6 +208,16 @@ who is on stage at each beat — then honor it literally:
   implies — a leap from below, a slide from a wing, a drop that bounces — and
   the settle hands off into the idle so the entrance CAUSES the float, walk,
   or hover that follows. One axis rings on the landing; two reads as wobble.
+- **Departures are EXITS, and exits are a baton pass.** When a chapter's cast
+  changes, every element that leaves gets its own exit beat — an element with
+  no exit lingers as stray geometry beside the next beat's subject (a clock's
+  centre pin floating next to a drawing checkmark, field-tested twice).
+  Sequence the exits so they hand over instead of coexisting: the outgoing
+  assembly collapses in order, parts absorbing into one another where the
+  geometry suggests it, and the incoming subject's action starts as the LAST
+  outgoing piece is leaving — the eye follows one thing at a time. Nothing of
+  the outgoing cast may still read by the time the incoming action reaches
+  the stage's focus.
 - **Ambient fields run until told to stop.** Elements the brief keeps moving
   across beats (clouds, waves, traffic, rain) drift from the very first frame
   at constant velocity, on the FIRST asset as much as the last, and stop only

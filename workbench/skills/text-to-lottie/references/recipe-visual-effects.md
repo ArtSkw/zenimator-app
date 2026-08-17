@@ -32,6 +32,12 @@ is the main deliverable.
 
 - `glass-sweep`: translucent angled pass across text, logo, or product.
 - `metal-sheen`: narrow highlight sweep with quick fade and subtle contrast.
+  For a light travelling along a stroke-like element (a ribbon, a band, a
+  ring), the default build is a TRIM WINDOW on the element's own path —
+  stacked low-alpha strokes of decreasing width sharing one travelling trim —
+  inside the shape by construction, soft-ended by its round caps, and
+  export-safe. Clip-based sweeps (Merge Paths) are preview-only
+  (player-contract: Export Compatibility).
 - `soft-glow`: restrained halo pulse behind the hero subject.
 - `gradient-fill`: color/fill transition moving across a shape or word.
 - `bubble-burst`: playful circles expand/fade around a success or reveal.
@@ -93,6 +99,9 @@ is the main deliverable.
 - Decorative effects hide weak composition instead of improving it.
 - Premium treatment becomes a pile of glow, glass, and gradients.
 - Render-only effects are promised as native vector Lottie behavior.
+- Effect built on Merge Paths renders in the preview but breaks in the
+  exported HTML and in dotLottie players (player-contract: Export
+  Compatibility).
 - Ambient field becomes generic wallpaper unrelated to the subject.
 - Typography effects become filler instead of supporting the phrase.
 - Effect layers make the object budget feel crowded.

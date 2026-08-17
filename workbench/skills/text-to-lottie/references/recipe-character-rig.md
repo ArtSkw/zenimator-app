@@ -99,6 +99,17 @@ below.
   freely; never bake motion into vertices just to keep the anchor at the origin.
   If a layer looks stuck right after an edit, suspect stale server/render state
   before suspecting the JSON.
+- **Counter-scale keeps a child's drawn shape under a morphing parent.** When
+  the brief says only the body deforms (eyes, badges, and face marks keep
+  their exact drawn proportions), a child of the squash rig inherits the
+  squash unless cancelled: give the child a scale track that is the exact
+  inverse of the parent's at every one of the PARENT's own keyframes
+  (`10000/sx, 10000/sy`), so the product is 100% throughout while position
+  and lean still cascade — glued to the face, never distorted. (Between keys
+  the inverse of an eased lerp is not the eased lerp of inverses; at squash
+  amplitudes up to ~±6% the residual is ~0.25%, invisible.) Motion accents
+  like speed lines follow motion-taste's trailing rule: absent at rest,
+  streaming in on the fast phase just passed, gone by the impact.
 - Volume-preserving squash and stretch, anchored at the base: at contact reduce
   one axis and widen the other so area stays roughly constant (short/wide
   alternating with tall/narrow), stretch the opposite way during fast motion, and

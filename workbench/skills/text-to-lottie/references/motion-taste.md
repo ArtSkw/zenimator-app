@@ -28,11 +28,28 @@ Use this reference when choosing pacing, easings, staging, or animation style.
 ## Principles
 
 - Stage motion in readable beats: anticipation, action/reveal, settle.
+- Elements whose artwork forms ONE continuous line are ONE gesture. Read the
+  source's connectivity before staging entrances: endpoints that touch (a
+  ribbon's head on a scribble's start, a scribble's tail running into its
+  spark) are a single drawn stroke — enter them on one clock, in one
+  direction, as one technique family. A fade-in beside a draw-on reads as two
+  unrelated events (field-tested, twice).
 - Give the primary subject the clearest timing. Secondary elements should support
   it, not compete.
 - Match easing to intent. Functional UI needs speed and clarity; brand motion can
   hold longer; playful effects can overshoot more.
 - Avoid linear interpolation unless mechanical motion is the intent.
+- **A speed-up out of a linear segment must be velocity-continuous.** When a
+  constant-rate motion (a sweeping hand, a scanner, a scrolling field) hands
+  into an eased acceleration, a stock accelerate curve STARTS at near-zero
+  slope — the element visibly stalls before speeding up. Solve the eased
+  segment's departure tangent from the incoming rate: for a cubic-bezier ease
+  the normalized start slope is `y1/x1`, so set `y1 = x1 · (v_in / v_avg)`.
+  And add travel (whole extra turns, extra laps) until the eased segment's
+  AVERAGE rate genuinely exceeds the linear one's — "it accelerates" must be
+  true of the geometry, not just of the easing's name. (Field-tested: a clock
+  hand at 7.5°/f handed 164° to exit-accelerate and stalled dead at the
+  boundary; +360° of travel and a solved tangent made it whip.)
 - Avoid generic easing where every property shares the same timing by default.
   Use locked timing for rigid/UI-stable motion, and offset opacity, position,
   scale, or trim timing only when it improves choreography.
@@ -102,6 +119,18 @@ by what it is doing this beat. Bezier is `x1,y1,x2,y2`.
 - Also useful: anticipate (pull slightly opposite before a fast reveal),
   steps/holds (typewriter, counters, scans, technical beats), and continuous
   linear (rotations, scanners, progress loops, mechanical seams).
+- Accent monochrome line art with MOTION, never with brightness: on dark
+  strokes over a light ground, "brighten" walks toward the ground colour and
+  reads as the element blinking out (field-tested: a tick "lit" toward white
+  on a white dial face simply vanished). A pass accent — if the brief asks
+  for one at all — is a small scale/position pulse on the element's own
+  pivot. Dial furniture (ticks, numerals, hatches) is DECAL by default:
+  perfectly still unless the brief explicitly animates it.
+- Speed lines TRAIL the move that just happened — they are the air the
+  subject just passed through, never a preview of where it is going: absent
+  at rest, absent at the apex, streaming in partway into the fast phase
+  (typically the descent), gone by the impact. Marks that lead the motion or
+  ride at rest read as antennae stuck to the character, not as air.
 - `travel-balanced`'s asymmetric control points (`1.00,.49,.00,.55`) are
   tuned for longer travel — compressed into a short segment (under ~10
   frames) genuinely bounded by a stop on BOTH ends (an overshoot extremum,

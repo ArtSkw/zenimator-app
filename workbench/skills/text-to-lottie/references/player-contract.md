@@ -275,6 +275,15 @@ top-level Lottie markers — names are contract, lowercase:
   true rest value shortly before the anticipation begins, so only the last
   few frames before it show motion — the long gap in between stays truly
   flat regardless of how many cycles are echoed.
+- **A shared boundary key must not swallow its beat's PEAK.** When an
+  entrance chain's last key IS the loop's first landing (the correct
+  single-key form), the loop generator's "skip the duplicate landing" guard
+  must still push that beat's peak/mid-cycle keys — a `continue` that skips
+  both deletes the first beat entirely. The loop then opens frozen, moves,
+  and freezes again after every wrap, and the boundary diff cannot see it,
+  because a frozen boundary is a perfect seam. Verify by rendering a frame
+  INSIDE the loop's first beat and reading the pose against the rest pose
+  (`check-loop-seam.mjs` fails a static opening mechanically).
 - **A boundary value must come from evaluating the SAME function at that
   boundary, never from a second hard-pinned keyframe at the identical
   timestamp.** A one-shot entrance handing off into a periodic idle at
@@ -340,6 +349,23 @@ transforms.
   its own anchor point — rather than relying on the parent null's scale to
   carry it. Position inheritance through `parent` is unaffected and still the
   simplest way to place text relative to a moving group.
+- **A layer's `ks.o` (opacity) does NOT cascade through `parent` in this
+  player** (confirmed by direct pixel sampling): a parent null's animated
+  opacity has zero visible effect on its parented children — only `p`/`a`/
+  `s`/`r` compose down the transform chain. A rig that fades or pops a whole
+  assembly by keying opacity on the shared parent null (the same pattern that
+  correctly cascades scale/position/rotation, e.g. a badge popping and
+  fading away, or a group of layers fading out together) will visibly render
+  every child at full, unfaded opacity forever — the parent's `o` keyframes
+  exist in the JSON and are silently inert. Fix: wrap the assembly in a real
+  **precomp** (an asset with its own nested `layers`, referenced by a `ty: 0`
+  layer with `refId`) and put the fade/pop opacity (and, if you like, the
+  scale too) on the OUTER precomp layer instead of an inner parent null —
+  precomp compositing is a genuine offscreen-buffer-then-composite operation,
+  so its own `o` and `s` apply correctly to everything inside. Keep any
+  shared *scale-only* rig (a breathe, a sway) on an inner null as usual; only
+  opacity needs the precomp wrapper. See `build-moneytransfer-status-scene-s5zh.mjs`
+  for a working precomp-wrapped matte/hatch precedent this pattern extends.
 - **Setting a layer's `a` (anchor) and `p` (position) to the SAME value is a
   hidden zero, not a placeholder.** The transform is `screenPoint = S·(local
   − a) + p`; when `a == p`, that reduces to `S·local + 0` — whatever value you
@@ -380,9 +406,60 @@ so compute the baseline from the font's cap height instead of eyeballing it.
 - If a transparent animation needs preview contrast, use the player/canvas
   environment for verification instead of baking unwanted pixels into the JSON.
 
+## Draw-ons And Animated Path Tracks
+
+- **A keyframed path track holds its FIRST keyframe backwards in time.** A
+  draw-on whose earliest path key is its pen-down stub therefore paints that
+  stub from frame 0 — on stage, in chapters it does not belong to. This has
+  shipped twice (a pen-start dot beside a clock; gleam bands over an earlier
+  chapter). Gate the LAYER's own opacity 0→100 at the draw's start frame;
+  the path track cannot express "not yet started".
+- **A stroke-to-fill polygon can still be DRAWN like a pen.** Expanded thick
+  strokes (mandatory for wide self-crossing scribbles — see
+  svg-compatibility) cannot take a trim path, and revealing one behind a
+  travelling band reads as a curtain, not handwriting. Keyframe the tube
+  itself: emit the polygon truncated at pen-progress `p` with a CONSTANT
+  vertex count (points past the pen collapse onto the pen position —
+  Skottie's shape-interpolation contract), so its round end-cap IS the pen
+  tip. Sample eased pen progress at linear times (one keyframe per step,
+  ~16–20 steps), and pace the hand as an S-curve — a sharp-attack ease
+  throws half the stroke down in a few frames and reads as a jump cut.
+  Emit **s-only keyframes** (players interpolate to the next keyframe's `s`):
+  carrying both `s` and `e` duplicates every polygon and nearly doubled a
+  shipped file (measured −44% on removal).
+
+## Export Compatibility — what survives leaving this player
+
+Skottie is not the only renderer the scene must satisfy. The app's HTML export
+replays the same JSON on **lottie-web**, and the mobile packs run it on
+**ThorVG** (dotLottie). A technique that works only in the preview is not
+shipped, and the defect surfaces at handoff, where it is most expensive.
+
+- **Merge Paths (`ty:'mm'`) do NOT survive the HTML export.** The exporter's
+  lottie-web compatibility pass has no translation for them, and lottie-web
+  paints the *operand* shapes instead of the boolean result — a clip mask
+  becomes a visible slab — on stage from frame 0 ("Draw-ons And Animated
+  Path Tracks" above explains why). ThorVG lists Merge Paths unsupported too.
+  Confirmed on a shipped scene whose ribbon gleam was clipped this way:
+  correct in the preview, wrong in the exported HTML.
+- **Reach for these instead, in order.** A **trim window on the target's own
+  stroke** — a light travelling along a ribbon IS a moving trim window with
+  round caps: inside the shape by construction, soft at both ends, and trim is
+  the best-supported modifier in every runtime. Then a **track matte**
+  (`td`/`tt`), which the export does handle. Then authored geometry.
+- If a boolean op is genuinely unavoidable, the scene is preview-only — say so
+  in its learnings doc rather than letting the export fail silently.
+
+(`recipe-logo.md`'s Merge-Paths clip reveal and `svg-compatibility.md`'s
+pairwise-order rules still describe the mechanic correctly; this section
+governs whether to use it at all in anything the designer will export.)
+
 ## Verification
 
 - Validate JSON before browser verification.
+- Never record a frame as "verified" unless it was RENDERED and its pose read
+  against expectation — a keyframe list that looks right can still describe a
+  frozen beat, and a doc that names unrendered frames poisons later sessions.
 - Confirm the scene appears in `/__context`.
 - Inspect pinned frames in the browser. New scenes need frame `0`, midpoint, and
   `op - 1`.
