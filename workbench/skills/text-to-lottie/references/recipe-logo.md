@@ -60,8 +60,12 @@ marks, and SVG logo sources.
 - A filled glyph can't be drawn on with a trim path — Skottie closes the cut
   with a straight chord that slices a diagonal across the letterform. Reveal a
   fill by clipping instead: keep the glyph as its exact, already-filled final
-  path and clip it to a growing region with a Merge Paths Intersect (`mm: 4`),
-  so every frame is a true sub-region of the final art, never a wrong silhouette.
+  path and clip it to a growing region, so every frame is a true sub-region of
+  the final art, never a wrong silhouette. **Clip with a TRACK MATTE
+  (`td`/`tt`) by default** — a Merge Paths Intersect (`mm: 4`) computes the
+  same sub-region but does not survive the HTML export or ThorVG/dotLottie
+  (player-contract: Export Compatibility), so `mm` is preview-only work. The
+  wedge/slant/margin rules below apply to the matte's region shape identically.
 - Bake a rotating sweep. A straight-axis reveal region (a growing rectangle) can
   be a plain 2-keyframe tween, but a ROTATING wedge cannot — a 2-keyframe tween
   moves each arc vertex in a straight line, so the shape looks like it inflates
@@ -69,20 +73,25 @@ marks, and SVG logo sources.
   one keyframe per frame; at 60fps that reads as a true arc.
 - Slant the wipe. A vertical leading edge reads as a flat guillotine cut; push
   the edge's top a couple of units ahead of its bottom for a dynamic diagonal —
-  same intersect-clip, no extra risk.
+  same clip region, no extra risk.
 - Slant-wipe margin: the region is inflated past the glyph's bbox by a `margin`
   so its rest states clear the geometry; for a slanted edge set
   `margin = slant + 1` px. If `margin < slant`, the leading corner leaves a
   sliver inside the glyph before it starts and the trailing corner leaves a
   permanent clipped strip after it ends (Lottie holds the last keyframe).
-- Counters/holes block clipping: Merge Paths combines pairwise in list order, so
-  `[outer, hole, reveal]` intersects the outer contour with the hole first and
-  destroys the glyph. A letter whose fill needs an inner counter (two subpaths,
-  one fill) can't be intersect-clipped — reveal it with an exact-shape opacity
-  fade instead.
+- Counters/holes block MERGE-PATHS clipping specifically: `mm` combines
+  pairwise in list order, so `[outer, hole, reveal]` intersects the outer
+  contour with the hole first and destroys the glyph. A track matte does not
+  have this problem — the glyph layer paints its own holes and the matte only
+  gates alpha, so counter-bearing glyphs clip fine under the matte default.
+  Only if a reveal is forced onto Merge Paths (preview-only work) must a
+  counter-bearing glyph fall back to an exact-shape opacity fade.
 
 ## Common Failure Modes
 
+- Reveal clipped with Merge Paths ships broken in the exported HTML — the
+  operand shapes paint instead of the boolean result (use a matte;
+  player-contract: Export Compatibility).
 - Final frame does not match the source lockup.
 - Wordmark letter spacing drifts during or after motion.
 - Decorative effects overpower brand recognition.

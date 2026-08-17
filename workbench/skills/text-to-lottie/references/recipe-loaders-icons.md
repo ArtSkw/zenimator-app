@@ -43,6 +43,11 @@ states, warning alerts, empty states, and compact status animations.
 - State feedback: 30-75 frames with a stable final pose.
 - Loaders: 60-120 frame seamless loops.
 - Use continuous linear only for rotational/progress loops.
+- A hand or sweep that accelerates OUT of its steady rate must leave at the
+  rate it arrived — solve the ease's start tangent per motion-taste's
+  velocity-continuity rule, or the acceleration reads as a stall first.
+- Dial furniture (tick marks, numerals, scale rings) is DECAL: perfectly
+  still while hands and sweeps move, unless the brief animates it by name.
 - Use short ease-out or low-bounce spring-like settles for success states.
 
 ## Ask Only When Needed

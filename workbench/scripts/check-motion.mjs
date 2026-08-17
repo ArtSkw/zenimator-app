@@ -23,6 +23,11 @@
  *      the shell look like it inflates around a fixed-size face.
  *   5. INVENTED FILL — every colour must appear in the source artwork; a rig
  *      re-parents and re-times shapes, it never repaints them.
+ *   6. EXPORT COMPAT — Merge Paths (`ty:'mm'`) render here but not in the
+ *      exported HTML (lottie-web paints the operands) or ThorVG/dotLottie;
+ *      animated gradient stops render NOTHING even here. Both fail the build
+ *      (mm is excusable for deliberately preview-only work via a declared
+ *      { layer, reason } exception; animated stops never are).
  *
  * REPORTS without failing (judgement stays with the designer): each rig's
  * period and its correlation to the subject's own track (a backdrop claiming
@@ -858,6 +863,37 @@ if (allowed.length) {
 for (const p of pairs.sort((x, y) => y.slide - x.slide).slice(0, 12)) {
   const verdict = p.declared ? 'decl' : p.slide > SLIDE_LIMIT ? 'FAIL' : 'ok  '
   console.log(`  ${verdict} ${p.slide.toFixed(2)}px  ${p.a} ↔ ${p.b}`)
+}
+
+// ── 6. EXPORT COMPAT — techniques that render in this preview but not in the
+// runtimes the designer ships to (lottie-web via the HTML export, ThorVG via
+// dotLottie). player-contract.md "Export Compatibility" is the prose twin.
+// Field origin: a ribbon gleam clipped with Merge Paths looked perfect in the
+// app canvas and shipped as raw white slabs in the exported HTML.
+{
+  const mmLayers = new Set()
+  const gradLayers = new Set()
+  // Shape items live in a layer's `shapes` array and inside `gr` groups' `it`
+  // — the same descent the INVENTED FILL walker uses; no need to crawl
+  // keyframe data or transform tracks.
+  const walkShapes = (items, layerNm) => {
+    for (const it of items ?? []) {
+      if (it.ty === 'gr') walkShapes(it.it, layerNm)
+      else if (it.ty === 'mm') mmLayers.add(layerNm)
+      else if ((it.ty === 'gf' || it.ty === 'gs') && it.g?.k?.a === 1) gradLayers.add(layerNm)
+    }
+  }
+  for (const l of doc.layers ?? []) walkShapes(l.shapes ?? [], l.nm ?? '?')
+  for (const a of doc.assets ?? []) for (const l of a.layers ?? []) walkShapes(l.shapes ?? [], l.nm ?? '?')
+  for (const nm of gradLayers) {
+    fail(`ANIMATED GRADIENT STOPS on layer "${nm}" — an animated \`g.k\` renders NOTHING in this Skottie build (documented player fact).`,
+      'Keep gradient stops static; animate a trim window, a matte, or stacked static layers instead.')
+  }
+  for (const nm of mmLayers) {
+    if (declaredLayer(nm)) continue
+    fail(`MERGE PATHS WON'T EXPORT — layer "${nm}" uses \`ty:'mm'\`: correct in this preview, broken in the exported HTML (lottie-web paints the operand shapes, from frame 0) and unsupported by ThorVG/dotLottie.`,
+      "Clip with a track matte (td/tt) or reveal with a trim window on the element's own stroke (player-contract: Export Compatibility). A deliberately preview-only scene may declare { layer, reason } in controls.json.")
+  }
 }
 
 if (failures.length) {

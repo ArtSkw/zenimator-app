@@ -51,6 +51,9 @@ SVG-like path behavior.
   error — merely by being present, static or animated. Bake it into a single
   fill contour with consistently-wound caps and joins; overlapping subpaths of
   opposite winding cancel under nonzero fill and bite holes at the caps.
+  To DRAW ON an expanded tube (a fill takes no trim path), keyframe the tube
+  truncated at pen progress with a constant vertex count — the full technique
+  is in player-contract's "Draw-ons And Animated Path Tracks".
 - Keep strokes as strokes when trim-path drawing is the animation itself, but
   verify cap/join behavior.
 - Flatten unnecessary groups, but keep semantically useful groups for animation
