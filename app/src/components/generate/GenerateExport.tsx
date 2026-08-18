@@ -370,7 +370,10 @@ export function GenerateExport({ loop }: { loop: boolean }) {
                         >
                           {'path' in Icon
                             ? <BrandMark icon={Icon} className="size-6 shrink-0" />
-                            : <Icon size={20} strokeWidth={1.75} className="shrink-0 text-muted-foreground" />}
+                            /* Same ink as the format's own title beside it — a
+                               muted glyph next to full-contrast text read as
+                               disabled. Brand marks keep their official hex. */
+                            : <Icon size={20} strokeWidth={1.75} className="shrink-0 text-foreground" />}
                           <span className="flex min-w-0 flex-col">
                             <span className="text-sm font-semibold">{f.label}</span>
                             <span className="truncate text-[11px] text-muted-foreground">{f.desc}</span>
