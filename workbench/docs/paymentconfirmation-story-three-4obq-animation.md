@@ -168,3 +168,41 @@ Verified: 0 merge-path nodes in the built JSON; `check-motion.mjs` and
 `check-loop-seam.mjs` exit 0; rendered and READ frames 0/60/140/272 (badge
 beats clean, no bands) and 316 vs 404 at 3× (the highlight travels from the
 ribbon's bright right end to its pale left tail, strictly within the stroke).
+
+## Refinement (2026-08-18) — the green line is drawn by ONE pen, in sequence
+
+Designer note: the two green halves were "clearly being drawn separately and
+a bit overlapping". They were — the first cut ran both on one clock radiating
+outward from where they join, which is a defensible reading of "one gesture"
+and the wrong one for anything that reads as *drawn*.
+
+- **Direction.** The source authors the ribbon RIGHT to LEFT (198,113 →
+  10,104), so trim-from-start drew it backwards for a right-handed pen.
+  Reversed (vertices reversed, in/out tangents swapped — the same move the
+  checkmark needs) so it runs LEFT to RIGHT and finishes beside the swoosh's
+  own start point at (173,113), 25px away and inside a stroke width. The
+  gradient is defined in canvas coordinates, so reversing the path does not
+  move the light-to-dark ramp; the gleam keeps the source orientation and is
+  untouched.
+- **Sequence.** Ribbon 184→206, swoosh 206→256 — contiguous, no gap, no
+  overlap. The swoosh's own draw (technique, direction, pace) is unchanged
+  at the designer's request.
+- **One speed.** Durations are derived, not typed: `pathLength()` measures
+  both arcs (ribbon 202.7px, swoosh 324.6px) and the ribbon's duration is
+  length-proportional to the swoosh's 50f, divided by `SWEEP_VS_SCRIBBLE =
+  1.4` because a long smooth arc genuinely runs hotter than a tight zigzag →
+  22f, i.e. 9.2px/f into 6.5px/f. Both halves ease `travelBal`, so the
+  handover is a corner, not a stop. Everything derives backward from
+  `LAND_END`, so the spark still settles (270) before `T` (272).
+- Ribbon and swoosh now draw across the badge's last ~22 fade frames
+  (pop ends 206). At the pale far-left end over a ghost badge this reads as a
+  cross-dissolve, not the muddle the round-3 notes describe (that was the
+  BRIGHT swoosh over a near-opaque badge).
+
+Promoted to `motion-taste.md`: a connected line is drawn sequentially along
+its length with chained pen order and length-proportional durations;
+simultaneous radiating is for bursts only.
+
+Verified: `check-motion` and `check-loop-seam` exit 0; rendered 186/196/206/
+220/240/256 — pen-down at the far left, sweeping right, ribbon complete as
+the swoosh picks it up, spark at the end.

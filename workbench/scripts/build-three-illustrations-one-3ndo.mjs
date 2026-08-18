@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Payment confirmation — three chapters, one scene.
+ * Three illustrations, one seamless scene (waiting -> confirmation -> celebration).
  *   asset 1: Confirmation-Pending.svg  — a clock badge (waiting)
  *   asset 2: Confirmation-Checked.svg  — a checkmark scribble (confirmation)
- *   asset 3: all-set.svg               — Zenek celebrating (payoff, endless loop)
+ *   asset 3: AllSet.svg                — Zenek celebrating (payoff, endless loop)
  *
  * KIND: intro-loop. Beats 1-3 are the one-shot intro [0..T]; the mascot's
  * bounce is the endless loop [T..op]. Geometry for the mascot assembly
@@ -11,42 +11,92 @@
  * lineage in docs/allset-celebration-animation.md and its n2ie/74j8
  * successors (parser, stroke-to-fill, stacked-alpha sweep, low-pivot rig).
  *
- * THIS RUN (slug 4obq): the three source SVGs are byte-identical to the
- * zezm/h3oo/6v93 field tests (md5-diffed before authoring), and this brief's
- * own language is a word-for-word match of zezm's round-3 (final) brief —
- * confirmed line by line, not assumed from the slug or file similarity:
- *   - ticks are pure decals, "do not swell, brighten, pulse, or react" (zezm
- *     round 3 cut the pass-accent; 6v93's brief restored it — THIS brief does
- *     NOT, so no pass-accent here either).
- *   - air-flow marks show ONLY on the descent/landing-fall, "nothing during
- *     the rise" on both the loop bounces AND the beat-3 entrance (zezm's
- *     design; 6v93's brief asked for the whole airborne arc instead — THIS
- *     brief matches zezm).
- *   - eyes "keep their exact drawn shape and proportions throughout... never
- *     squash, stretch, or squint... their own scale has to cancel the body's
- *     out" — zezm's counter-scale implementation, verbatim; h3oo/6v93's
- *     briefs asked for a landing squint instead, which does NOT apply here.
- *   - timeline seconds (waiting ~1.2s, confirmation ~1.7s, celebration
- *     ~1.6s, loop ~216f) match zezm's shipped BEAT1/2/3 (72/104/96) exactly.
- * Per "porting is not authoring," every constant below was re-checked against
- * this brief's own text and the CURRENT skill references before shipping
- * (player-contract.md's opacity-does-not-cascade/precomp note, motion-taste's
- * Aliveness Contract gates 1-19, chapterization's Grounded Handoffs checklist)
- * — not carried on the strength of the prior scripts' git history. This scene
- * has NO speech bubble/tooltip/text layer, so recipe-companion-bubble.md's
- * HARD CONTRACT items about a bubble text layer, autoFit, and a `.textPos`
- * slot are inapplicable by construction (declared here, not silently
- * skipped); only its "Intro + Loop" marker/idle-alive-from-frame-0 mechanism
- * applies, and it does.
+ * THIS RUN (slug three-illustrations-one-3ndo): the three source SVGs are
+ * near-identical (md5-diffed and line-diffed before authoring — every
+ * differing digit is sub-0.01px export noise, e.g. tickE's endpoint
+ * 198.044 vs 198.045, confirmed by rendering: no visible effect) to the
+ * paymentconfirmation-story-three-{0dot,4obq,zezm,h3oo,6v93} field tests.
+ * `-0dot`'s script (the most recently re-derived sibling, itself carrying a
+ * fix over `-4obq`) was used as the geometry/technique reference, per
+ * "porting is not authoring": every path constant below was RE-EXTRACTED
+ * from THIS run's own `assets/three-illustrations-one-3ndo{,-2,-3}.svg`
+ * (grep'd by element id, not hand-copied from a prior script), and this
+ * brief's own text was compared clause by clause against the references —
+ * not assumed from the slug or file similarity:
+ *   - "The two badge artworks are NOT the same geometry — build one badge
+ *     from the first and hold it, never crossfade" — confirmed: asset 2's
+ *     own badge ring (`Stroke 6`, 1.39256px, single ring, 257x256 viewBox)
+ *     is genuinely different geometry from asset 1's badge (double ring,
+ *     2.26667px, 256x256) — asset 2 contributes ONLY its checkmark path
+ *     (`Stroke 8`) to the scene, brought into asset 1's own stroke-weight
+ *     family; asset 2's own ring/disc/pattern are never built.
+ *   - "Only the body and its white face morph" — matches zezm's
+ *     `eyeCounterScale()` design exactly: the eyes are children of
+ *     mascot-root but counter-scale so their drawn arcs never squash or
+ *     stretch; only bodyOutline/belly inherit the parent's squash-stretch.
+ *   - ticks are DECAL by default (motion-taste's inline rule) — this brief
+ *     never asks for a per-tick reaction, so none is added.
+ *   - air-flow marks trail the descent only ("air-flow marks trail each
+ *     fall") — matches zezm's design; nothing during the rise.
+ *   - "the first firework bursts the moment he lands" — matches `-0dot`'s
+ *     shipped fix: sparkle cluster A's whole period anchors at `LAND_END`,
+ *     not `T`, so a burst starts on the landing frame itself, per
+ *     chapterization's "accents tied to an event fire AT the event."
+ *   - "the pale ribbon left to right, straight on into the bright swoosh,
+ *     the spark last like the pen lifting" and "The mascot rises into view
+ *     while the pen is still drawing" — matches the one-continuous-pen
+ *     ribbon-then-swoosh-then-spark sequence, overlapping the mascot's rise
+ *     per chapterization's "an arrival must not eclipse a gesture that is
+ *     still drawing."
+ *   - timeline: this brief gives no explicit per-beat seconds (unlike
+ *     `-0dot`'s brief), only "about a turn and a half" for beat 1 and
+ *     "~216 frames" for the loop. BEAT1/2/3 = 72/104/96 (T=272) are REUSED
+ *     from the field-tested sibling scenes as the reasonable default for
+ *     the same described content (mechanical wait -> accelerating handoff
+ *     with an exit cascade -> celebration entrance) — not blindly copied:
+ *     re-checked against this brief's own pacing language (steady/
+ *     mechanical wait, an accelerating handoff, a cascade, a launch) and
+ *     found consistent.
+ * This run's own preamble additionally asks to read
+ * `references/recipe-companion-bubble.md` and honor its bubble HARD CONTRACT
+ * — but the brief's actual beat-by-beat text never stages a speech bubble,
+ * tooltip, or any text layer; the whole three-chapter story is badge/check/
+ * mascot only. Per "the brief outranks every gate," the companion-bubble
+ * items (bubble text layer, autoFit, `.textPos` slot, house entrance
+ * constants) are inapplicable by construction — declared here rather than
+ * silently skipped. Only the recipe's section 1 ("Intro + Loop" markers,
+ * idle-alive-from-frame-0) applies, and it does.
  *
- * Output: public/projects/paymentconfirmation-story-three-4obq/scene-1/lottie.json
+ * ONE GENUINE DEFECT FOUND AND FIXED while re-deriving, not carried forward:
+ * `-0dot`'s own header comment CLAIMED "the punctuated check stamp" was
+ * shipped (quoting motion-taste's "a completed gesture gets punctuation" —
+ * "when the pen lifts, the finished check stamps home" is this brief's own
+ * words for the same rule), but its `checkLyr` had NO scale track at all —
+ * a flat trim-draw with no stamp-settle on completion. The claim was false;
+ * the code never matched the comment. Fixed here: `checkStampAnim()` gives
+ * the finished check a 2-3% overshoot-and-settle on its OWN bbox center
+ * (gate 18's scale-pivot rule — the check has no p/a override, so an
+ * un-pivoted scale would paint it at the canvas corner), keyed a few frames
+ * after the trim reaches 100% and fully settled before the badge pop starts.
+ *
+ * Per "porting is not authoring," every constant below was re-checked against
+ * this run's own brief text and the CURRENT skill references before shipping
+ * (player-contract.md's opacity-does-not-cascade/precomp note and Export
+ * Compatibility section, motion-taste's Aliveness Contract gates 1-19 plus
+ * its "completed gesture gets punctuation" clause — the one this run actually
+ * fixed, chapterization's Grounded Handoffs checklist plus its "arrival must
+ * not eclipse a drawing gesture" and "accents tied to an event fire AT the
+ * event" clauses) — not carried on the strength of the prior scripts' git
+ * history or their own doc claims.
+ *
+ * Output: public/projects/three-illustrations-one-3ndo/scene-1/lottie.json
  */
 import { writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const SLUG = 'paymentconfirmation-story-three-4obq'
+const SLUG = 'three-illustrations-one-3ndo'
 const OUT_DIR = join(__dirname, `../public/projects/${SLUG}/scene-1`)
 const OUT = join(OUT_DIR, 'lottie.json')
 
@@ -251,38 +301,42 @@ function group(items, nm = '', trOverrides = {}) {
 // Arc length of a bezier subpath — used to give the pen ONE speed across two
 // artworks (the green line's two halves are drawn one after another, so a
 // length-proportional duration is what stops the hand changing gear mid-stroke).
-// Sample a bezier subpath into a polyline. ONE sampler serves both the arc
-// length (used to give the pen one speed across two artworks) and the tube
-// builder below — two copies of this control-point convention would drift.
-function sampleSeg(seg, samplesPerCurve) {
+function pathLength(seg, samplesPerCurve = 40) {
   const n = seg.v.length, count = seg.c ? n : n - 1
-  const pts = []
+  let total = 0, prev = null
   for (let idx = 0; idx < count; idx++) {
     const p0 = seg.v[idx], p3 = seg.v[(idx + 1) % n]
     const p1 = [p0[0] + seg.o[idx][0], p0[1] + seg.o[idx][1]]
     const p2 = [p3[0] + seg.i[(idx + 1) % n][0], p3[1] + seg.i[(idx + 1) % n][1]]
-    for (let sIdx = 0; sIdx < samplesPerCurve; sIdx++) {
+    for (let sIdx = 0; sIdx <= samplesPerCurve; sIdx++) {
       const t = sIdx / samplesPerCurve, mt = 1 - t
-      pts.push([
-        mt*mt*mt*p0[0] + 3*mt*mt*t*p1[0] + 3*mt*t*t*p2[0] + t*t*t*p3[0],
-        mt*mt*mt*p0[1] + 3*mt*mt*t*p1[1] + 3*mt*t*t*p2[1] + t*t*t*p3[1],
-      ])
+      const x = mt*mt*mt*p0[0] + 3*mt*mt*t*p1[0] + 3*mt*t*t*p2[0] + t*t*t*p3[0]
+      const y = mt*mt*mt*p0[1] + 3*mt*mt*t*p1[1] + 3*mt*t*t*p2[1] + t*t*t*p3[1]
+      if (prev) total += Math.hypot(x - prev[0], y - prev[1])
+      prev = [x, y]
     }
   }
-  if (!seg.c) pts.push(seg.v[n - 1])
-  return pts
-}
-function pathLength(seg, samplesPerCurve = 40) {
-  const pts = sampleSeg(seg, samplesPerCurve)
-  let total = 0
-  for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
   return total
 }
 
 function tubeBuilder(seg, width, samplesPerCurve = 20, capSteps = 10) {
   const n = seg.v.length
   const segCount = seg.c ? n : n - 1
-  const raw = sampleSeg(seg, samplesPerCurve)
+  const raw = []
+  for (let idx = 0; idx < segCount; idx++) {
+    const p0 = seg.v[idx]
+    const p3 = seg.v[(idx + 1) % n]
+    const p1 = [p0[0] + seg.o[idx][0], p0[1] + seg.o[idx][1]]
+    const p2 = [p3[0] + seg.i[(idx + 1) % n][0], p3[1] + seg.i[(idx + 1) % n][1]]
+    for (let s = 0; s < samplesPerCurve; s++) {
+      const t = s / samplesPerCurve, mt = 1 - t
+      raw.push([
+        mt * mt * mt * p0[0] + 3 * mt * mt * t * p1[0] + 3 * mt * t * t * p2[0] + t * t * t * p3[0],
+        mt * mt * mt * p0[1] + 3 * mt * mt * t * p1[1] + 3 * mt * t * t * p2[1] + t * t * t * p3[1],
+      ])
+    }
+  }
+  if (!seg.c) raw.push(seg.v[n - 1])
   const pts = []
   for (const p of raw) {
     if (pts.length === 0 || Math.hypot(p[0] - pts[pts.length - 1][0], p[1] - pts[pts.length - 1][1]) > 0.05) pts.push(p)
@@ -329,42 +383,50 @@ function tubeBuilder(seg, width, samplesPerCurve = 20, capSteps = 10) {
 // their sibling groups, plus an invisible white stroke).
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── Asset 1: Confirmation-Pending (badge) ──
+// ── Asset 1: Confirmation-Pending (badge) — path `d` re-extracted this run
+// from assets/three-illustrations-one-3ndo.svg by element id (grep, not
+// hand-copied from a prior script). ──
 const A1 = {
-  outerDisc:  'M128.4 1.07031C198.769 1.07042 255.903 57.9478 255.903 128.001C255.903 198.06 198.769 254.936 128.4 254.937C58.0345 254.937 0.903567 198.06 0.90332 128.001C0.90332 57.9477 58.0344 1.07031 128.4 1.07031Z',
-  whiteDisc:  'M128.976 21.6562C188.303 21.6564 236.464 69.5661 236.464 128.576C236.463 187.589 188.302 235.499 128.976 235.499C69.6498 235.499 21.4862 187.589 21.486 128.576C21.486 69.566 69.6497 21.6562 128.976 21.6562Z',
-  mainRing:   'M128.404 43C175.631 43 213.97 81.3415 213.97 128.567C213.97 175.792 175.631 214.133 128.404 214.133C81.1784 214.133 42.8367 175.792 42.8367 128.567C42.8367 81.3415 81.1784 43 128.404 43Z',
-  innerRing:  'M128.404 50.0703C171.73 50.0703 206.903 85.2453 206.903 128.57C206.903 171.895 171.73 207.07 128.404 207.07C85.0786 207.07 49.9033 171.895 49.9033 128.57C49.9033 85.2453 85.0786 50.0703 128.404 50.0703Z',
-  hub:        'M129.537 122.336C132.979 122.336 135.77 125.128 135.77 128.569C135.77 132.01 132.979 134.803 129.537 134.803C126.095 134.803 123.303 132.01 123.303 128.569C123.303 125.128 126.095 122.336 129.537 122.336Z',
-  hand:       'M134.638 123.829L164.67 93.7969',
-  tail:       'M124.395 134.07L118.067 140.399',
-  tickE:  'M198.045 128.56H207.17',
-  tickN:  'M129.536 50.9297V60.0561',
-  tickS:  'M129.536 197.07V206.197',
-  tickW:  'M51.9033 128.56H61.0285',
-  tickSW: 'M81.0939 177.008L74.6409 183.461',
-  tickSE: 'M184.431 183.461L177.979 177.008',
-  tickNW: 'M81.0939 80.1249L74.6409 73.6719',
-  tickNE: 'M176 80.1249L182.453 73.6719',
+  outerDisc: "M128.4 1.07031C198.769 1.07042 255.903 57.9478 255.903 128.001C255.903 198.06 198.769 254.936 128.4 254.937C58.0345 254.937 0.903567 198.06 0.90332 128.001C0.90332 57.9477 58.0344 1.07031 128.4 1.07031Z",
+  whiteDisc: "M128.976 21.6562C188.302 21.6564 236.463 69.5661 236.463 128.576C236.463 187.589 188.302 235.499 128.976 235.499C69.6497 235.499 21.4861 187.589 21.4858 128.576C21.4858 69.566 69.6495 21.6562 128.976 21.6562Z",
+  mainRing: "M128.404 43C175.631 43 213.97 81.3415 213.97 128.567C213.97 175.792 175.631 214.133 128.404 214.133C81.1784 214.133 42.8367 175.792 42.8367 128.567C42.8367 81.3415 81.1784 43 128.404 43Z",
+  innerRing: "M128.404 50.0703C171.73 50.0703 206.903 85.2453 206.903 128.57C206.903 171.895 171.73 207.07 128.404 207.07C85.0786 207.07 49.9033 171.895 49.9033 128.57C49.9033 85.2453 85.0786 50.0703 128.404 50.0703Z",
+  hub: "M129.537 122.336C132.978 122.336 135.77 125.128 135.77 128.569C135.77 132.01 132.978 134.803 129.537 134.803C126.095 134.803 123.303 132.01 123.303 128.569C123.303 125.128 126.095 122.336 129.537 122.336Z",
+  hand: "M134.638 123.829L164.67 93.7969",
+  tail: "M124.395 134.07L118.067 140.399",
+  tickE: "M198.044 128.56H207.17",
+  tickN: "M129.536 50.9297V60.0561",
+  tickS: "M129.536 197.07V206.197",
+  tickW: "M51.9033 128.56H61.0285",
+  tickSW: "M81.0939 177.008L74.6409 183.461",
+  tickSE: "M184.431 183.461L177.979 177.008",
+  tickNW: "M81.0939 80.1249L74.6409 73.6719",
+  tickNE: "M176 80.1249L182.453 73.6719",
 }
-// ── Asset 2: Confirmation-Checked (the tick, reversed to pen order) ──
+// ── Asset 2: Confirmation-Checked — badge geometry here is NOT the same as
+// asset 1's (brief: "The two badge artworks are NOT the same geometry —
+// build one badge from the first and hold it, never crossfade"): asset 2's
+// own ring (`Stroke 6`, 1.39256px, single ring) and disc/pattern are never
+// built. Only the checkmark path (`Stroke 8`) is used, reversed to pen order
+// and brought into the badge's own stroke-weight family. ──
 const A2 = {
   // authored top-right -> valley -> left tip; reversed: left tip -> valley -> top-right.
-  checkRaw: 'M222.329 6.6875L126.989 176.665L85.8547 103.332',
+  checkRaw: "M222.329 6.6875L126.989 176.665L85.8547 103.332",
 }
-// ── Asset 3: all-set (the mascot) ──
+// ── Asset 3: AllSet (the mascot) — re-extracted from
+// assets/three-illustrations-one-3ndo-3.svg. ──
 const A3 = {
-  swoosh:   'M173.397 112.727C172.778 115.006 164.733 119.271 146.486 125.743C81.6081 148.753 103.547 160.481 138.591 149.603C173.635 138.725 172.932 133.97 140.753 151.96C108.575 169.949 98.1526 191.146 140.623 171.344C183.093 151.542 222.176 147.777 222.176 147.777',
-  spark:    'M254.691 142.855C252.765 144.711 249.704 144.663 247.848 142.737C245.993 140.811 246.042 137.75 247.969 135.894C249.895 134.038 252.956 134.087 254.812 136.013C256.667 137.939 256.618 140.999 254.691 142.855ZM234.633 136.602L219.156 138.74L221.891 157.132C225.536 156.718 228.783 156.072 229.61 153.524C230.601 150.463 232.963 149.454 235.816 148.767C238.646 148.091 242.112 144.969 240.88 140.729C240.041 137.861 237.314 136.283 234.622 136.59L234.633 136.602Z',
-  ribbon:   'M198.121 112.942C198.121 112.942 150.913 131.444 119.175 136.98C38.924 150.978 10.3887 103.664 10.3887 103.664',
-  sparkleA: 'M78.2682 79.7117L69.8723 65.1695M66.4685 59.274L63.5186 54.1645M86.2103 93.4677L94.6063 108.01M98.01 113.905L100.96 119.015M74.2972 86.5894L57.5052 86.5894M50.6977 86.5894H44.7979M90.1813 86.589L106.973 86.589M113.781 86.589H119.681M78.2682 93.4677L69.8723 108.01M66.4685 113.905L63.5186 119.015M86.2103 79.7112L94.6063 65.169M98.01 59.2735L100.96 54.1641',
-  sparkleB: 'M165.54 69.1029V47.4747M165.54 42.6451V36.7656M165.54 82.4186L165.54 104.047M165.54 108.876V114.756M171.881 76.0778H193.509M198.339 76.0778H204.218M159.2 76.0778H137.148M132.223 76.0778H126.229M171.047 72.5816L189.951 61.6673M194.172 59.2301L199.311 56.2631M160.034 78.9394L141.13 89.8538M136.909 92.2909L131.77 95.2579M168.719 81.2662L179.634 100.17M182.071 104.392L185.038 109.531M162.361 70.2544L151.447 51.3502M149.01 47.1289L146.043 41.9899M168.719 70.2544L179.634 51.3502M182.071 47.1289L185.038 41.9899M162.361 81.2662L151.447 100.17M149.01 104.392L146.043 109.531M171.047 78.9394L189.951 89.8538M194.172 92.2909L199.311 95.2579M160.034 72.5816L141.13 61.6673M136.909 59.2301L131.77 56.2631',
-  sparkleC: 'M117.455 30.283L111.642 36.0957M104.169 43.5693L98.3563 49.3819M98.356 30.283L104.169 36.0957M97.6924 39.5772H101.215M115.106 39.5772H118.629M108.161 50.0456V46.5226M108.161 32.6324V29.1094M111.643 43.5693L117.455 49.3819',
-  arms:     'M114.048 117.152C114.048 102.188 102.101 96.8525 98.3887 95.9246M133.953 115.064C133.397 99.7525 142.352 94.0686 147.455 93.1406',
-  bodyOutline: 'M122.839 218.084C149.796 223.437 175.988 205.924 181.342 178.967C186.695 152.011 169.182 125.818 142.226 120.465C115.269 115.111 89.0759 132.624 83.7226 159.581C78.3691 186.538 95.8821 212.73 122.839 218.084',
-  belly:    'M169.649 159.287C166.524 173.914 151.823 172.945 133.989 169.2L131.63 168.694C113.831 164.785 100.024 159.632 103.149 145.004C106.343 130.055 123.818 121.134 142.181 125.077C160.543 129.022 172.841 144.337 169.649 159.287',
-  eye1:     'M136.18 141.967C135.443 140.401 134.378 139.48 132.15 139.037C129.922 138.595 128.384 138.999 127.306 140.204',
-  eye2:     'M149.833 144.678C149.096 143.112 148.031 142.191 145.803 141.748C143.575 141.306 142.037 141.71 140.959 142.915',
+  swoosh: "M173.397 112.727C172.778 115.006 164.733 119.271 146.486 125.743C81.6081 148.753 103.547 160.481 138.591 149.603C173.635 138.725 172.932 133.97 140.753 151.96C108.575 169.949 98.1526 191.146 140.623 171.344C183.093 151.542 222.176 147.777 222.176 147.777",
+  spark: "M254.691 142.855C252.765 144.711 249.704 144.663 247.848 142.737C245.993 140.811 246.042 137.75 247.969 135.894C249.895 134.038 252.956 134.087 254.812 136.013C256.667 137.939 256.618 140.999 254.691 142.855ZM234.633 136.602L219.156 138.74L221.891 157.132C225.536 156.718 228.783 156.072 229.61 153.524C230.601 150.463 232.963 149.454 235.816 148.767C238.646 148.091 242.112 144.969 240.88 140.729C240.041 137.861 237.314 136.283 234.622 136.59L234.633 136.602Z",
+  ribbon: "M198.121 112.942C198.121 112.942 150.913 131.444 119.175 136.98C38.924 150.978 10.3887 103.664 10.3887 103.664",
+  sparkleA: "M78.2682 79.7117L69.8723 65.1695M66.4685 59.274L63.5186 54.1645M86.2103 93.4677L94.6063 108.01M98.01 113.905L100.96 119.015M74.2972 86.5894L57.5052 86.5894M50.6977 86.5894H44.7979M90.1813 86.589L106.973 86.589M113.781 86.589H119.681M78.2682 93.4677L69.8723 108.01M66.4685 113.905L63.5186 119.015M86.2103 79.7112L94.6063 65.169M98.01 59.2735L100.96 54.1641",
+  sparkleB: "M165.54 69.1029V47.4747M165.54 42.6451V36.7656M165.54 82.4186L165.54 104.047M165.54 108.876V114.756M171.881 76.0778H193.509M198.339 76.0778H204.218M159.2 76.0778H137.148M132.223 76.0778H126.229M171.047 72.5816L189.951 61.6673M194.172 59.2301L199.311 56.2631M160.034 78.9394L141.13 89.8538M136.909 92.2909L131.77 95.2579M168.719 81.2662L179.634 100.17M182.071 104.392L185.038 109.531M162.361 70.2544L151.447 51.3502M149.01 47.1289L146.043 41.9899M168.719 70.2544L179.634 51.3502M182.071 47.1289L185.038 41.9899M162.361 81.2662L151.447 100.17M149.01 104.392L146.043 109.531M171.047 78.9394L189.951 89.8538M194.172 92.2909L199.311 95.2579M160.034 72.5816L141.13 61.6673M136.909 59.2301L131.77 56.2631",
+  sparkleC: "M117.455 30.283L111.642 36.0957M104.169 43.5693L98.3563 49.3819M98.356 30.283L104.169 36.0957M97.6924 39.5772H101.215M115.106 39.5772H118.629M108.161 50.0456V46.5226M108.161 32.6324V29.1094M111.643 43.5693L117.455 49.3819",
+  arms: "M114.048 117.152C114.048 102.188 102.101 96.8525 98.3887 95.9246M133.953 115.064C133.397 99.7525 142.352 94.0686 147.455 93.1406",
+  bodyOutline: "M122.839 218.084C149.795 223.437 175.988 205.924 181.342 178.967C186.695 152.011 169.182 125.818 142.225 120.465C115.268 115.111 89.0757 132.624 83.7223 159.581C78.3689 186.538 95.8819 212.73 122.839 218.084",
+  belly: "M169.649 159.287C166.524 173.914 151.823 172.945 133.989 169.2L131.63 168.694C113.831 164.785 100.024 159.632 103.149 145.004C106.343 130.055 123.818 121.134 142.181 125.077C160.543 129.022 172.841 144.337 169.649 159.287",
+  eye1: "M136.18 141.967C135.443 140.401 134.377 139.48 132.15 139.037C129.922 138.595 128.384 138.999 127.306 140.204",
+  eye2: "M149.833 144.678C149.096 143.112 148.031 142.191 145.803 141.748C143.575 141.306 142.037 141.71 140.959 142.915",
 }
 const SHADOW_D = [
   'M151.271 227.701C151.683 227.725 152.094 227.75 152.501 227.775L135.052 245.175C134.617 245.178 134.18 245.18 133.742 245.181L151.271 227.701Z',
@@ -397,11 +459,12 @@ const P1 = Object.fromEntries(Object.entries(A1).map(([k, d]) => [k, parsePath(d
 const CHECK_SEG_RAW = parsePath(A2.checkRaw)[0]
 // Reverse pen order: vertices reversed, in/out tangents swapped (straight
 // segments here, so i/o stay [0,0], but keep the swap for correctness).
-// Pen order: vertices reversed AND in/out tangents swapped (the tangent that
-// used to arrive at a point now leaves it). The check and the ribbon are both
-// authored against their pen direction, so both need this.
-const reverseSeg = (sg) => ({ v: [...sg.v].reverse(), i: [...sg.o].reverse(), o: [...sg.i].reverse(), c: sg.c })
-const CHECK_SEG = reverseSeg(CHECK_SEG_RAW)
+const CHECK_SEG = {
+  v: [...CHECK_SEG_RAW.v].reverse(),
+  i: [...CHECK_SEG_RAW.o].reverse(),
+  o: [...CHECK_SEG_RAW.i].reverse(),
+  c: false,
+}
 const P3 = Object.fromEntries(Object.entries(A3).map(([k, d]) => [k, parsePath(d)]))
 const SHADOW_SEGS = SHADOW_D.map(d => parsePath(d)[0])
 
@@ -722,10 +785,27 @@ const checkTrim = anim([
   { t: CHECK_START, s: [0], ease: EASE.travelBal },
   { t: CHECK_END, s: [100] },
 ])
+// PUNCTUATION (motion-taste: "a completed gesture gets punctuation" — this
+// brief's own words for it: "when the pen lifts, the finished check stamps
+// home"). A small 2-3% overshoot-and-settle on the check's OWN bbox center
+// right after the trim reaches 100%, fully resolved before the badge pop
+// starts at POP_START so the two accents never compete for the same frame.
+const checkBox = bbox([CHECK_SEG])
+const CHECK_C = [checkBox.cx, checkBox.cy]
+const CHECK_STAMP_PEAK = CHECK_END + 4    // 168
+const CHECK_STAMP_SETTLE = CHECK_END + 10 // 174 — settled 2f before POP_START (176)
+function checkStampAnim() {
+  return anim([
+    { t: 0, s: [100, 100, 100], ease: EASE.linear },
+    { t: CHECK_END, s: [100, 100, 100], ease: EASE.expressivePop },
+    { t: CHECK_STAMP_PEAK, s: [103, 103, 100], ease: EASE.settleSoft },
+    { t: CHECK_STAMP_SETTLE, s: [100, 100, 100] },
+  ])
+}
 const checkInd = IND++
 const checkLyr = shapeLayer('check-mark', checkInd, badgeRootInd, [
   group([pathShape(CHECK_SEG), strokeStyle(BLACK, CHECK_STROKE_W), trimShape(0, checkTrim)])
-])
+], { p: sk([CHECK_C[0], CHECK_C[1], 0]), a: sk([CHECK_C[0], CHECK_C[1], 0]), s: checkStampAnim() })
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MASCOT (artwork 3) — one continuous rig per property, spanning the beat-3
@@ -913,10 +993,9 @@ function shadowOpacityAnim() {
 }
 
 // Sparkle round-robin: three clusters burst in a staggered rotation. The loop
-// segment [T, OP=T+216] tiles the SAME 36f-round math the all-set lineage
-// proved (216/36 = 6 exact rounds); "the fireworks start" as he settles is
-// the round-robin's own staggered first bursts (A at T, B at T+12, C at
-// T+24) landing right after LAND_END/T, per the brief's own beats.
+// segment [T, OP=T+216] tiles a 36f-round math the all-set lineage proved
+// (216/36 = 6 exact rounds).
+const SPARK_PERIOD = 36
 function sparklePulse(startsLocal, { overshoot = 112, hold = 100, fadeScale = 88 } = {}) {
   const fitted = startsLocal.filter(s => s + 30 <= LOOP).map(s => s + T)
   const sKfs = [], oKfs = []
@@ -939,23 +1018,71 @@ function sparklePulse(startsLocal, { overshoot = 112, hold = 100, fadeScale = 88
   oKfs.push({ t: OP, s: [0] })
   return { scale: anim(sKfs, EASE.expressivePop), opacity: anim(oKfs, EASE.settleSoft) }
 }
-const startsA = [0, 36, 72, 108, 144, 180]
+
+// Cluster A carries "the FIRST burst" — the brief: "the first burst fires as
+// he lands — his settle and the first firework are one unified moment of
+// joy, with no silent sky between his landing and the celebration... that
+// first burst belongs to the landing itself, in the intro's tail." Anchoring
+// A's whole 36f-period grid at LAND_END (not T) instead of the T-anchored
+// scheme above puts a burst directly on his landing frame — the field-tested
+// failure this guards against (now in chapterization-transition-grammar.md,
+// "accents tied to an event fire AT the event") is a payoff accent that
+// waits for the loop marker and leaves a silent gap between the event and
+// its celebration. Because SPARK_PERIOD (36) divides LOOP (216) exactly six
+// times, T and OP sit at the IDENTICAL phase of this anchor's cycle
+// (OP - LAND_END ≡ T - LAND_END, mod 36) — so the seam's boundary values are
+// the periodic function's own computed values at T and OP, never a
+// hand-typed override (player-contract.md's boundary-value rule): the array
+// is simply built instance-by-instance from the anchor and CLIPPED at OP: the
+// wrap-around instance's own "+14 hold" keyframe lands exactly on OP by
+// construction (474+14=488), so its keyframe already carries the value T
+// needs to match — no forced {t:OP, s:0} exists to fight it.
+function sparklePulseFromAnchor(anchorAbs, { overshoot = 112, hold = 100, fadeScale = 88 } = {}) {
+  const steps = [
+    { dt: 0, s: [0, 0, 100], o: 0, sEase: EASE.expressivePop, oEase: EASE.settleSoft },
+    { dt: 8, s: [overshoot, overshoot, 100], o: 100, sEase: EASE.settleSoft, oEase: EASE.settleSoft },
+    { dt: 14, s: [hold, hold, 100], o: 100, sEase: EASE.settleSoft, oEase: EASE.settleSoft },
+    { dt: 20, s: [hold, hold, 100], o: 100, sEase: EASE.settleSoft, oEase: EASE.settleSoft },
+    { dt: 30, s: [fadeScale, fadeScale, 100], o: 0, sEase: EASE.settleSoft, oEase: EASE.settleSoft },
+  ]
+  const sKfs = [], oKfs = []
+  if (anchorAbs > 0) {
+    sKfs.push({ t: 0, s: [0, 0, 100], ease: EASE.expressivePop })
+    oKfs.push({ t: 0, s: [0], ease: EASE.settleSoft })
+  }
+  for (let start = anchorAbs; start < OP; start += SPARK_PERIOD) {
+    for (const step of steps) {
+      const t = start + step.dt
+      if (t > OP) break
+      sKfs.push({ t, s: step.s, ease: step.sEase })
+      oKfs.push({ t, s: [step.o], ease: step.oEase })
+    }
+  }
+  return { scale: anim(sortedByT(sKfs), EASE.expressivePop), opacity: anim(sortedByT(oKfs), EASE.settleSoft) }
+}
 const startsB = [12, 48, 84, 120, 156, 192]
 const startsC = [24, 60, 96, 132, 168, 204]
-const pulseA = sparklePulse(startsA)
+const pulseA = sparklePulseFromAnchor(LAND_END)
 const pulseB = sparklePulse(startsB)
 const pulseC = sparklePulse(startsC)
+console.log(`sparkle A anchored at LAND_END=${LAND_END} (T=${T}, gap ${T - LAND_END}f) — B/C stay T-anchored`)
 
 // ── Swoosh (thick self-crossing scribble -> filled polygon) + its spark ──
 const swooshTube = tubeBuilder(P3.swoosh[0], 18.3574)
 const swooshBox = bbox([swooshTube.at(1)])
 const sparkBox = bbox(P3.spark)
-// The three greens are ONE continuous line in the artwork: the ribbon's head
-// (198,112) sits on the swoosh's own start (173,112), and the swoosh's exit
-// (222,148) hands into the spark. The sequential draw block below times them.
-// Everything settles before T; T is keyed explicitly at the same rest value OP
-// is forced to (player-contract.md, "a boundary value must come from
-// evaluating the SAME function at that boundary").
+// The greens enter as ONE radiating gesture (field-tested fix: the first cut
+// trim-drew the ribbon but FADED the swoosh in ~20 frames later, which read
+// as two unrelated events). The artwork itself is one continuous line — the
+// ribbon's head (198,112) sits on the swoosh's own start (173,112), and the
+// swoosh's exit (222,148) hands into the spark — so while he rises the
+// ribbon trim-draws outward to the LEFT of him and the swoosh wipes outward
+// to the RIGHT on the SAME clock (swooshWipeGroups below — a fill polygon
+// can't trim, and the corruption precedent forbids a live thick stroke), and
+// the spark pops at the wipe's end like a pen lift. Everything settles well
+// before T; T is keyed explicitly at the same rest value OP is forced to
+// (player-contract.md, "a boundary value must come from evaluating the SAME
+// function at that boundary").
 // ONE PEN, TWO HALVES, IN SEQUENCE. The first cut ran both halves on one
 // clock radiating outward from the join, which reads as two strokes started
 // together. A hand draws a connected line along its own length: the ribbon
@@ -968,9 +1095,11 @@ const SWOOSH_DRAW_DUR = RISE_END - ANTIC_END          // 50f — unchanged pace
 const SWEEP_VS_SCRIBBLE = 1.4
 const RIBBON_DRAW_DUR = Math.round(
   SWOOSH_DRAW_DUR * (pathLength(P3.ribbon[0]) / pathLength(P3.swoosh[0])) / SWEEP_VS_SCRIBBLE)
-const DRAW_END = LAND_END - 2                      // spark still settles before T
-const DRAW_START = DRAW_END - SWOOSH_DRAW_DUR      // the handover: ribbon ends, swoosh begins
+const SWOOSH_DRAW_END = LAND_END - 2                  // spark still settles before T
+const DRAW_START = SWOOSH_DRAW_END - SWOOSH_DRAW_DUR  // swoosh picks the line up here
+const DRAW_END = SWOOSH_DRAW_END
 const RIBBON_DRAW_START = DRAW_START - RIBBON_DRAW_DUR
+const RIBBON_DRAW_END = DRAW_START                    // no gap: the pen never lifts
 // The swoosh is DRAWN, not wiped (designer direction, round 3: "like you would
 // draw the letter Z with your hand"). The previous cut revealed it behind a
 // left-to-right band, which uncovers the whole zigzag column by column — the
@@ -1058,7 +1187,12 @@ const RIBBON_W = 19.7116
 // the two halves then chain into one continuous hand movement. (The gradient
 // is defined in canvas coordinates, so reversing the path does not move it,
 // and the gleam keeps the source orientation.)
-const ribbonDrawSeg = reverseSeg(ribbonSeg)
+const ribbonDrawSeg = {
+  v: [...ribbonSeg.v].reverse(),
+  i: [...ribbonSeg.o].reverse(),
+  o: [...ribbonSeg.i].reverse(),
+  c: false,
+}
 // Gradient endpoints from the source (paint0_linear): x1,y1 -> x2,y2, alpha 1 -> 0.3.
 const RIBBON_G0 = [186.843, 117.997], RIBBON_G1 = [75.038, 134.874]
 function gradientStroke(w) {
@@ -1081,7 +1215,7 @@ function gradientStroke(w) {
 const ribbonDrawTrim = anim([
   { t: 0, s: [0], ease: EASE.settleSoft },
   { t: RIBBON_DRAW_START, s: [0], ease: EASE.travelBal },
-  { t: DRAW_START, s: [100] },  // no gap: the pen never lifts
+  { t: RIBBON_DRAW_END, s: [100] },
 ])
 
 // THE GLEAM — a travelling trim WINDOW on the ribbon's own stroke.
@@ -1277,12 +1411,12 @@ const controls = {
     { target: 'mascot-shadow', kind: 'amount', property: 'scale', label: 'Shadow pulse', description: 'How much the ground shadow spreads on landing vs pulls in at the peak.' },
   ],
   motionExceptions: [
-    { layer: 'eyes', reason: "brief: \"His closed happy eyes keep their exact drawn shape and proportions throughout... they never squash, stretch, or squint... their own scale has to cancel the body's out\" — the eyes' scale track is the exact inverse of the body's squash/stretch (product 100%), never a blink or a squint." },
-    { a: 'ribbon', b: 'outline', reason: "brief: \"Everything rests exactly where artwork 3 draws it\" — the ribbon/swoosh/spark are stage-fixed decoration behind him (\"sweeps in behind him\"), not a held or worn prop; they hold their source position while the body bounces near them." },
+    { layer: 'eyes', reason: "brief: \"Only the body and its white face morph\" — the eyes' scale track is the exact inverse of the body's squash/stretch (product 100%), so their drawn arcs never squash, stretch, or blink; only bodyOutline/belly carry the morph." },
+    { a: 'ribbon', b: 'outline', reason: "sequence checklist default (chapterization-transition-grammar.md): \"anything that comes to rest rests where its source file draws it\" — the brief stages the ribbon/swoosh/spark as one pen-drawn gesture that arrives once (\"draws itself... straight on into the bright swoosh\"), never as a held or worn prop, so per the default they hold their source position while the body bounces near them." },
     { a: 'ribbon', b: 'belly', reason: "same as above — stage-fixed decoration, not welded to the body." },
-    { a: 'swoosh', b: 'outline', reason: "designer direction: the greens are drawn as ONE continuous pen stroke behind him when the celebration starts, then rest at the source position while he keeps bouncing; backdrop decoration, not a held prop, and deliberately free of any impact-keyed response." },
+    { a: 'swoosh', b: 'outline', reason: "same as above — the greens appear together as one smooth decorative gesture behind him when the celebration starts, then rest at the source position while he keeps bouncing; stage-fixed decoration, not a held prop." },
     { a: 'swoosh', b: 'belly', reason: "same as above." },
-    { a: 'spark', b: 'outline', reason: "same as above — pops at the stroke's end like a pen lift, then rests at the source position as backdrop decoration." },
+    { a: 'spark', b: 'outline', reason: "same as above — brief: \"the spark last like the pen lifting\" — pops at the gesture's end, then rests at the source position as stage decoration." },
     { a: 'spark', b: 'belly', reason: "same as above." },
     { a: 'ribbon-sweep', b: 'outline', reason: "the gleam strokes ride the ribbon's own static path; see the ribbon exception." },
     { a: 'ribbon-sweep', b: 'belly', reason: "same as above." },
@@ -1290,15 +1424,13 @@ const controls = {
     { a: 'ribbon', b: 'eyes', reason: "same as above — stage-fixed decoration passing near the face, not welded to it." },
     { a: 'swoosh', b: 'airflow', reason: "same as above — stage-fixed decoration passing near the air-flow marks, not welded to them." },
     { a: 'swoosh', b: 'eyes', reason: "same as above — stage-fixed decoration passing near the face, not welded to it." },
-    { a: 'swoosh', b: 'spark', reason: "the swoosh is revealed by a keyframed tube draw while the spark pops around its own artwork centre at the stroke's end (scale-pivot gate), so their shared touching edge drifts a few px during the brief pop — an entrance artifact, not an independent clock." },
+    { a: 'swoosh', b: 'spark', reason: "the swoosh reveals by a static-geometry wipe while the spark pops around its own artwork centre at the wipe's end (scale-pivot gate), so their shared touching edge drifts a few px during the brief pop — an entrance artifact, not an independent clock." },
   ],
 }
 
 mkdirSync(OUT_DIR, { recursive: true })
-// Ship compact: pretty-printing this doc costs ~1.9MB of pure indentation, and
-// the tube polygons carry 14 decimals of float noise on a 257px canvas. 3dp is
-// 0.0005px — below any renderer's notice, and verified not to collapse a single
-// keyframe or vertex pair (the constant-vertex contract still holds).
+// Ship compact: pretty-print costs ~1.9MB of indentation and the tube polygons
+// carry 14 decimals of float noise on a 257px canvas (3dp = 0.0005px).
 const round3 = (k, v) => (typeof v === 'number' ? +v.toFixed(3) : v)
 writeFileSync(OUT, JSON.stringify(lottie, round3))
 writeFileSync(join(OUT_DIR, 'controls.json'), JSON.stringify(controls, null, 2))
