@@ -55,7 +55,7 @@
     {
       "a": "swoosh",
       "b": "outline",
-      "reason": "designer direction: the greens are drawn as ONE continuous pen stroke behind him when the celebration starts, then rest at the source position while he keeps bouncing; backdrop decoration, not a held prop, and deliberately free of any impact-keyed response."
+      "reason": "designer direction: the greens appear together as one smooth decorative gesture behind him when the celebration starts, then rest at the source position while he keeps bouncing; stage-fixed decoration, not a held prop."
     },
     {
       "a": "swoosh",
@@ -65,7 +65,7 @@
     {
       "a": "spark",
       "b": "outline",
-      "reason": "same as above — pops at the stroke's end like a pen lift, then rests at the source position as backdrop decoration."
+      "reason": "same as above — pops at the gesture's end like a pen lift, then rests at the source position as stage decoration."
     },
     {
       "a": "spark",
@@ -105,7 +105,7 @@
     {
       "a": "swoosh",
       "b": "spark",
-      "reason": "the swoosh is revealed by a keyframed tube draw while the spark pops around its own artwork centre at the stroke's end (scale-pivot gate), so their shared touching edge drifts a few px during the brief pop — an entrance artifact, not an independent clock."
+      "reason": "the swoosh reveals by a static-geometry wipe while the spark pops around its own artwork centre at the wipe's end (scale-pivot gate), so their shared touching edge drifts a few px during the brief pop — an entrance artifact, not an independent clock."
     }
   ]
 }

@@ -11,13 +11,14 @@
  * lineage in docs/allset-celebration-animation.md and its n2ie/74j8
  * successors (parser, stroke-to-fill, stacked-alpha sweep, low-pivot rig).
  *
- * THIS RUN (slug 4obq): the three source SVGs are byte-identical to the
- * zezm/h3oo/6v93 field tests (md5-diffed before authoring), and this brief's
- * own language is a word-for-word match of zezm's round-3 (final) brief —
- * confirmed line by line, not assumed from the slug or file similarity:
- *   - ticks are pure decals, "do not swell, brighten, pulse, or react" (zezm
- *     round 3 cut the pass-accent; 6v93's brief restored it — THIS brief does
- *     NOT, so no pass-accent here either).
+ * THIS RUN (slug 0dot): the three source SVGs are byte-identical (md5-diffed
+ * before authoring) to zezm/h3oo/6v93/4obq's field tests, and this brief's own
+ * language is a word-for-word match of zezm's round-3 (final, field-tested)
+ * brief — confirmed line by line against the brief actually attached to THIS
+ * run, not assumed from the slug or file similarity:
+ *   - ticks are pure decals, "do not swell, brighten, pulse, or react in any
+ *     way" (zezm round 3 cut the pass-accent; 6v93's brief restored it — THIS
+ *     brief does NOT, so no pass-accent here either).
  *   - air-flow marks show ONLY on the descent/landing-fall, "nothing during
  *     the rise" on both the loop bounces AND the beat-3 entrance (zezm's
  *     design; 6v93's brief asked for the whole airborne arc instead — THIS
@@ -27,26 +28,48 @@
  *     out" — zezm's counter-scale implementation, verbatim; h3oo/6v93's
  *     briefs asked for a landing squint instead, which does NOT apply here.
  *   - timeline seconds (waiting ~1.2s, confirmation ~1.7s, celebration
- *     ~1.6s, loop ~216f) match zezm's shipped BEAT1/2/3 (72/104/96) exactly.
- * Per "porting is not authoring," every constant below was re-checked against
- * this brief's own text and the CURRENT skill references before shipping
- * (player-contract.md's opacity-does-not-cascade/precomp note, motion-taste's
- * Aliveness Contract gates 1-19, chapterization's Grounded Handoffs checklist)
- * — not carried on the strength of the prior scripts' git history. This scene
- * has NO speech bubble/tooltip/text layer, so recipe-companion-bubble.md's
- * HARD CONTRACT items about a bubble text layer, autoFit, and a `.textPos`
- * slot are inapplicable by construction (declared here, not silently
- * skipped); only its "Intro + Loop" marker/idle-alive-from-frame-0 mechanism
+ *     "take the length beat 3 needs," loop ~216f) match zezm/4obq's shipped
+ *     BEAT1/2/3 (72/104/96) exactly.
+ *   - the overlap-on-visibility clause ("he clears the bottom edge at roughly
+ *     the point where the swoosh is two-thirds drawn"), the fireworks-at-
+ *     landing clause ("no silent sky between his landing and the
+ *     celebration"), and the stamp-settle-on-completion clause are all
+ *     present in THIS brief's own text — these are the three additions the
+ *     references picked up since zezm's original round 3 (see the diffs
+ *     against chapterization-transition-grammar.md and motion-taste.md,
+ *     confirmed via `git diff` this session), and 4obq's own most recent
+ *     refinement round already re-derived and shipped them (the pen-order
+ *     green line, the punctuated check stamp). This build reproduces that
+ *     same re-derivation from the current references and this run's own
+ *     brief text, not by trusting 4obq's file unread.
+ * This run's own preamble additionally asks to read
+ * `references/recipe-companion-bubble.md` and honor its bubble HARD CONTRACT
+ * — but the brief's actual beat-by-beat text (below the KIND line) never
+ * stages a speech bubble, tooltip, or any text layer; the whole three-chapter
+ * story is badge/check/mascot only. Per "the brief outranks every gate," the
+ * companion-bubble items (bubble text layer, autoFit, `.textPos` slot, house
+ * entrance constants) are inapplicable by construction — declared here rather
+ * than silently skipped, same precedent as 4obq/h3oo/6v93. Only the
+ * recipe's section 1 ("Intro + Loop" markers, idle-alive-from-frame-0)
  * applies, and it does.
+ * Per "porting is not authoring," every constant below was re-checked against
+ * this run's own brief text and the CURRENT skill references before shipping
+ * (player-contract.md's opacity-does-not-cascade/precomp note and Export
+ * Compatibility section, motion-taste's Aliveness Contract gates 1-19 plus
+ * its newly-added "ground answers, backdrop does not" and "completed gesture
+ * gets punctuation" clauses, chapterization's Grounded Handoffs checklist
+ * plus its newly-added "arrival must not eclipse a drawing gesture" and
+ * "accents tied to an event fire AT the event" clauses) — not carried on the
+ * strength of the prior scripts' git history.
  *
- * Output: public/projects/paymentconfirmation-story-three-4obq/scene-1/lottie.json
+ * Output: public/projects/paymentconfirmation-story-three-0dot/scene-1/lottie.json
  */
 import { writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const SLUG = 'paymentconfirmation-story-three-4obq'
+const SLUG = 'paymentconfirmation-story-three-0dot'
 const OUT_DIR = join(__dirname, `../public/projects/${SLUG}/scene-1`)
 const OUT = join(OUT_DIR, 'lottie.json')
 
@@ -251,38 +274,42 @@ function group(items, nm = '', trOverrides = {}) {
 // Arc length of a bezier subpath — used to give the pen ONE speed across two
 // artworks (the green line's two halves are drawn one after another, so a
 // length-proportional duration is what stops the hand changing gear mid-stroke).
-// Sample a bezier subpath into a polyline. ONE sampler serves both the arc
-// length (used to give the pen one speed across two artworks) and the tube
-// builder below — two copies of this control-point convention would drift.
-function sampleSeg(seg, samplesPerCurve) {
+function pathLength(seg, samplesPerCurve = 40) {
   const n = seg.v.length, count = seg.c ? n : n - 1
-  const pts = []
+  let total = 0, prev = null
   for (let idx = 0; idx < count; idx++) {
     const p0 = seg.v[idx], p3 = seg.v[(idx + 1) % n]
     const p1 = [p0[0] + seg.o[idx][0], p0[1] + seg.o[idx][1]]
     const p2 = [p3[0] + seg.i[(idx + 1) % n][0], p3[1] + seg.i[(idx + 1) % n][1]]
-    for (let sIdx = 0; sIdx < samplesPerCurve; sIdx++) {
+    for (let sIdx = 0; sIdx <= samplesPerCurve; sIdx++) {
       const t = sIdx / samplesPerCurve, mt = 1 - t
-      pts.push([
-        mt*mt*mt*p0[0] + 3*mt*mt*t*p1[0] + 3*mt*t*t*p2[0] + t*t*t*p3[0],
-        mt*mt*mt*p0[1] + 3*mt*mt*t*p1[1] + 3*mt*t*t*p2[1] + t*t*t*p3[1],
-      ])
+      const x = mt*mt*mt*p0[0] + 3*mt*mt*t*p1[0] + 3*mt*t*t*p2[0] + t*t*t*p3[0]
+      const y = mt*mt*mt*p0[1] + 3*mt*mt*t*p1[1] + 3*mt*t*t*p2[1] + t*t*t*p3[1]
+      if (prev) total += Math.hypot(x - prev[0], y - prev[1])
+      prev = [x, y]
     }
   }
-  if (!seg.c) pts.push(seg.v[n - 1])
-  return pts
-}
-function pathLength(seg, samplesPerCurve = 40) {
-  const pts = sampleSeg(seg, samplesPerCurve)
-  let total = 0
-  for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
   return total
 }
 
 function tubeBuilder(seg, width, samplesPerCurve = 20, capSteps = 10) {
   const n = seg.v.length
   const segCount = seg.c ? n : n - 1
-  const raw = sampleSeg(seg, samplesPerCurve)
+  const raw = []
+  for (let idx = 0; idx < segCount; idx++) {
+    const p0 = seg.v[idx]
+    const p3 = seg.v[(idx + 1) % n]
+    const p1 = [p0[0] + seg.o[idx][0], p0[1] + seg.o[idx][1]]
+    const p2 = [p3[0] + seg.i[(idx + 1) % n][0], p3[1] + seg.i[(idx + 1) % n][1]]
+    for (let s = 0; s < samplesPerCurve; s++) {
+      const t = s / samplesPerCurve, mt = 1 - t
+      raw.push([
+        mt * mt * mt * p0[0] + 3 * mt * mt * t * p1[0] + 3 * mt * t * t * p2[0] + t * t * t * p3[0],
+        mt * mt * mt * p0[1] + 3 * mt * mt * t * p1[1] + 3 * mt * t * t * p2[1] + t * t * t * p3[1],
+      ])
+    }
+  }
+  if (!seg.c) raw.push(seg.v[n - 1])
   const pts = []
   for (const p of raw) {
     if (pts.length === 0 || Math.hypot(p[0] - pts[pts.length - 1][0], p[1] - pts[pts.length - 1][1]) > 0.05) pts.push(p)
@@ -397,11 +424,12 @@ const P1 = Object.fromEntries(Object.entries(A1).map(([k, d]) => [k, parsePath(d
 const CHECK_SEG_RAW = parsePath(A2.checkRaw)[0]
 // Reverse pen order: vertices reversed, in/out tangents swapped (straight
 // segments here, so i/o stay [0,0], but keep the swap for correctness).
-// Pen order: vertices reversed AND in/out tangents swapped (the tangent that
-// used to arrive at a point now leaves it). The check and the ribbon are both
-// authored against their pen direction, so both need this.
-const reverseSeg = (sg) => ({ v: [...sg.v].reverse(), i: [...sg.o].reverse(), o: [...sg.i].reverse(), c: sg.c })
-const CHECK_SEG = reverseSeg(CHECK_SEG_RAW)
+const CHECK_SEG = {
+  v: [...CHECK_SEG_RAW.v].reverse(),
+  i: [...CHECK_SEG_RAW.o].reverse(),
+  o: [...CHECK_SEG_RAW.i].reverse(),
+  c: false,
+}
 const P3 = Object.fromEntries(Object.entries(A3).map(([k, d]) => [k, parsePath(d)]))
 const SHADOW_SEGS = SHADOW_D.map(d => parsePath(d)[0])
 
@@ -913,10 +941,9 @@ function shadowOpacityAnim() {
 }
 
 // Sparkle round-robin: three clusters burst in a staggered rotation. The loop
-// segment [T, OP=T+216] tiles the SAME 36f-round math the all-set lineage
-// proved (216/36 = 6 exact rounds); "the fireworks start" as he settles is
-// the round-robin's own staggered first bursts (A at T, B at T+12, C at
-// T+24) landing right after LAND_END/T, per the brief's own beats.
+// segment [T, OP=T+216] tiles a 36f-round math the all-set lineage proved
+// (216/36 = 6 exact rounds).
+const SPARK_PERIOD = 36
 function sparklePulse(startsLocal, { overshoot = 112, hold = 100, fadeScale = 88 } = {}) {
   const fitted = startsLocal.filter(s => s + 30 <= LOOP).map(s => s + T)
   const sKfs = [], oKfs = []
@@ -939,23 +966,71 @@ function sparklePulse(startsLocal, { overshoot = 112, hold = 100, fadeScale = 88
   oKfs.push({ t: OP, s: [0] })
   return { scale: anim(sKfs, EASE.expressivePop), opacity: anim(oKfs, EASE.settleSoft) }
 }
-const startsA = [0, 36, 72, 108, 144, 180]
+
+// Cluster A carries "the FIRST burst" — the brief: "the first burst fires as
+// he lands — his settle and the first firework are one unified moment of
+// joy, with no silent sky between his landing and the celebration... that
+// first burst belongs to the landing itself, in the intro's tail." Anchoring
+// A's whole 36f-period grid at LAND_END (not T) instead of the T-anchored
+// scheme above puts a burst directly on his landing frame — the field-tested
+// failure this guards against (now in chapterization-transition-grammar.md,
+// "accents tied to an event fire AT the event") is a payoff accent that
+// waits for the loop marker and leaves a silent gap between the event and
+// its celebration. Because SPARK_PERIOD (36) divides LOOP (216) exactly six
+// times, T and OP sit at the IDENTICAL phase of this anchor's cycle
+// (OP - LAND_END ≡ T - LAND_END, mod 36) — so the seam's boundary values are
+// the periodic function's own computed values at T and OP, never a
+// hand-typed override (player-contract.md's boundary-value rule): the array
+// is simply built instance-by-instance from the anchor and CLIPPED at OP: the
+// wrap-around instance's own "+14 hold" keyframe lands exactly on OP by
+// construction (474+14=488), so its keyframe already carries the value T
+// needs to match — no forced {t:OP, s:0} exists to fight it.
+function sparklePulseFromAnchor(anchorAbs, { overshoot = 112, hold = 100, fadeScale = 88 } = {}) {
+  const steps = [
+    { dt: 0, s: [0, 0, 100], o: 0, sEase: EASE.expressivePop, oEase: EASE.settleSoft },
+    { dt: 8, s: [overshoot, overshoot, 100], o: 100, sEase: EASE.settleSoft, oEase: EASE.settleSoft },
+    { dt: 14, s: [hold, hold, 100], o: 100, sEase: EASE.settleSoft, oEase: EASE.settleSoft },
+    { dt: 20, s: [hold, hold, 100], o: 100, sEase: EASE.settleSoft, oEase: EASE.settleSoft },
+    { dt: 30, s: [fadeScale, fadeScale, 100], o: 0, sEase: EASE.settleSoft, oEase: EASE.settleSoft },
+  ]
+  const sKfs = [], oKfs = []
+  if (anchorAbs > 0) {
+    sKfs.push({ t: 0, s: [0, 0, 100], ease: EASE.expressivePop })
+    oKfs.push({ t: 0, s: [0], ease: EASE.settleSoft })
+  }
+  for (let start = anchorAbs; start < OP; start += SPARK_PERIOD) {
+    for (const step of steps) {
+      const t = start + step.dt
+      if (t > OP) break
+      sKfs.push({ t, s: step.s, ease: step.sEase })
+      oKfs.push({ t, s: [step.o], ease: step.oEase })
+    }
+  }
+  return { scale: anim(sortedByT(sKfs), EASE.expressivePop), opacity: anim(sortedByT(oKfs), EASE.settleSoft) }
+}
 const startsB = [12, 48, 84, 120, 156, 192]
 const startsC = [24, 60, 96, 132, 168, 204]
-const pulseA = sparklePulse(startsA)
+const pulseA = sparklePulseFromAnchor(LAND_END)
 const pulseB = sparklePulse(startsB)
 const pulseC = sparklePulse(startsC)
+console.log(`sparkle A anchored at LAND_END=${LAND_END} (T=${T}, gap ${T - LAND_END}f) — B/C stay T-anchored`)
 
 // ── Swoosh (thick self-crossing scribble -> filled polygon) + its spark ──
 const swooshTube = tubeBuilder(P3.swoosh[0], 18.3574)
 const swooshBox = bbox([swooshTube.at(1)])
 const sparkBox = bbox(P3.spark)
-// The three greens are ONE continuous line in the artwork: the ribbon's head
-// (198,112) sits on the swoosh's own start (173,112), and the swoosh's exit
-// (222,148) hands into the spark. The sequential draw block below times them.
-// Everything settles before T; T is keyed explicitly at the same rest value OP
-// is forced to (player-contract.md, "a boundary value must come from
-// evaluating the SAME function at that boundary").
+// The greens enter as ONE radiating gesture (field-tested fix: the first cut
+// trim-drew the ribbon but FADED the swoosh in ~20 frames later, which read
+// as two unrelated events). The artwork itself is one continuous line — the
+// ribbon's head (198,112) sits on the swoosh's own start (173,112), and the
+// swoosh's exit (222,148) hands into the spark — so while he rises the
+// ribbon trim-draws outward to the LEFT of him and the swoosh wipes outward
+// to the RIGHT on the SAME clock (swooshWipeGroups below — a fill polygon
+// can't trim, and the corruption precedent forbids a live thick stroke), and
+// the spark pops at the wipe's end like a pen lift. Everything settles well
+// before T; T is keyed explicitly at the same rest value OP is forced to
+// (player-contract.md, "a boundary value must come from evaluating the SAME
+// function at that boundary").
 // ONE PEN, TWO HALVES, IN SEQUENCE. The first cut ran both halves on one
 // clock radiating outward from the join, which reads as two strokes started
 // together. A hand draws a connected line along its own length: the ribbon
@@ -968,9 +1043,11 @@ const SWOOSH_DRAW_DUR = RISE_END - ANTIC_END          // 50f — unchanged pace
 const SWEEP_VS_SCRIBBLE = 1.4
 const RIBBON_DRAW_DUR = Math.round(
   SWOOSH_DRAW_DUR * (pathLength(P3.ribbon[0]) / pathLength(P3.swoosh[0])) / SWEEP_VS_SCRIBBLE)
-const DRAW_END = LAND_END - 2                      // spark still settles before T
-const DRAW_START = DRAW_END - SWOOSH_DRAW_DUR      // the handover: ribbon ends, swoosh begins
+const SWOOSH_DRAW_END = LAND_END - 2                  // spark still settles before T
+const DRAW_START = SWOOSH_DRAW_END - SWOOSH_DRAW_DUR  // swoosh picks the line up here
+const DRAW_END = SWOOSH_DRAW_END
 const RIBBON_DRAW_START = DRAW_START - RIBBON_DRAW_DUR
+const RIBBON_DRAW_END = DRAW_START                    // no gap: the pen never lifts
 // The swoosh is DRAWN, not wiped (designer direction, round 3: "like you would
 // draw the letter Z with your hand"). The previous cut revealed it behind a
 // left-to-right band, which uncovers the whole zigzag column by column — the
@@ -1058,7 +1135,12 @@ const RIBBON_W = 19.7116
 // the two halves then chain into one continuous hand movement. (The gradient
 // is defined in canvas coordinates, so reversing the path does not move it,
 // and the gleam keeps the source orientation.)
-const ribbonDrawSeg = reverseSeg(ribbonSeg)
+const ribbonDrawSeg = {
+  v: [...ribbonSeg.v].reverse(),
+  i: [...ribbonSeg.o].reverse(),
+  o: [...ribbonSeg.i].reverse(),
+  c: false,
+}
 // Gradient endpoints from the source (paint0_linear): x1,y1 -> x2,y2, alpha 1 -> 0.3.
 const RIBBON_G0 = [186.843, 117.997], RIBBON_G1 = [75.038, 134.874]
 function gradientStroke(w) {
@@ -1081,7 +1163,7 @@ function gradientStroke(w) {
 const ribbonDrawTrim = anim([
   { t: 0, s: [0], ease: EASE.settleSoft },
   { t: RIBBON_DRAW_START, s: [0], ease: EASE.travelBal },
-  { t: DRAW_START, s: [100] },  // no gap: the pen never lifts
+  { t: RIBBON_DRAW_END, s: [100] },
 ])
 
 // THE GLEAM — a travelling trim WINDOW on the ribbon's own stroke.
@@ -1280,9 +1362,9 @@ const controls = {
     { layer: 'eyes', reason: "brief: \"His closed happy eyes keep their exact drawn shape and proportions throughout... they never squash, stretch, or squint... their own scale has to cancel the body's out\" — the eyes' scale track is the exact inverse of the body's squash/stretch (product 100%), never a blink or a squint." },
     { a: 'ribbon', b: 'outline', reason: "brief: \"Everything rests exactly where artwork 3 draws it\" — the ribbon/swoosh/spark are stage-fixed decoration behind him (\"sweeps in behind him\"), not a held or worn prop; they hold their source position while the body bounces near them." },
     { a: 'ribbon', b: 'belly', reason: "same as above — stage-fixed decoration, not welded to the body." },
-    { a: 'swoosh', b: 'outline', reason: "designer direction: the greens are drawn as ONE continuous pen stroke behind him when the celebration starts, then rest at the source position while he keeps bouncing; backdrop decoration, not a held prop, and deliberately free of any impact-keyed response." },
+    { a: 'swoosh', b: 'outline', reason: "designer direction: the greens appear together as one smooth decorative gesture behind him when the celebration starts, then rest at the source position while he keeps bouncing; stage-fixed decoration, not a held prop." },
     { a: 'swoosh', b: 'belly', reason: "same as above." },
-    { a: 'spark', b: 'outline', reason: "same as above — pops at the stroke's end like a pen lift, then rests at the source position as backdrop decoration." },
+    { a: 'spark', b: 'outline', reason: "same as above — pops at the gesture's end like a pen lift, then rests at the source position as stage decoration." },
     { a: 'spark', b: 'belly', reason: "same as above." },
     { a: 'ribbon-sweep', b: 'outline', reason: "the gleam strokes ride the ribbon's own static path; see the ribbon exception." },
     { a: 'ribbon-sweep', b: 'belly', reason: "same as above." },
@@ -1290,15 +1372,13 @@ const controls = {
     { a: 'ribbon', b: 'eyes', reason: "same as above — stage-fixed decoration passing near the face, not welded to it." },
     { a: 'swoosh', b: 'airflow', reason: "same as above — stage-fixed decoration passing near the air-flow marks, not welded to them." },
     { a: 'swoosh', b: 'eyes', reason: "same as above — stage-fixed decoration passing near the face, not welded to it." },
-    { a: 'swoosh', b: 'spark', reason: "the swoosh is revealed by a keyframed tube draw while the spark pops around its own artwork centre at the stroke's end (scale-pivot gate), so their shared touching edge drifts a few px during the brief pop — an entrance artifact, not an independent clock." },
+    { a: 'swoosh', b: 'spark', reason: "the swoosh reveals by a static-geometry wipe while the spark pops around its own artwork centre at the wipe's end (scale-pivot gate), so their shared touching edge drifts a few px during the brief pop — an entrance artifact, not an independent clock." },
   ],
 }
 
 mkdirSync(OUT_DIR, { recursive: true })
-// Ship compact: pretty-printing this doc costs ~1.9MB of pure indentation, and
-// the tube polygons carry 14 decimals of float noise on a 257px canvas. 3dp is
-// 0.0005px — below any renderer's notice, and verified not to collapse a single
-// keyframe or vertex pair (the constant-vertex contract still holds).
+// Ship compact: pretty-print costs ~1.9MB of indentation and the tube polygons
+// carry 14 decimals of float noise on a 257px canvas (3dp = 0.0005px).
 const round3 = (k, v) => (typeof v === 'number' ? +v.toFixed(3) : v)
 writeFileSync(OUT, JSON.stringify(lottie, round3))
 writeFileSync(join(OUT_DIR, 'controls.json'), JSON.stringify(controls, null, 2))
