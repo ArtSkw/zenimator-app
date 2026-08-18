@@ -110,6 +110,17 @@ below.
   amplitudes up to ~±6% the residual is ~0.25%, invisible.) Motion accents
   like speed lines follow motion-taste's trailing rule: absent at rest,
   streaming in on the fast phase just passed, gone by the impact.
+- **Ground answers, backdrop decoration doesn't** (motion-taste's
+  world-responds boundary, routed here because landing characters are where
+  it bites). Elements sharing his GROUND — the shadow, floor props, whatever
+  he lands on — answer every landing with a low-amplitude derived response.
+  Decoration floating BEHIND him (ribbons, glows, decorative strokes) stays
+  serene: no impact-keyed jolt, which reads as jitter rather than weight.
+  Serene is not inert, though — it still owes gate 1 its own quiet accent (a
+  travelling gleam, a slow breath), and that accent is what distinguishes it
+  from the decorative satellites below, which DO carry independent
+  micro-floats because they read as objects in the scene rather than as
+  backdrop.
 - Volume-preserving squash and stretch, anchored at the base: at contact reduce
   one axis and widen the other so area stays roughly constant (short/wide
   alternating with tall/narrow), stretch the opposite way during fast motion, and

@@ -31,9 +31,21 @@ Use this reference when choosing pacing, easings, staging, or animation style.
 - Elements whose artwork forms ONE continuous line are ONE gesture. Read the
   source's connectivity before staging entrances: endpoints that touch (a
   ribbon's head on a scribble's start, a scribble's tail running into its
-  spark) are a single drawn stroke — enter them on one clock, in one
-  direction, as one technique family. A fade-in beside a draw-on reads as two
-  unrelated events (field-tested, twice).
+  spark) are a single drawn stroke — one technique family, never a fade-in
+  beside a draw-on, which reads as two unrelated events (field-tested, twice).
+  **And a hand draws such a line SEQUENTIALLY along its own length, not
+  simultaneously outward from the join.** Chain the pen order — reverse
+  whichever piece needs it so each half ENDS where the next one BEGINS, and
+  run them back-to-back with no gap and no overlap. Give each half a duration
+  proportional to its own arc length — measure it, don't eyeball it (the
+  `pathLength()` sampler in `build-paymentconfirmation-story-three-4obq.mjs`
+  is the reference implementation); a long smooth sweep may run somewhat
+  hotter than a tight scribble, ~1.4× on the one scene where it was measured,
+  so treat that as a data point rather than a ceiling. The pen never changes gear
+  mid-stroke; ease both halves the same way, and the small slowdown where
+  they meet reads as the hand rounding a corner. Simultaneous radiating from
+  a midpoint is right only for a genuine burst (sparks, confetti) — for
+  anything that reads as drawn, it looks like two pens starting at once.
 - Give the primary subject the clearest timing. Secondary elements should support
   it, not compete.
 - Match easing to intent. Functional UI needs speed and clarity; brand motion can
@@ -131,6 +143,15 @@ by what it is doing this beat. Bezier is `x1,y1,x2,y2`.
   at rest, absent at the apex, streaming in partway into the fast phase
   (typically the descent), gone by the impact. Marks that lead the motion or
   ride at rest read as antennae stuck to the character, not as air.
+- **A completed gesture gets punctuation.** When something draws itself on —
+  a checkmark, a stroke, a written word — the pen lifting is a beat, not a
+  stop: give the finished mark a small stamp-settle (2-3% overshoot on its
+  own pivot over a few frames) so the completion clicks physically. Trace
+  the beat's punctuation chain to find the gap — a scene that pulses the
+  hand-off and pops the exit but lets the actual payoff mark just stop has
+  punctuated everything except the moment that matters. (recipe-loaders-icons'
+  `check-complete` preset says "draw plus short settle" — this rule is why,
+  and it applies wherever a drawn mark completes, whatever recipe routed.)
 - `travel-balanced`'s asymmetric control points (`1.00,.49,.00,.55`) are
   tuned for longer travel — compressed into a short segment (under ~10
   frames) genuinely bounded by a stop on BOTH ends (an overshoot extremum,
@@ -232,6 +253,25 @@ Four properties separate a living idle from a placed one:
   down-beat; liquid sloshes when the glass moves; paper rocks when the pen
   taps. Response is what makes motion read as weight in a world instead of
   layers wiggling independently.
+  **The response boundary — GROUND answers, BACKDROP does not.** Which other
+  elements answer is decided by physical relationship, not proximity:
+  anything sharing the subject's contact surface (the shadow, the seat, a
+  floor prop, the thing he lands on or touches) answers every impact with a
+  low-amplitude derived response (`amplitude × the body's own driver`, a
+  frame or two behind, rest == source by construction — never an own clock).
+  Backdrop DECORATION — ribbons, glows, halos, decorative strokes floating
+  BEHIND the subject — stays serene: its aliveness is its own quiet accent
+  (a gleam, a slow breath), and a sympathetic jolt on it reads as jitter,
+  not weight. What this bans is the IMPACT-KEYED jolt, not derived motion in
+  general: a smooth parallax counter-move on a distant backdrop is still
+  right (see "Distant backdrops hold still"), because slow drift derived
+  from travel reads as depth where a flinch derived from a landing reads as
+  a twitch. Field-tested in BOTH directions on one scene: the
+  ground shadow answering every landing sold the weight, while a derived
+  dip on the floating greens behind him read as "sudden moves on a delicate
+  background element" and was reverted by the designer. When unsure whether
+  an element is ground or backdrop, ask what he would disturb by landing —
+  air doesn't flinch.
   - **A derived response's rest value must equal the source pose, the same
     "rest == source" discipline the primary track already follows.** The
     tempting shortcut is to write the response as `amplitude * (1 -
@@ -692,8 +732,11 @@ Four properties separate a living idle from a placed one:
 
 - Path drawing should follow the natural reading or construction order.
 - Keep trim-path speed visually even; short segments may need shorter durations.
-- For handwriting/path reveals, add a slight follow-through or ink settle only
-  if it suits the style.
+- For handwriting/path reveals, the completed mark gets a stamp-settle by
+  DEFAULT (2-3% overshoot on its own pivot over a few frames) — the pen
+  lifting is a beat, not a stop; see "A completed gesture gets punctuation"
+  in Easing Anchors. Drop it only where the register forbids a pop (serious
+  data, technical traces), and say so.
 - For loops, match first and last frames in position, opacity, color, and
   perceived velocity.
 

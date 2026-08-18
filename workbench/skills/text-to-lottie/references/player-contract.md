@@ -428,6 +428,28 @@ so compute the baseline from the font's cap height instead of eyeballing it.
   carrying both `s` and `e` duplicates every polygon and nearly doubled a
   shipped file (measured −44% on removal).
 
+## Payload — the scene file is a shipped asset
+
+The JSON is not a build artifact, it is the thing the app downloads and the
+thing an engineer drops into a product. Write it accordingly:
+
+- **Serialize compact, and round.** `JSON.stringify(doc)` with no indent
+  argument, through a replacer that rounds numbers to 3 decimals:
+  `(k, v) => (typeof v === 'number' ? +v.toFixed(3) : v)`. Pretty-printing a
+  scene with generated geometry costs ~86% of the file in indentation alone,
+  and generated tube/hatch polygons carry 11-14 decimals of float noise —
+  1e-14px of "precision" on a 256px canvas. Measured on one scene: 2.19MB →
+  198KB, 91% smaller, pixel-identical render. 3dp = 0.0005px, below any
+  renderer's notice; verify (as that scene did) that no keyframe pair becomes
+  identical and no polygon vertices collapse, since a constant-vertex draw-on
+  depends on both.
+- **Emit s-only keyframes.** Carrying both `s` and `e` duplicates every value,
+  because `e` is just the next keyframe's `s` (measured: −44% on a
+  polygon-heavy track before rounding was even applied).
+- A scene whose biggest layer is a keyframed polygon track is where all of
+  this bites — check the per-layer byte split before assuming the file is
+  fine.
+
 ## Export Compatibility — what survives leaving this player
 
 Skottie is not the only renderer the scene must satisfy. The app's HTML export
