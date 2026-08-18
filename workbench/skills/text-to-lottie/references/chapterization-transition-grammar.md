@@ -208,6 +208,37 @@ who is on stage at each beat — then honor it literally:
   implies — a leap from below, a slide from a wing, a drop that bounces — and
   the settle hands off into the idle so the entrance CAUSES the float, walk,
   or hover that follows. One axis rings on the landing; two reads as wobble.
+- **An arrival must not ECLIPSE a gesture that is still drawing.** When an
+  entrance overlaps an accent that draws itself (a stroke, a trim reveal, a
+  written mark), the drawn thing is the beat's message and the arriving
+  subject is scenery until it lands — so the gesture must be legible before
+  the subject covers its ground. Stage the overlap deliberately: the stroke
+  runs on the empty stage, the subject launches only as the stroke's last
+  fraction goes down, and the two resolve together (the pen lifts as it
+  lands). If both cannot read inside the beat's current length, LENGTHEN THE
+  BEAT — a hidden gesture is wasted work, and the animation that draws it
+  paid for it in file size too. Watch for this after ANY retiming of a drawn
+  accent: moving a stroke's window later can silently push it under an
+  entrance that did not move (field-tested — sequencing a two-part stroke
+  slid its second half 20 frames into the character's arrival).
+- **Time that overlap by the arriving subject's first VISIBLE frame.** One
+  number governs it: the frame the subject's own artwork CROSSES INTO VIEW,
+  stated as a fraction of the drawn gesture's progress — "he clears the
+  bottom edge when the stroke is two-thirds down". Verify by rendering that
+  fraction and looking for him; use the SUBTREE's topmost geometry, not the
+  focal shape's (see the parking trap above). The two failure directions
+  fall out of that one number: land it too late and the beat QUEUES (the
+  stage empties and waits — there must be no frame where the stroke has
+  finished and nothing else has begun), too early and the arrival ECLIPSES
+  the gesture. It should read as one continuous phrase (drawing, drawing,
+  and *up* he comes), never as two announcements; if a scrub shows a lull,
+  the overlap is too SMALL, not too large.
+  **Never anchor this on anticipation.** A subject entering from off-stage
+  does its coil where nobody can see it, so "his anticipation begins during
+  the stroke" buys exactly nothing on screen. Three successive prose
+  refinements failed on one scene for precisely this reason: the engine
+  obeyed each one and moved an invisible coil earlier, while the first
+  visible frame never budged.
 - **Departures are EXITS, and exits are a baton pass.** When a chapter's cast
   changes, every element that leaves gets its own exit beat — an element with
   no exit lingers as stray geometry beside the next beat's subject (a clock's
@@ -218,6 +249,16 @@ who is on stage at each beat — then honor it literally:
   outgoing piece is leaving — the eye follows one thing at a time. Nothing of
   the outgoing cast may still read by the time the incoming action reaches
   the stage's focus.
+- **Accents tied to an event fire AT the event, never at the next marker.**
+  When the brief couples an accent to a story moment ("as he settles, the
+  fireworks start"), the first instance belongs to that moment — even when
+  the moment sits in the intro and the accent's repeating system lives in
+  the loop. Author the first burst in the intro tail, timed to the event,
+  and let the loop's own seam-exact tiling take over from T; a payoff accent
+  that waits for the loop marker leaves a silent gap between the event and
+  its celebration (field-tested: the mascot landed, and the sky stayed empty
+  for a dozen frames before the first firework). Markers are playback
+  structure, not story beats.
 - **Ambient fields run until told to stop.** Elements the brief keeps moving
   across beats (clouds, waves, traffic, rain) drift from the very first frame
   at constant velocity, on the FIRST asset as much as the last, and stop only
