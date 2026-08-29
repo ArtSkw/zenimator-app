@@ -352,6 +352,28 @@ Four properties separate a living idle from a placed one:
   anchors between sparse poses. Never leave `travel-balanced` on a track
   that must read as a single sweep (see its singularity note above), and
   never leave a raw linear segment (`0,0,1,1`) inside an organic gesture.
+  **A named anchor tuned for a dramatic entrance/exit can itself blow this
+  ceiling at small, continuous-cycle amplitudes — the curve is smooth, the
+  ceiling still fails.** `entrance-sharp`/`exit-accelerate` (and similar
+  "fast start, soft land" / "slow start, fast end" anchors) have a large
+  internal tangent ratio BY DESIGN — roughly 40-60× between their initial
+  and final slope, appropriate for a hero move covering real distance. Used
+  on a small continuous cycle (a several-px walk bounce, a few-percent
+  squash) that internal ratio shows up almost unchanged in the max/median
+  audit, because there's no larger motion around it to dilute the spike:
+  measured 8.07× on a 6px bounce and 9.84× on a 12px steam drift, both using
+  these two anchors directly, both otherwise smooth curves. Fix: derive a
+  gentler sibling for continuous/cyclic tracks specifically — same
+  qualitative shape (ease OUT on the away phase, ease IN on the return) at a
+  shallower internal ratio (e.g. `[.40,.55,.60,.90]` / `[.45,.20,.65,.70]`
+  cleared 1.3-1.9× on the same tracks) — rather than assuming a named anchor
+  is safe everywhere just because it renders smoothly. Separately, keyframe
+  TIMING can cause the identical symptom even with safe easing: four points
+  per cycle spanning very uneven time gaps (10f / 26f / 26f / 10f) for a
+  tiny total value range measured 17.29× purely from the spacing; collapsing
+  to two evenly-timed points (matching the cycle's own natural contact/apex
+  beats) removed it independent of the easing curve. Audit both causes
+  separately before concluding a "lurch" needs a different curve.
 - **The silhouette breathes — morphs, not just transforms.** Rigid
   transforms (position/rotation/scale) MOVE a character; they never make it
   read alive the way a rigged Rive mesh does, because the OUTLINE never
