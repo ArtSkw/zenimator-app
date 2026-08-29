@@ -9,6 +9,9 @@ import { Switch } from '@/components/ui/switch'
 import { Check } from 'lucide-react'
 import { sceneLayers } from '@/engine/lottie/sceneRoot'
 import { SlotContentSection } from '@/components/panels/SlotContentSection'
+import { ParametersSection } from '@/components/panels/ParametersSection'
+import { claimedSids, useParameters } from '@/store/useParameters'
+import { PropertyRow } from '@/components/params'
 import { useSlotMetas } from '@/store/useSlotMetas'
 import { SlotControlsPanel } from '@/components/generate/SlotControlsPanel'
 import { SceneDossier } from '@/components/generate/SceneDossier'
@@ -67,6 +70,15 @@ export function ControlsPanel() {
   // the motion knobs. Counted into the empty check so a scene with only slots
   // still populates the panel.
   const slotMetas = useSlotMetas()
+  // Declared parameters win over shape-inferred slots: a scene migrating to the
+  // typed contract must not show the same value twice, once with the right
+  // editor and once with a guessed one.
+  const params = useParameters()
+  const legacyMetas = useMemo(() => {
+    const claimed = claimedSids(params)
+    return slotMetas.filter((m) => !claimed.has(m.sid))
+  }, [slotMetas, params])
+  const hasContent = params.length > 0 || legacyMetas.length > 0
   const selName = selNm
     ? (layerLabels[selNm] ?? cast.find((m) => m.nm === selNm)?.label ?? selNm)
     : undefined
@@ -120,7 +132,7 @@ export function ControlsPanel() {
       </div>
 
       <ScrollArea className="flex-1 min-h-0">
-        {all.length === 0 && slotMetas.length === 0 ? (
+        {all.length === 0 && !hasContent ? (
           <Empty className="py-10 border-none">
             <EmptyHeader>
               <EmptyMedia variant="icon"><SlidersHorizontal /></EmptyMedia>
@@ -146,18 +158,21 @@ export function ControlsPanel() {
 
             {/* Content (editable strings/geometry) sits under Animation, in the
                 same section voice, separated so it reads as its own concern. */}
-            {slotMetas.length > 0 && (
+            {hasContent && (
               <>
                 {general.length > 0 && <div className="border-t border-border" />}
                 <Section title="Content" icon={Type}>
-                  <SlotContentSection metas={slotMetas} />
+                  <div className="space-y-4">
+                    <ParametersSection params={params} />
+                    <SlotContentSection metas={legacyMetas} />
+                  </div>
                 </Section>
               </>
             )}
 
             {/* Divider makes it unambiguous which controls are scene-wide vs.
                 scoped to the selected layer. */}
-            {(general.length > 0 || slotMetas.length > 0) && <div className="border-t border-border" />}
+            {(general.length > 0 || hasContent) && <div className="border-t border-border" />}
 
             {selNm ? (
               <Section title={selName ?? 'Layer'} icon={Layers}>
@@ -165,8 +180,12 @@ export function ControlsPanel() {
                     label + tooltip (no helper paragraph). */}
                 {movesControl && (
                   <TooltipProvider>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-foreground/90">Motion</span>
+                    <PropertyRow
+                      label="Motion"
+                      layout="row"
+                      modified={movesOn !== (movesControl.value !== (movesControl.offValue ?? 0))}
+                      onReset={() => setSlotOverride(movesControl.id, movesControl.value)}
+                    >
                       <Tooltip>
                         <TooltipTrigger
                           render={
@@ -183,7 +202,7 @@ export function ControlsPanel() {
                         />
                         <TooltipContent side="left">Applies motion to this part — off holds it still</TooltipContent>
                       </Tooltip>
-                    </div>
+                    </PropertyRow>
                   </TooltipProvider>
                 )}
                 {movesOn ? (
@@ -292,7 +311,7 @@ function HistoryPanel({ slug, onClose }: { slug: string; onClose: () => void }) 
                 type="button"
                 disabled={applying || !revert}
                 onClick={() => revert?.(v.v)}
-                className="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left transition-colors hover:bg-muted disabled:opacity-40 disabled:pointer-events-none"
+                className="flex w-full items-center gap-2 rounded-control border border-border px-3 py-2 text-left transition-colors hover:bg-muted disabled:opacity-40 disabled:pointer-events-none"
               >
                 <RotateCcw size={13} className="shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">
@@ -381,7 +400,7 @@ function IntensityControl({
 
   return (
     <div className="space-y-1.5">
-      <p className="flex-1 min-w-0 truncate text-xs font-medium text-foreground/90">Intensity</p>
+      <p className="flex-1 min-w-0 truncate text-xs font-medium text-foreground">Intensity</p>
       <TooltipProvider>
         <div className="grid grid-cols-3 gap-1.5">
           {INTENSITY_MODES.map((m) => {
@@ -396,13 +415,13 @@ function IntensityControl({
                       aria-pressed={active}
                       onClick={() => apply(m.key)}
                       className={
-                        'pressable flex items-center justify-center gap-1 rounded-lg border px-1.5 py-1.5 text-[11px] ' +
+                        'pressable flex items-center justify-center gap-1 rounded-control border px-1.5 py-1.5 text-[11px] transition-colors ' +
                         (active
-                          ? 'border-primary bg-primary/10 text-foreground font-medium'
-                          : 'border-border text-foreground/90 hover:bg-muted')
+                          ? 'border-foreground bg-foreground text-background font-medium'
+                          : 'border-control-border bg-control text-muted-foreground hover:bg-control-hover hover:text-foreground')
                       }
                     >
-                      <Icon size={12} className={active ? 'shrink-0 text-primary' : 'shrink-0 text-muted-foreground'} />
+                      <Icon size={12} className={active ? 'shrink-0 text-background' : 'shrink-0 text-muted-foreground'} />
                       <span className="truncate">{m.label}</span>
                     </button>
                   }

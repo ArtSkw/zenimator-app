@@ -221,6 +221,68 @@ filler. 1–2 per key layer, only for motion that truly benefits from a handle.
   size slot at text extents + 2×padding (never below `min`), live, while a
   teammate previews locale strings. See `recipe-companion-bubble.md`.
 
+## Content Parameters — declare the KIND, never let it be guessed
+
+Slots alone are classified by SHAPE: two or three numbers read as a size, four
+as a colour. That inference cannot see a gradient at all, and the failure is
+silent — the panel shows a flat swatch that edits one thing while the ramp
+beside it, often the loudest element on screen, ignores every change. Two
+shipped scenes had exactly this: a "Check accent color" control driving four
+small strokes while the gradient ring it appeared to name stayed untouched.
+
+When a scene has user-facing content, declare it in `controls.json` alongside
+`controls` and `layerControls`:
+
+```json
+"parameters": [
+  {
+    "id": "checkRing",
+    "kind": "gradient",
+    "sid": "checkRing",
+    "label": "Check ring ramp",
+    "description": "The sweep around the tick — four stops, fading as it closes.",
+    "themable": true
+  }
+]
+```
+
+`kind` is one of `text · number · size · color · gradient · select · toggle`.
+A scene without `parameters` renders exactly as before, so adding them is safe
+on any existing scene.
+
+**The accuracy law.** A parameter must bind a property of its own kind. A
+`color` parameter may NEVER bind a gradient, and a `gradient` parameter may
+never bind a flat colour. If the artwork uses a ramp, the control is a ramp —
+collapsing it to one swatch is not a simplification, it is a lie about three of
+the four stops, and the fade in the fourth disappears entirely.
+
+**Bind the real property.** Put the `sid` on the property the renderer reads —
+for a gradient that is the `g` object, not the shape and not a sibling colour.
+
+**Publish every sid as a slot.** A property carrying a `sid` with no matching
+entry in `slots` renders correctly in Skottie, which falls back to the inline
+value — but Skottie is not what ships. `lottie-web` and ThorVG carry the HTML
+and dotLottie exports, and an unresolved reference is not worth the bet:
+
+```js
+const RAMP = buildRamp(stops, 'checkRing')   // ONE object…
+// …used by the shape AND published as the slot, so they cannot drift:
+gradientStrokeItem({ ramp: RAMP, ... })
+slots: { checkRing: { p: RAMP } }
+```
+
+Two copies of the same numbers is precisely how a slot and its property fall
+out of step after one edit. Build the value once and reference it twice.
+
+**Few, and in product language.** At most 8 parameters per scene, labelled for
+what the viewer sees ("Check ring ramp"), never for the mechanism
+("gs.g.k"). Mark brand accents `themable` — the interactive flagship's theme
+export consumes that flag.
+
+**Name honestly.** If a control covers only part of what its label implies,
+narrow the label rather than widening the promise: `checkAccent` binding four
+flat greens is a "Check accent tint", not a "Check accent color".
+
 ## Intro + Loop (markers)
 
 An `intro-loop` scene is ONE composition with two segments declared by

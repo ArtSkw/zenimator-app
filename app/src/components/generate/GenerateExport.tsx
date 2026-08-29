@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils'
 import { makeDotLottie } from '@/export/exportDotLottie'
 import { downloadLottieHtml } from '@/export/exportLottieHtml'
 import { buildMobilePack } from '@/export/mobile/buildPack'
+import { parseParameterSpecs } from '@/engine/lottie/parameters'
 import { parseSlotSpecs } from '@/engine/lottie/slots'
 import { sceneFontAssets } from '@/engine/studio/studioClient'
 import { loopStartFromJson } from '@/engine/lottie/markers'
@@ -165,8 +166,10 @@ async function runInstantExport(id: string, json: string, loop: boolean): Promis
     const fonts = Object.entries(assets).map(([family, bytes]) => ({ file: `${family}.ttf`, bytes: new Uint8Array(bytes) }))
     // The agent's controls.json carries the autoFit slot specs the web
     // helper is generated from; mobile packs ignore them.
-    const slotSpecs = parseSlotSpecs(useGenerateStore.getState().agentControlsJson)
-    const pack = buildMobilePack(framework, { lottieJson: json, loop, fonts, slotSpecs })
+    const controlsJson = useGenerateStore.getState().agentControlsJson
+    const slotSpecs = parseSlotSpecs(controlsJson)
+    const parameters = parseParameterSpecs(controlsJson)
+    const pack = buildMobilePack(framework, { lottieJson: json, loop, fonts, slotSpecs, parameters })
     triggerDownload(pack.blob, pack.filename)
     if (pack.fontsMissing) toast.warning('Pack downloaded — the scene uses native text but its font wasn’t reachable (see README)')
     else toast.success('Pack downloaded', { description: 'Unzip and follow README.md.' })

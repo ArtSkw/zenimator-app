@@ -1,7 +1,34 @@
 import { makeDotLottieBytes } from '../exportDotLottie'
 import { findTextDoc, numericValue, sidPrefix, textLineHeight, type SlotSpec } from '@/engine/lottie/slots'
 import { loopStartFrame } from '@/engine/lottie/markers'
-import type { PackContext, SlotFit } from './types'
+import type { PackContext, PackParameter, SlotFit } from './types'
+import {
+  readParameterValue, type GradientValue, type ParameterSpec,
+} from '@/engine/lottie/parameters'
+import { rgbToHex } from '@/engine/lottie/color'
+
+/** What a developer needs to see in a README: the shipped value, readable. */
+function showParameter(kind: string, value: unknown): string {
+  if (value == null) return '—'
+  if (kind === 'gradient') {
+    const g = value as GradientValue
+    const stops = (g.stops ?? []).map((s) => s.color).join(' → ')
+    return `${g.type}, ${g.stops?.length ?? 0} stops (${stops})`
+  }
+  if (kind === 'color') {
+    const c = (value as { k?: number[] })?.k ?? (value as number[])
+    if (Array.isArray(c) && c.length >= 3) return rgbToHex(c[0], c[1], c[2])
+  }
+  if (kind === 'size') {
+    const v = (value as { k?: number[] })?.k ?? (value as number[])
+    if (Array.isArray(v) && v.length >= 2) return `${Math.round(v[0])} × ${Math.round(v[1])}`
+  }
+  if (kind === 'text') {
+    const t = (value as { k?: { t?: string } })?.k
+    if (t && typeof t === 'object' && 't' in t) return `"${String(t.t).slice(0, 40)}"`
+  }
+  return typeof value === 'object' ? '—' : String(value)
+}
 
 /** Builds the shared context every pack file is rendered from. Parses the
  *  baked doc once; the `.lottie` bytes are produced here so `animation.json`
@@ -11,6 +38,7 @@ export function buildPackContext(
   loop: boolean,
   fonts: { file: string; bytes: Uint8Array }[] = [],
   slotSpecs: SlotSpec[] = [],
+  parameters: ParameterSpec[] = [],
 ): PackContext {
   const doc = JSON.parse(lottieJson) as {
     w?: number
@@ -77,6 +105,15 @@ export function buildPackContext(
       hasNativeText: Array.isArray(doc.fonts?.list) && doc.fonts.list.length > 0,
       loopStart: loopStart != null && loopStart < frames ? Math.round(loopStart) : null,
       slotIds: doc.slots ? Object.keys(doc.slots) : [],
+      // Read from the BAKED doc, so the README quotes what the pack actually
+      // contains rather than what the scene was authored with.
+      parameters: parameters.map<PackParameter>((spec) => ({
+        id: spec.id,
+        sid: spec.sid,
+        kind: spec.kind,
+        label: spec.label,
+        shown: showParameter(spec.kind, readParameterValue(doc, spec)),
+      })),
     },
     fonts,
     slotFits,

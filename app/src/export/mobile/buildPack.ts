@@ -1,6 +1,7 @@
 import { strToU8, zipSync } from 'fflate'
 import { frameworkById } from './frameworks'
 import { buildPackContext } from './meta'
+import type { ParameterSpec } from '@/engine/lottie/parameters'
 import { renderReadme } from './readme'
 import type { SlotSpec } from '@/engine/lottie/slots'
 import type { FrameworkId, PackFile } from './types'
@@ -23,10 +24,11 @@ export function buildMobilePack(
     fonts?: { file: string; bytes: Uint8Array }[]
     /** Agent slot specs (autoFit) — the web pack's fitBubble constants. */
     slotSpecs?: SlotSpec[]
+    parameters?: ParameterSpec[]
   },
 ): MobilePack {
   const def = frameworkById(id)
-  const ctx = buildPackContext(args.lottieJson, args.loop, args.fonts ?? [], args.slotSpecs ?? [])
+  const ctx = buildPackContext(args.lottieJson, args.loop, args.fonts ?? [], args.slotSpecs ?? [], args.parameters ?? [])
 
   const files: PackFile[] = [
     { path: 'README.md', content: renderReadme(def, ctx) },

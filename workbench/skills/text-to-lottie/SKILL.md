@@ -121,7 +121,11 @@ These few defaults are non-negotiable and apply to every designed scene. Load
   behavior, focal element strongest); do not fall back to one uniform ease for
   every layer.
 - Use slots for important editable values and add `controls.json` labels/ranges
-  when they improve the properties panel. For the scene's key layers, also
+  when they improve the properties panel. When a value is user-facing content
+  (a label, an accent fill, a gradient ramp, a size), also DECLARE it in
+  `controls.json`'s `parameters` array with its `kind` — shape inference cannot
+  see a gradient, and a colour swatch standing in for a ramp is a silent lie.
+  See the player-contract "Content Parameters" section. For the scene's key layers, also
   author 1–2 bespoke `layerControls` knobs (contextual names like "Bag sway",
   never generic) — see the player-contract "Layer controls" section.
 - For SVG input, preserve the viewBox, normalize styling, watch fill rules and
@@ -206,14 +210,22 @@ Before finishing:
    by design on a perfectly clean seam. A failure prints the diff's bounding
    box — go and render that box rather than guessing.
 
-9. **Run the Aliveness Contract** in `references/motion-taste.md` — the
+9. **If the scene declares `parameters`, run
+   `node scripts/check-parameters.mjs <slug>` — it must exit 0.** It enforces
+   the ACCURACY LAW mechanically: a `color` parameter bound to a gradient ramp
+   is a swatch that edits one stop of four and drops the fade, and no amount of
+   prose prevents that from shipping. It also reports gradients that carry no
+   parameter at all — the gap that leaves the loudest part of a scene
+   un-editable while a flat control beside it appears to name it.
+
+10. **Run the Aliveness Contract** in `references/motion-taste.md` — the
    completion gate for whether the scene is actually alive: nothing inert,
    amplitude measured rather than assumed, held objects parented and carrying
    their own secondary motion, bodies breathing, parts articulating, effort
    phase-locked, accents slow enough to resolve. Report it as a table (track ·
    amplitude · active span · verdict), not as prose. A scene that renders
    cleanly but fails this gate is not finished.
-10. Finish only when the animation renders cleanly and feels intentional.
+11. Finish only when the animation renders cleanly and feels intentional.
 
 ## Maintenance Evals
 

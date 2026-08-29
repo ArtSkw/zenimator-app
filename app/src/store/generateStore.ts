@@ -6,6 +6,9 @@ import { castFromControls, type CastMember } from '@/engine/controls/cast'
 import { labelsFromDoc } from '@/engine/studio/studioClient'
 import { sceneLayers } from '@/engine/lottie/sceneRoot'
 import { applySlotOverride, SLOT_OVERRIDE_PREFIX } from '@/engine/lottie/slots'
+import {
+  applyParameterOverride, parseParameterSpecs, PARAM_OVERRIDE_PREFIX,
+} from '@/engine/lottie/parameters'
 import { fitFrame } from '@/engine/lottie/portable/fitFrame'
 import type { Skeleton } from '@/engine/legacy/skeleton'
 
@@ -354,14 +357,14 @@ export const useGenerateStore = create<GenerateState>((set) => ({
  *  Movement/Speed/etc.) into the doc — each control re-writes the keyframes it
  *  was derived from. Shared by the live-preview hook and the imperative export
  *  getter. Returns the raw doc untouched when nothing is overridden. */
-function bakeFrom(lottieJson: string | null, controls: ControlManifest | null, slotOverrides: Record<string, unknown>): string | null {
+function bakeFrom(lottieJson: string | null, controls: ControlManifest | null, slotOverrides: Record<string, unknown>, agentControlsJson: string | null): string | null {
   if (!lottieJson || !Object.keys(slotOverrides).length) return lottieJson
   // Single-entry memo on input identity: the store replaces these objects on
   // every change, so identity equality is exact — and one memo makes a second
   // mounted useBakedLottieJson (the transport's loop tick needs one) free
   // instead of doubling a parse+rewrite+stringify of a hundreds-of-KB doc.
   const hit = bakeMemo
-  if (hit && hit.lottieJson === lottieJson && hit.controls === controls && hit.slotOverrides === slotOverrides) {
+  if (hit && hit.lottieJson === lottieJson && hit.controls === controls && hit.slotOverrides === slotOverrides && hit.agentControlsJson === agentControlsJson) {
     return hit.result
   }
   let result: string | null
@@ -380,6 +383,19 @@ function bakeFrom(lottieJson: string | null, controls: ControlManifest | null, s
     for (const [id, v] of Object.entries(slotOverrides)) {
       if (id.startsWith(SLOT_OVERRIDE_PREFIX)) applySlotOverride(doc, id.slice(SLOT_OVERRIDE_PREFIX.length), v)
     }
+    // Typed content parameters ride the SAME bake. A gradient has no Skottie
+    // slot to set live, so rewriting the doc is not a second lane — it is the
+    // only lane, and it already feeds preview, exports and the saved project
+    // alike.
+    const paramSpecs = parseParameterSpecs(agentControlsJson)
+    if (paramSpecs.length) {
+      const byId = new Map(paramSpecs.map((p) => [p.id, p]))
+      for (const [id, v] of Object.entries(slotOverrides)) {
+        if (!id.startsWith(PARAM_OVERRIDE_PREFIX)) continue
+        const spec = byId.get(id.slice(PARAM_OVERRIDE_PREFIX.length))
+        if (spec) applyParameterOverride(doc, spec, v, applySlotOverride)
+      }
+    }
     // A resized plate can now reach past the frame it was authored in — a
     // wrapped translation grows upward and the player crops it. Open the frame
     // to fit instead of truncating the string; a no-op unless something
@@ -389,13 +405,14 @@ function bakeFrom(lottieJson: string | null, controls: ControlManifest | null, s
   } catch {
     result = lottieJson
   }
-  bakeMemo = { lottieJson, controls, slotOverrides, result }
+  bakeMemo = { lottieJson, controls, slotOverrides, agentControlsJson, result }
   return result
 }
 let bakeMemo: {
   lottieJson: string
   controls: ControlManifest | null
   slotOverrides: Record<string, unknown>
+  agentControlsJson: string | null
   result: string | null
 } | null = null
 
@@ -405,13 +422,17 @@ export function useBakedLottieJson(): string | null {
   const lottieJson = useGenerateStore((s) => s.lottieJson)
   const controls = useGenerateStore((s) => s.controls)
   const slotOverrides = useGenerateStore((s) => s.slotOverrides)
-  return useMemo(() => bakeFrom(lottieJson, controls, slotOverrides), [lottieJson, controls, slotOverrides])
+  const agentControlsJson = useGenerateStore((s) => s.agentControlsJson)
+  return useMemo(
+    () => bakeFrom(lottieJson, controls, slotOverrides, agentControlsJson),
+    [lottieJson, controls, slotOverrides, agentControlsJson],
+  )
 }
 
 /** Imperative one-shot bake for export handlers — the heavy parse/clone/
  *  stringify runs on the export click, not on every control commit (which a
  *  second mounted hook would have forced). */
 export function bakeLottieJson(): string {
-  const { lottieJson, controls, slotOverrides } = useGenerateStore.getState()
-  return bakeFrom(lottieJson, controls, slotOverrides) ?? ''
+  const { lottieJson, controls, slotOverrides, agentControlsJson } = useGenerateStore.getState()
+  return bakeFrom(lottieJson, controls, slotOverrides, agentControlsJson) ?? ''
 }

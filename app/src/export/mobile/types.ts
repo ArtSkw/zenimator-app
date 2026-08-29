@@ -38,6 +38,15 @@ export type SlotFit = {
 
 export type PackFile = { path: string; content: string | Uint8Array }
 
+export type PackParameter = {
+  id: string
+  sid: string
+  kind: string
+  label: string
+  /** Human-readable form of the shipped value — a hex, a size, a ramp summary. */
+  shown: string
+}
+
 export type PackMeta = {
   w: number
   h: number
@@ -52,6 +61,9 @@ export type PackMeta = {
   loopStart: number | null
   /** Content slot ids (companion pattern) — the scene's localization surface. */
   slotIds: string[]
+  /** Declared content parameters with the value the pack actually ships, so a
+   *  developer can see what is swappable at runtime without opening the JSON. */
+  parameters: PackParameter[]
 }
 
 export type PackContext = {

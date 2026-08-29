@@ -50,6 +50,48 @@ Letting the whole file loop instead replays the entrance every cycle — it
 works, but it isn't the design.
 `
 
+  const parametersSection = meta.parameters.length === 0
+    ? ''
+    : `
+## Content parameters (swap at runtime)
+
+The studio declared these as editable content. The pack already ships them at the
+values below — override them in code when you need a variant, instead of asking
+for a re-export.
+
+| Parameter | Slot id | Type | Ships as |
+| --- | --- | --- | --- |
+${meta.parameters.map((p) => `| ${p.label} | \`${p.sid}\` | ${p.kind} | ${p.shown} |`).join('\n')}
+
+**lottie-web (≥ 5.12)** — pass overrides as \`slots\` at load time. The shape
+mirrors the \`slots\` object inside \`animation.json\`, so copy the entry you want to
+change and edit its value:
+
+\`\`\`js
+lottie.loadAnimation({
+  container: el,
+  path: 'animation.json',
+  renderer: 'svg',
+  loop: true,
+  autoplay: true,
+  slots: {
+    // a colour: [r, g, b, a] in 0..1, NOT 0..255
+    // accentColor: { p: { a: 0, k: [0.13, 0.89, 0.26, 1] } },
+    // a gradient ramp: 4x stops colour numbers, then 2x stops opacity numbers
+    // ${meta.parameters[0]?.sid ?? 'ramp'}: { p: { p: 2, k: { a: 0, k: [0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1] } } },
+  },
+})
+\`\`\`
+
+**dotlottie players** — per-parameter theming arrives with the interactive
+release; until then load \`animation.json\` through lottie-web for overrides, or
+ship a second export.
+
+**iOS / Android** — the airbnb-lineage runtimes have no slot API. Use a value
+provider keyed by the layer name (\`AnimationKeypath\` / \`KeyPath\`), or take the
+variant as its own file.
+`
+
   const localizationSection = meta.slotIds.length === 0
     ? ''
     : `
@@ -103,7 +145,7 @@ ${def.quickStart(ctx)}
 ## Alternative: ${def.alternativeLabel}
 
 ${def.alternative(ctx)}
-${segmentSection}${localizationSection}${fontsSection}
+${segmentSection}${parametersSection}${localizationSection}${fontsSection}
 ## Rendering parity
 
 The animation was authored and verified on Skia. All dotlottie runtimes (web,

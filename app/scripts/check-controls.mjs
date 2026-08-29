@@ -154,6 +154,52 @@ function unheldCuts(out, base) {
   return [...bad]
 }
 
+/**
+ * THE ACCURACY LAW, mechanically. A `color` parameter must not bind a gradient
+ * and a `gradient` parameter must not bind a flat colour — a swatch standing in
+ * for a ramp is a silent lie about every stop but one, and prose in the skill
+ * cannot stop it from shipping. Also checks that every `sid` resolves: a
+ * dangling reference renders in Skottie (it falls back to the inline value) and
+ * is a bet on lottie-web and ThorVG that we have no reason to take.
+ */
+function parameterProblems(doc, controlsJson) {
+  let parsed
+  try { parsed = JSON.parse(controlsJson) } catch { return [] }
+  const params = Array.isArray(parsed?.parameters) ? parsed.parameters : []
+  if (!params.length) return []
+  const out = []
+
+  const bound = new Map()
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return
+    if (!Array.isArray(node)) {
+      for (const [key, v] of Object.entries(node)) {
+        if (v && typeof v === 'object' && !Array.isArray(v) && typeof v.sid === 'string') {
+          const isRamp = typeof v.p === 'number' && v.k && typeof v.k === 'object' && Array.isArray(v.k.k)
+          bound.set(v.sid, { key, isRamp: (bound.get(v.sid)?.isRamp ?? false) || isRamp })
+        }
+      }
+    }
+    for (const v of Array.isArray(node) ? node : Object.values(node)) walk(v)
+  }
+  walk(doc)
+
+  if (params.length > 8) out.push(`${params.length} parameters — the budget is 8`)
+  for (const p of params) {
+    const id = p?.id ?? p?.sid ?? '(unnamed)'
+    if (typeof p?.sid !== 'string' || !p.sid) { out.push(`${id}: no sid`); continue }
+    if (typeof p?.label !== 'string' || !p.label.trim()) out.push(`${id}: no label`)
+    const hit = bound.get(p.sid)
+    if (!hit) { out.push(`${id}: sid "${p.sid}" is on no property`); continue }
+    if (!doc.slots || !(p.sid in doc.slots)) {
+      out.push(`${id}: sid "${p.sid}" is not published in slots — unresolved for lottie-web/ThorVG`)
+    }
+    if (p.kind === 'color' && hit.isRamp) out.push(`${id}: kind "color" bound to a GRADIENT ramp — accuracy law`)
+    if (p.kind === 'gradient' && !hit.isRamp) out.push(`${id}: kind "gradient" bound to a flat "${hit.key}" — accuracy law`)
+  }
+  return out
+}
+
 const bundle = await rolldown({
   input: join(APP, 'src', 'engine', 'controls', 'deriveControls.ts'),
   platform: 'node',
@@ -162,8 +208,69 @@ const bundle = await rolldown({
 })
 await bundle.write({ file: BUNDLE, format: 'cjs' })
 await bundle.close()
+const PARAM_BUNDLE = join(APP, 'node_modules', '.cache', 'check-params.cjs')
+const paramBundle = await rolldown({
+  input: join(APP, 'src', 'engine', 'lottie', 'parameters.ts'),
+  platform: 'node',
+  resolve: { alias: { '@': join(APP, 'src') } },
+  logLevel: 'silent',
+})
+await paramBundle.write({ file: PARAM_BUNDLE, format: 'cjs' })
+await paramBundle.close()
+
 const { createRequire } = await import('node:module')
 const { deriveControls, applyControlValues, parseLayerControlSpecs } = createRequire(import.meta.url)(BUNDLE)
+const {
+  parseParameterSpecs, applyParameterOverride, readParameterValue,
+} = createRequire(import.meta.url)(PARAM_BUNDLE)
+
+/**
+ * A retime and a content parameter must COMPOSE. Both recompute from the
+ * pristine doc, so in principle they cannot fight — but "in principle" is not a
+ * test, and the way this breaks is SILENT: if `applyControlValues` rebuilt a
+ * gradient property it would drop the `sid`, the override would resolve to
+ * nothing, and the picture would ignore every edit while the panel kept
+ * reporting the new value.
+ */
+function retimeParameterProblems(base, controlsJson, manifest) {
+  const specs = parseParameterSpecs(controlsJson).filter((s) => s.kind === 'gradient')
+  const duration = manifest.controls.find((c) => c.binding.kind === 'duration')
+  if (!specs.length || !duration) return []
+  const out = []
+  const target = Math.round(((duration.min ?? 0) + (duration.max ?? 0)) / 2)
+  const doc = applyControlValues(base, manifest, { [duration.id]: target })
+  if (doc.op !== target) out.push(`retime to ${target} did not take (op=${doc.op})`)
+
+  for (const spec of specs) {
+    // Compare against the PRISTINE value, not the retimed one. Reading the
+    // retimed doc twice would happily agree with itself while the retime had
+    // quietly truncated the ramp.
+    const pristineValue = readParameterValue(base, spec)
+    const authored = readParameterValue(doc, spec)
+    if (!authored) { out.push(`${spec.id}: binding lost by the retime — the override would be a no-op`); continue }
+    if (pristineValue && authored.stops.length !== pristineValue.stops.length) {
+      out.push(`${spec.id}: retime changed the ramp (${pristineValue.stops.length} stops → ${authored.stops.length})`)
+    }
+    if (pristineValue && authored.type !== pristineValue.type) {
+      out.push(`${spec.id}: retime changed the gradient type (${pristineValue.type} → ${authored.type})`)
+    }
+    // A retime must not un-publish the slot either, or the shipped doc goes out
+    // with a sid no runtime can resolve.
+    if (!doc.slots || !(spec.sid in doc.slots)) {
+      out.push(`${spec.id}: sid "${spec.sid}" is no longer published in slots after the retime`)
+    }
+    const probe = '#FF00FF'
+    applyParameterOverride(doc, spec, {
+      ...authored,
+      stops: authored.stops.map((s, i) => (i === 0 ? { ...s, color: probe } : s)),
+    }, () => {})
+    const after = readParameterValue(doc, spec)
+    if (after?.stops?.[0]?.color !== probe) out.push(`${spec.id}: override did not land on a retimed doc`)
+    if (after?.stops?.length !== authored.stops.length) out.push(`${spec.id}: override changed the stop count`)
+    if (doc.op !== target) out.push(`${spec.id}: the override undid the retime`)
+  }
+  return out
+}
 
 const scenes = existsSync(PROJECTS)
   ? readdirSync(PROJECTS).filter((s) => existsSync(join(PROJECTS, s, 'scene-1', 'lottie.json')))
@@ -188,6 +295,11 @@ for (const slug of scenes) {
 
   const baseKeys = countKeys(base, base.op)
   const broken = []
+  if (existsSync(controlsPath)) {
+    const cj = readFileSync(controlsPath, 'utf8')
+    for (const problem of parameterProblems(base, cj)) broken.push(`parameters — ${problem}`)
+    for (const problem of retimeParameterProblems(base, cj, manifest)) broken.push(`retime+parameter — ${problem}`)
+  }
   for (const c of timeControls) {
     const isDuration = c.binding.kind === 'duration'
     const values = isDuration
@@ -229,6 +341,7 @@ for (const slug of scenes) {
 }
 
 rmSync(BUNDLE, { force: true })
+rmSync(PARAM_BUNDLE, { force: true })
 console.log(`\n${checks} retimes checked across ${scenes.length} scene(s).`)
 if (failures) {
   console.error(`${failures} scene(s) produced invalid keyframe times.`)
