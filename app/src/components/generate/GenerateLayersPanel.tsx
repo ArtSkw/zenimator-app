@@ -7,11 +7,11 @@ import { useProjectsStore } from '@/store/projectsStore'
 import { tracksSummary } from '@/engine/lottie/project'
 import { ProjectsPanel } from '@/components/panels/ProjectsPanel'
 
-/** Row style shared by every clickable sidebar item — an inset rounded pill,
- *  never a full-bleed bordered row. Selection = filled pill; hover = soft
- *  tint; press = solid tint (feedback on pointer-down). */
+/** Row style shared by every clickable sidebar item — an inset row on the
+ *  control corner radius, never a full-bleed bordered row. Selection = filled;
+ *  hover = soft tint; press = solid tint (feedback on pointer-down). */
 export const SIDEBAR_ITEM =
-  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors'
+  'flex w-full items-center gap-2 rounded-control px-2.5 py-2 text-left text-[13px] transition-colors'
 export const SIDEBAR_ITEM_IDLE = 'text-foreground/85 hover:bg-muted/60 active:bg-muted'
 export const SIDEBAR_ITEM_ACTIVE = 'bg-muted text-foreground font-medium'
 

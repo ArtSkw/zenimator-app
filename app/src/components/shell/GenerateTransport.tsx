@@ -152,7 +152,7 @@ export function GenerateTransport() {
               if (e.key === 'Enter') commitEdit()
               if (e.key === 'Escape') setEditing(false)
             }}
-            className="w-14 h-6 rounded-md border border-input bg-background px-1.5 text-right text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="w-14 h-6 rounded-control border border-control-border bg-control px-1.5 text-right text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
         ) : (
           <button

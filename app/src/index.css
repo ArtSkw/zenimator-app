@@ -31,12 +31,21 @@
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-control: var(--control);
+  --color-control-hover: var(--control-hover);
+  --color-control-border: var(--control-border);
   --color-ring: var(--ring);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 1);
   --radius-lg: calc(var(--radius) * 1.6);
   --radius-xl: calc(var(--radius) * 2.4);
+  /* CONTROL CORNERS — every field, trigger, list row and segmented button.
+     Deliberately NOT on the --radius scale: `rounded-lg` is 16px, which on a
+     32px-tall control is exactly half its height and renders a perfect pill, so
+     controls sharing the container scale silently split into two styles.
+     Pills stay reserved for primary actions (BRIEF: pill primaries). */
+  --radius-control: 0.5rem;
 
   /* Motion tokens — built-in CSS easings are too weak for deliberate motion.
      ZEN motion is crisp and fast, never bouncy: strong ease-out for anything
@@ -68,6 +77,19 @@
   --input: #F7F7F8;
   --ring: #0A0A0A;
 
+  /* CONTROL SURFACE — the fill every interactive control carries so it reads as
+     "you can act on this" against a flat panel. Light steps DOWN from the panel,
+     dark steps UP; one deliberate step, affordances only. Decorative containers
+     keep the single surface tone (BRIEF: premium means subtract).
+
+     Deliberately the EXISTING ladder (secondary → muted → border) rather than a
+     third set of greys: the settings pills already sat on `--secondary`, and a
+     control class rendered in two near-identical tones reads as one of them
+     being disabled. One token, one shade. */
+  --control: #F7F7F8;
+  --control-hover: #EFEFF1;
+  --control-border: #E5E5E8;
+
   /* ZEN radius — soft, rounded */
   --radius: 0.625rem; /* 10px base */
 }
@@ -97,6 +119,13 @@
   --border: #2A2A2E;
   --input: #1E1E22;
   --ring: #F0F0F2;
+
+  /* Lighter than `--card` (#141416). Against `--popover` (#1A1A1D) the fill
+     alone is faint (1.05:1), so inside a popover the BORDER carries the
+     definition instead — it clears 1.22:1 there. */
+  --control: #1E1E22;
+  --control-hover: #252529;
+  --control-border: #2A2A2E;
 }
 
 @layer base {
@@ -172,6 +201,44 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+
+  /* The rule above only neutralises `animation-*` — TRANSITIONS still moved,
+     and movement is exactly what reduced motion asks to drop. The press scale
+     goes; the colour change that says "the control responded" stays. Gentler,
+     not zero. */
+  .pressable {
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      border-color 150ms ease;
+  }
+  .pressable:active {
+    transform: none;
+  }
+}
+
+/* Status-line swap — two states BRIDGE instead of blinking. A keyed remount
+   fades the new phrase in but drops the old one instantly, so the line goes
+   blank and then slowly fills; holding the outgoing phrase for one exit lets
+   them cross. The blur is what keeps a crossfade from reading as a double
+   exposure while both strings are legible at once.
+
+   Exit is quicker than entry on purpose: the phase change is a system response,
+   so the new text is the half worth noticing. Reduced motion collapses both to
+   instant via the rule above — the text still swaps, it just stops moving. */
+@keyframes swap-text-in {
+  from { opacity: 0; transform: translateY(2px); filter: blur(2px); }
+  to   { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes swap-text-out {
+  from { opacity: 1; transform: none; filter: blur(0); }
+  to   { opacity: 0; transform: translateY(-2px); filter: blur(2px); }
+}
+@utility swap-text-in {
+  animation: swap-text-in 180ms var(--ease-out-strong) both;
+}
+@utility swap-text-out {
+  animation: swap-text-out 140ms var(--ease-out-strong) both;
 }
 
 /* Progress bar cycle animation for ambient (infinite-loop) scenes */

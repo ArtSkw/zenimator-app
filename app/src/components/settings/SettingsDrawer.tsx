@@ -109,7 +109,7 @@ export function SettingsDrawer() {
                   type="button"
                   variant={effort === level ? 'default' : 'secondary'}
                   size="sm"
-                  className="rounded-full flex-1 text-xs"
+                  className="rounded-control flex-1 text-xs"
                   onClick={() => setEffort(level)}
                 >
                   {level}
@@ -154,7 +154,7 @@ export function SettingsDrawer() {
                 type="button"
                 variant="secondary"
                 size="sm"
-                className="rounded-full"
+                className="rounded-control"
                 disabled={pinging}
                 onClick={runEngineTest}
               >
@@ -195,7 +195,7 @@ export function SettingsDrawer() {
                   type="button"
                   variant={theme === value ? 'default' : 'secondary'}
                   size="sm"
-                  className="rounded-full flex-1 gap-1.5"
+                  className="rounded-control flex-1 gap-1.5"
                   onClick={() => setTheme(value)}
                 >
                   <Icon size={12} />

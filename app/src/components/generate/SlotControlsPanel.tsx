@@ -11,9 +11,7 @@
 
 import { useGenerateStore } from '@/store/generateStore'
 import type { ParamControl, ControlManifest } from '@/engine/controls/deriveControls'
-import { ParamSlider } from '@/components/controls/ParamSlider'
-import { ParamSelect } from '@/components/controls/ParamSelect'
-import { ParamSwitch } from '@/components/controls/ParamSwitch'
+import { NumberField, SelectField, ToggleField } from '@/components/params'
 
 interface SlotControlsPanelProps {
   manifest: ControlManifest
@@ -29,27 +27,35 @@ export function SlotControlsPanel({ manifest }: SlotControlsPanelProps) {
         const stored = slotOverrides[ctrl.id]
         const value = typeof stored === 'number' ? stored : ctrl.value
         return (
-          <div key={ctrl.id} className="space-y-1">
-            <ControlRow ctrl={ctrl} value={value} onCommit={(n) => setSlotOverride(ctrl.id, n)} />
-            {ctrl.description && (
-              <p className="text-xs leading-snug text-muted-foreground">{ctrl.description}</p>
-            )}
-          </div>
+          <ControlRow
+            key={ctrl.id}
+            ctrl={ctrl}
+            value={value}
+            onCommit={(n) => setSlotOverride(ctrl.id, n)}
+          />
         )
       })}
     </div>
   )
 }
 
+/**
+ * Scene-wide knobs render through the SAME field family as content parameters
+ * and layer controls. There is no second styling for "engine" controls: one
+ * look, one reset affordance, one origin tick — see BRIEF, "The control
+ * surface". The three bespoke Param* components this replaced were used only
+ * here and are gone.
+ */
 function ControlRow({ ctrl, value, onCommit }: { ctrl: ParamControl; value: number; onCommit: (n: number) => void }) {
   if (ctrl.control === 'select' && ctrl.options?.length) {
     return (
-      <ParamSelect
+      <SelectField
         label={ctrl.label}
+        description={ctrl.description}
         value={String(value)}
-        originValue={String(ctrl.value)}
+        authored={String(ctrl.value)}
         options={ctrl.options.map((o) => ({ label: o.label, value: String(o.value) }))}
-        onChange={(v) => onCommit(Number(v))}
+        onValueChange={(v) => onCommit(Number(v))}
       />
     )
   }
@@ -57,26 +63,32 @@ function ControlRow({ ctrl, value, onCommit }: { ctrl: ParamControl; value: numb
   if (ctrl.control === 'toggle') {
     const off = ctrl.offValue ?? 0
     return (
-      <ParamSwitch
+      <ToggleField
         label={ctrl.label}
-        checked={value !== off}
-        origin={ctrl.value !== off}
-        onChange={(on) => onCommit(on ? ctrl.value : off)}
+        description={ctrl.description}
+        value={value !== off}
+        authored={ctrl.value !== off}
+        onValueChange={(on) => onCommit(on ? ctrl.value : off)}
       />
     )
   }
 
+  const step = ctrl.step ?? 1
   return (
-    <ParamSlider
+    <NumberField
       label={ctrl.label}
+      description={ctrl.description}
       value={value}
+      authored={ctrl.value}
       min={ctrl.min ?? 0}
       max={ctrl.max ?? 100}
-      step={ctrl.step ?? 1}
-      unit={ctrl.unit ?? ''}
-      origin={ctrl.value}
-      onChange={() => {}}
-      onCommit={onCommit}
+      step={step}
+      // Fractional steps (0.1s) need a decimal readout; whole steps must not
+      // grow a trailing ".0".
+      precision={Number.isInteger(step) ? 0 : 1}
+      suffix={ctrl.unit ?? undefined}
+      slider
+      onValueChange={onCommit}
     />
   )
 }

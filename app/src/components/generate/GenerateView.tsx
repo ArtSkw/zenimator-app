@@ -9,6 +9,7 @@ import { History } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { SwapText } from '@/components/ui/swap-text'
 import { SkottiePlayer } from '@/components/player/SkottiePlayer'
 import { SkeletonSelectionOverlay } from '@/components/generate/SkeletonSelectionOverlay'
 import { StudioSelectionOverlay } from '@/components/generate/StudioSelectionOverlay'
@@ -1437,12 +1438,10 @@ export function GenerateView() {
                       {applying ? (
                         <span className="flex min-w-0 items-center gap-1.5 pl-1">
                           <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
-                          <span
-                            key={stage ?? 'apply'}
-                            className="truncate text-xs text-muted-foreground animate-in fade-in duration-300"
-                          >
-                            {stage || 'Applying…'}
-                          </span>
+                          <SwapText
+                            text={stage || 'Applying…'}
+                            className="text-xs text-muted-foreground"
+                          />
                         </span>
                       ) : (
                         !isPlaying && momentFrame == null && (
