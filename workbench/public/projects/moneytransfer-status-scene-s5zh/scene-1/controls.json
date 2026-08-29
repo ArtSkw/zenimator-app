@@ -2,7 +2,17 @@
   "controls": [
     {
       "sid": "checkAccent",
-      "label": "Check accent color"
+      "label": "Check accent tint"
+    }
+  ],
+  "parameters": [
+    {
+      "id": "checkRing",
+      "kind": "gradient",
+      "sid": "checkRing",
+      "label": "Check ring ramp",
+      "description": "The sweep around the tick — four stops, fading out as it closes.",
+      "themable": true
     }
   ],
   "layerControls": [

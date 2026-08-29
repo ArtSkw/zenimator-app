@@ -1,4 +1,14 @@
 {
+  "parameters": [
+    {
+      "id": "ribbonRamp",
+      "kind": "gradient",
+      "sid": "ribbonRamp",
+      "label": "Ribbon ramp",
+      "description": "The gradient the ribbon is filled with, across its whole run.",
+      "themable": true
+    }
+  ],
   "controls": [
     {
       "sid": "accentColor",

@@ -1,5 +1,15 @@
 {
   "controls": [],
+  "parameters": [
+    {
+      "id": "ribbonRamp",
+      "kind": "gradient",
+      "sid": "ribbonRamp",
+      "label": "Ribbon ramp",
+      "description": "The green sweep behind the mascot — fades out along its tail.",
+      "themable": true
+    }
+  ],
   "layerControls": [
     {
       "target": "mascot-root",

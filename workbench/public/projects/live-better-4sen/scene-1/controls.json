@@ -1,10 +1,28 @@
 {
   "controls": [],
   "layerControls": [
-    { "target": "global", "kind": "feel", "label": "Feel",
-      "description": "Easing personality of the whole handwritten pass, from brisk to unhurried." },
-    { "target": "r-tail-dot", "kind": "amount", "property": "scale",
+    {
+      "target": "global",
+      "kind": "feel",
+      "label": "Feel",
+      "description": "Easing personality of the whole handwritten pass, from brisk to unhurried."
+    },
+    {
+      "target": "r-tail-dot",
+      "kind": "amount",
+      "property": "scale",
       "label": "Final dot pop",
-      "description": "How pronounced the last ink dot's landing pop is." }
+      "description": "How pronounced the last ink dot's landing pop is."
+    }
+  ],
+  "parameters": [
+    {
+      "id": "letteringRamp",
+      "kind": "gradient",
+      "sid": "letteringRamp",
+      "label": "Lettering ramp",
+      "description": "The gradient the handwritten word is filled with.",
+      "themable": true
+    }
   ]
 }

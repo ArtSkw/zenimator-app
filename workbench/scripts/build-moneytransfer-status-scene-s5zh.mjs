@@ -167,11 +167,22 @@ function fillItem(colorHex, opacity = 100, nm = 'Fill') { const [r, g, b] = hexT
 function fillItemSlot(colorHex, sid, opacity = 100, nm = 'Fill') { const [r, g, b] = hexToRgb1(colorHex); return { ty: 'fl', nm, o: { a: 0, k: opacity }, c: { a: 0, k: [r, g, b, 1], sid }, r: 1 } }
 function strokeItem(colorHex, width, opacity = 100, nm = 'Stroke', cap = 2, join = 2) { const [r, g, b] = hexToRgb1(colorHex); return { ty: 'st', nm, o: { a: 0, k: opacity }, w: { a: 0, k: width }, c: { a: 0, k: [r, g, b, 1] }, lc: cap, lj: join } }
 function strokeItemSlot(colorHex, sid, width, opacity = 100, nm = 'Stroke', cap = 2, join = 2) { const [r, g, b] = hexToRgb1(colorHex); return { ty: 'st', nm, o: { a: 0, k: opacity }, w: { a: 0, k: width }, c: { a: 0, k: [r, g, b, 1], sid }, lc: cap, lj: join } }
-function gradientStrokeItem({ stops, width, opacity = 100, s, e, nm = 'Gradient Stroke' }) {
+/** The colour ramp as ONE object, shared by the shape and by the slot entry —
+ *  two copies of the same numbers is how a slot and its property drift apart. */
+function buildRamp(stops, sid) {
   const colorArr = [], alphaArr = []
   for (const st of stops) { const [r, g, b] = hexToRgb1(st.color); colorArr.push(st.offset, r, g, b); alphaArr.push(st.offset, st.alpha ?? 1) }
-  return { ty: 'gs', nm, o: { a: 0, k: opacity }, w: { a: 0, k: width }, g: { p: stops.length, k: { a: 0, k: [...colorArr, ...alphaArr] } }, s: { a: 0, k: s }, e: { a: 0, k: e }, t: 1, lc: 2, lj: 2 }
+  return { p: stops.length, k: { a: 0, k: [...colorArr, ...alphaArr] }, ...(sid ? { sid } : {}) }
 }
+function gradientStrokeItem({ stops, ramp, width, opacity = 100, s, e, nm = 'Gradient Stroke', sid }) {
+  return { ty: 'gs', nm, o: { a: 0, k: opacity }, w: { a: 0, k: width }, g: ramp ?? buildRamp(stops, sid), s: { a: 0, k: s }, e: { a: 0, k: e }, t: 1, lc: 2, lj: 2 }
+}
+const CHECK_RING_RAMP = buildRamp([
+  { offset: 0, color: '#22E243', alpha: 1 },
+  { offset: 0.15694, color: '#22E243', alpha: 1 },
+  { offset: 0.73997, color: '#0A9F24', alpha: 1 },
+  { offset: 1, color: '#22E243', alpha: 0.2 },
+], 'checkRing')
 function trimItem({ eKeys, ease, m = 1, nm = 'Trim' }) {
   const keys = eKeys.map((p, idx) => {
     const isLast = idx === eKeys.length - 1
@@ -507,13 +518,12 @@ for (const [nm, id] of [['check-ring-end-dot', 'Vector_8'], ['check-ring-end-blo
   const shapes = [group('check-ring', [
     shapeFromSubpath(sp, 'check-ring-path'),
     gradientStrokeItem({
+      ramp: CHECK_RING_RAMP,
+      // The ring is the loudest part of the tick and it is a RAMP, not a
+      // colour — the flat `checkAccent` slot beside it can never speak for it.
+      // Bound as a typed gradient parameter so the panel edits the real four
+      // stops, including the fade to 20% as it closes.
       width: 14, s: [199, 114.001], e: [11.4995, 240.001],
-      stops: [
-        { offset: 0, color: '#22E243', alpha: 1 },
-        { offset: 0.15694, color: '#22E243', alpha: 1 },
-        { offset: 0.73997, color: '#0A9F24', alpha: 1 },
-        { offset: 1, color: '#22E243', alpha: 0.2 },
-      ],
     }),
     trimItem({ eKeys: [{ t: RING_DRAW[0], v: 0 }, { t: RING_DRAW[1], v: 100 }], ease: 'travelBalanced' }),
   ])]
@@ -680,14 +690,34 @@ const markers = [
 const doc = {
   v: '5.9.0', fr: FPS, ip: 0, op: OP, w: W, h: H, nm: 'Money Transfer Status',
   ddd: 0, assets, layers, markers,
-  slots: { checkAccent: { p: { a: 0, k: [...hexToRgb1('#22E243'), 1] } } },
+  slots: {
+    checkAccent: { p: { a: 0, k: [...hexToRgb1('#22E243'), 1] } },
+    // The ring's ramp is published as a slot too, so `sid` always resolves.
+    // A dangling sid renders fine in Skottie (it falls back to the inline
+    // value) but we do not ship on Skottie alone — lottie-web and ThorVG
+    // carry the exports, and an unresolved reference is not worth the bet.
+    checkRing: { p: CHECK_RING_RAMP },
+  },
 }
 
 mkdirSync(OUT_DIR, { recursive: true })
 writeFileSync(OUT, JSON.stringify(doc))
 
 const controls = {
-  controls: [{ sid: 'checkAccent', label: 'Check accent color' }],
+  // `checkAccent` binds four FLAT greens (tail + three dots). The ring beside
+  // them is a gradient, so it needs a typed parameter — a colour slot cannot
+  // stand in for a ramp without lying about three of its four stops.
+  controls: [{ sid: 'checkAccent', label: 'Check accent tint' }],
+  parameters: [
+    {
+      id: 'checkRing',
+      kind: 'gradient',
+      sid: 'checkRing',
+      label: 'Check ring ramp',
+      description: 'The sweep around the tick — four stops, fading out as it closes.',
+      themable: true,
+    },
+  ],
   layerControls: [
     { target: 'disc-sway', kind: 'amount', property: 'rotation', label: 'Canopy sway', description: 'How far the paraglider disc tips side to side.' },
     { target: 'zenek-lag', kind: 'amount', property: 'rotation', label: 'Dangle drag', description: "How much Zenek's own dangle lags behind the canopy." },

@@ -228,19 +228,22 @@ const layers = []
 const p0 = SEGS[0] // ribbon-behind compound path (Strip A + Strip B)
 const p12 = SEGS[12] // ribbon-front compound path (Strip C)
 const gradDef = Object.values(GRADIENTS)[0]
-const ribbonGradFill = () => {
+// ONE ramp object, referenced by every ribbon part AND published as the slot —
+// the two must not become separate copies of the same numbers.
+const RIBBON_RAMP = (() => {
   const colorArr = [], alphaArr = []
   for (const st of gradDef.stops) {
     const [r, g, b] = hexToRgb1(st.color)
     colorArr.push(st.offset, r, g, b)
     alphaArr.push(st.offset, st.opacity)
   }
-  return {
-    ty: 'gf', nm: 'gradient', t: 1, o: sk(100), r: 1,
-    s: sk([gradDef.x1, gradDef.y1]), e: sk([gradDef.x2, gradDef.y2]),
-    g: { p: gradDef.stops.length, k: sk([...colorArr, ...alphaArr]) },
-  }
-}
+  return { p: gradDef.stops.length, k: sk([...colorArr, ...alphaArr]), sid: 'ribbonRamp' }
+})()
+const ribbonGradFill = () => ({
+  ty: 'gf', nm: 'gradient', t: 1, o: sk(100), r: 1,
+  s: sk([gradDef.x1, gradDef.y1]), e: sk([gradDef.x2, gradDef.y2]),
+  g: RIBBON_RAMP,
+})
 const ribbonSolidFill = () => ({ ty: 'fl', nm: 'fill', o: sk(100), r: 1, c: { a: 0, k: GREEN, sid: 'accentColor' } })
 
 function segCentroid(seg) {
@@ -443,6 +446,7 @@ const doc = {
   markers: [],
   slots: {
     accentColor: { p: { a: 0, k: [...GREEN, 1] } },
+    ribbonRamp: { p: RIBBON_RAMP },
   },
 }
 
@@ -453,6 +457,16 @@ console.log(`FRAMES=${FRAMES} (${(FRAMES / FPS).toFixed(2)}s)`)
 console.log(`Ribbon: A[${T_A},${T_A + DUR_A}] C[${T_C},${T_C + DUR_C}] B[${T_B},${T_B + DUR_B}] accent pop @${POP_START}`)
 
 const controls = {
+  parameters: [
+    {
+      id: 'ribbonRamp',
+      kind: 'gradient',
+      sid: 'ribbonRamp',
+      label: 'Ribbon ramp',
+      description: 'The gradient the ribbon is filled with, across its whole run.',
+      themable: true,
+    },
+  ],
   controls: [{ sid: 'accentColor', label: 'Ribbon & accent color' }],
   layerControls: [
     { target: 'phone', kind: 'amount', property: 'rotation', label: 'Breathing sway', description: 'How far the phone gently sways and rises as it breathes.' },

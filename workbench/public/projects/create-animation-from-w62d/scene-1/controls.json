@@ -28,11 +28,11 @@
       "description": "How far the clouds drift upward as they draw themselves in."
     },
     {
-      "target": "start-dot",
+      "target": "checkmark",
       "kind": "amount",
       "property": "scale",
-      "label": "Badge pop",
-      "description": "How much the circle's start and end sparks bounce in as it closes."
+      "label": "Check finish pop",
+      "description": "How much the checkmark bounces as it finishes drawing."
     }
   ]
 }

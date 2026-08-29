@@ -1,51 +1,69 @@
 #!/usr/bin/env node
 /**
- * Generates an animated Lottie JSON for create-animation-from-c3tg.svg — a
- * success checkmark badge drawing itself on with two ambient background
- * clouds. Same source geometry as the earlier `cloudscheck` scene (path data
- * verified identical), so this reuses that proven rig — circle, THEN
- * checkmark, THEN clouds — with one deliberate difference: this brief asks
- * the clouds to be "drawn naturally" in addition to drifting, so the cloud
- * outlines now trim-path draw themselves (not just fade+drift).
- * Output: public/projects/create-animation-from-c3tg/scene-1/lottie.json
+ * Generates the animated Lottie JSON for create-animation-from-w62d.svg — a
+ * green success-checkmark badge (an almost-closed hand-drawn circle, a
+ * checkmark crossing it, a start-dot/end-flourish/end-dot marking the
+ * circle's pen-down/pen-up points) with two small scalloped clouds flanking
+ * it. Output: public/projects/create-animation-from-w62d/scene-1/lottie.json
  *
- * Animation design (60fps, 165f = 2.75s, plays once and holds):
- *  - Stage 1 (0-82): the circle draws itself. Its start-dot pops in first
- *    (0-12), the gradient circle stroke trims on (8-74), and the circle's
- *    end flourish + accent dot pop as the stroke closes (70-82). The
- *    start-dot and end-flourish/end-dot are the source's own decorative
- *    "pen down / pen lift" marks and sit exactly at the circle stroke's
- *    authored start and end points, so they belong to the circle's stage,
- *    not the checkmark's.
- *  - Stage 2 (82-128): the checkmark draws itself, starting only after the
- *    circle has fully closed. The checkmark's source path is authored
- *    tip-to-tip in the "wrong" direction for a left-to-right read (long arm
- *    first, ending on the short arm) — its vertex order is reversed before
- *    the trim so the reveal starts at the short arm (left) and finishes
- *    sweeping up to the long arm's tip (upper right), i.e. reads as "draws
- *    left to right," per the brief.
- *  - Stage 3 (119-157): both clouds fade in, trim-draw their outline (`m:2`
- *    so the big scalloped bump draws first and the two short dash accents
- *    flick on right after — proportional to each subpath's own length), and
- *    drift upward (~14px) in the same window, beginning as the checkmark is
- *    ~80% drawn. Left cloud slightly leads the right. A trailing ~8-frame
- *    hold settles the scene exactly on the source composition.
- *  - Every animated property uses one consistent symmetric ease-in-out
- *    curve, per the brief's explicit "use ease-in-out timing" — this file
- *    deliberately does NOT mix in the asymmetric entrance/settle anchors
- *    used elsewhere in this project's motion vocabulary.
+ * Geometry note: diffing this SVG's path `d` data against already-shipped
+ * scenes (svg-compatibility's prevention-first intake) found an exact match
+ * in scripts/build-create-animation-from-c3tg.mjs / build-cloudscheck.mjs —
+ * same artwork. Per this run's brief, that prior script is a source of
+ * GEOMETRY ONLY: the rig below (staging, timing, easing, pivots) is
+ * re-derived from the CURRENT references, not ported.
  *
- * Skottie gotchas (same build as the other scripts in this folder):
- *  - Non-zero anchor + animated SCALE/ROTATION is safe; + animated
- *    POSITION is not. The dot/flourish pops use non-zero anchor + scale
- *    (safe); the cloud drift uses anchor [0,0,0] + position (also safe,
- *    since the anchor is zero).
- *  - Animated keyframe arrays must start at t=0 (ensureStartsAtZero).
- *  - A static (non-animated) gradient fill/stroke renders fine; an
- *    ANIMATED gradient's stops render nothing in this Skottie build — not
- *    an issue here since the source circle gradient is a static wash and
- *    the checkmark's source gradient is degenerate (both stops the same
- *    color), so it's authored as a flat stroke instead.
+ * Animation design (60fps, 150f = 2.5s, plays once and holds — KIND: ENTRY):
+ *  - The brief reads "the checkmark draws itself... WITH the circle also
+ *    drawing" as concurrent, not sequential — so the circle leads by a short
+ *    head start (it is the larger "frame" the checkmark reads against) and
+ *    the checkmark starts while the circle is still mid-stroke, both drawing
+ *    over much of the same window and finishing close together. This is a
+ *    deliberate re-read of the brief, not a copy of an earlier script's
+ *    circle-then-checkmark staging.
+ *  - The checkmark's source path is authored tip-to-tip from its long arm
+ *    (top-right) down to the "V" and back up its short arm — backwards for a
+ *    left-to-right read, per recipe-loaders-icons' check-complete preset — so
+ *    its vertex order (and in/out tangents) is reversed before the trim: the
+ *    reveal starts at the short/left arm and finishes sweeping up to the long
+ *    arm's tip, reading left to right per the brief. A single continuous
+ *    subpath trimmed by one `e` key already reveals at even ARC-LENGTH speed
+ *    (Skottie's trim distributes by path length), which is exactly one
+ *    continuous pen stroke — no manual per-segment pacing needed here.
+ *  - "A completed gesture gets punctuation" (motion-taste): the checkmark and
+ *    the circle stroke each get a small stamp-settle (2-3% scale overshoot,
+ *    pivoting on their own bbox center) right as their trim completes. The
+ *    checkmark is the hero (per the brief, "the visible checkmark" leads the
+ *    sentence) so it gets the strongest personality (+4%); the circle is the
+ *    supporting frame, so its settle is quieter (+2%). The start-dot and
+ *    end-dot/end-flourish are the source's own decorative "pen down / pen
+ *    lift" marks; they pop in with a modest overshoot (+6%) exactly at the
+ *    circle's authored start/end points, which doubles as the circle's own
+ *    completed-gesture punctuation.
+ *  - The clouds draw on (trim `m:2`, so the long scalloped bump draws first
+ *    and its two short dash accents flick on right after — proportional to
+ *    each subpath's own arc length) while fading in and drifting up ~14px
+ *    into their source position, starting once the circle has settled and
+ *    the checkmark is most of the way drawn — the last cast member to join,
+ *    not a continuously-scrolling ambient field, so it settles ONCE, exactly
+ *    on the source composition, per KIND: ENTRY.
+ *  - One consistent symmetric ease-in-out curve drives every keyframe in the
+ *    scene, per the brief's explicit "use ease-in-out timing" — deliberately
+ *    not mixed with the asymmetric entrance/settle anchors motion-taste
+ *    otherwise favors for push-off/settle beats, because the brief's own
+ *    instruction outranks that general preference here.
+ *
+ * Skottie facts this build relies on (still true against the current
+ * player-contract):
+ *  - Non-zero anchor + animated SCALE is safe; anchor == position with only
+ *    scale/rotation animating is the correct "absolute geometry" pivot
+ *    pattern (screenPoint = S·(local-a)+p collapses to local at scale 100%).
+ *  - Animated keyframe arrays must start at t=0.
+ *  - A static (non-animated) gradient fill/stroke renders fine; an ANIMATED
+ *    gradient's stops render nothing — not an issue here (the circle's
+ *    source gradient is a static wash; the checkmark's source gradient is
+ *    degenerate, both stops the same colour, so it's authored as a flat
+ *    stroke).
  *  - The trim modifier must sit AFTER the path items and stroke it affects,
  *    in the group's `it` order.
  */
@@ -54,10 +72,10 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const OUT_DIR = join(__dirname, '../public/projects/create-animation-from-c3tg/scene-1')
+const OUT_DIR = join(__dirname, '../public/projects/create-animation-from-w62d/scene-1')
 const OUT = join(OUT_DIR, 'lottie.json')
 
-const W = 375, H = 240, FPS = 60, FRAMES = 165 // 2.75s, plays once and holds
+const W = 375, H = 240, FPS = 60, FRAMES = 150 // 2.5s, plays once and holds
 
 // ── SVG path → Lottie bezier ────────────────────────────────────────────────
 function parsePath(d) {
@@ -106,9 +124,9 @@ function parsePath(d) {
   return subpaths
 }
 
-// Reverse a subpath's traversal direction (open paths). Vertex order
-// flips, and each vertex's in/out tangent pair swaps roles — the tangent
-// that used to arrive at a point now leaves it, and vice versa.
+// Reverse a subpath's traversal direction (open paths). Vertex order flips,
+// and each vertex's in/out tangent pair swaps roles — the tangent that used
+// to arrive at a point now leaves it, and vice versa.
 function reverseSubpath(sp) {
   const v = sp.v.slice().reverse()
   const i = sp.o.slice().reverse()
@@ -116,7 +134,7 @@ function reverseSubpath(sp) {
   return { closed: sp.closed, v, i, o }
 }
 
-// ── Raw path data lifted from create-animation-from-c3tg.svg (viewBox 0 0 375 240) ──
+// ── Raw path data lifted from create-animation-from-w62d.svg (viewBox 0 0 375 240) ──
 const SVG_PATHS = {
   cloudLeftBump: 'M23.3254 139.47H35.1928C34.6504 138.06 34.3531 136.529 34.3531 134.928C34.3531 127.942 40.0156 122.28 47.0016 122.28C49.4656 122.28 51.7567 122.995 53.7012 124.213C53.7698 111.312 64.2469 100.874 77.1642 100.874C88.1315 100.874 97.3391 108.398 99.9119 118.565C102.518 116.844 105.636 115.836 108.991 115.836C118.103 115.836 125.489 123.222 125.489 132.333C125.489 135.019 124.847 137.554 123.709 139.795H138.462',
   cloudLeftDashL: 'M17.8128 139.793H9.37988',
@@ -128,8 +146,8 @@ const SVG_PATHS = {
   endFlourish: 'M171.598 40.9007L172.927 40.6102C173.942 40.3903 174.641 39.919 175.165 39.1741C175.687 38.4851 176.032 37.5674 176.278 36.584C176.506 35.6583 176.922 34.8006 177.543 34.1641C178.928 32.8237 181.411 32.8238 182.483 32.0237C183.145 31.4978 183.613 30.7433 183.734 29.7851C183.855 28.827 183.625 27.581 182.985 26.8694C182.349 26.1481 181.189 25.6893 180.091 25.6626C176.206 25.7631 173.143 26.1508 168.497 27.1636C161.491 28.6907 163.188 42.2312 171.598 40.9007Z',
   endDot: 'M191 31.0453C192.538 30.7675 193.56 29.2951 193.282 27.7566C193.004 26.2181 191.532 25.1961 189.994 25.4739C188.456 25.7517 187.434 27.2241 187.712 28.7626C187.99 30.3011 189.462 31.3231 191 31.0453Z',
   checkmark: 'M265.438 38.4088C265.438 38.4088 199.082 176.091 164.551 158.477C142.332 147.143 152.707 109.99 152.707 109.99',
-};
-const START_DOT = {"cx":272.5,"cy":119.5,"r":9.5};
+}
+const START_DOT = { cx: 272.5, cy: 119.5, r: 9.5 }
 
 // ── Lottie builder helpers ──────────────────────────────────────────────────
 const hexToRgb1 = (hex) => {
@@ -137,13 +155,14 @@ const hexToRgb1 = (hex) => {
   return [parseInt(hex.slice(0, 2), 16) / 255, parseInt(hex.slice(2, 4), 16) / 255, parseInt(hex.slice(4, 6), 16) / 255]
 }
 
-// One consistent symmetric ease-in-out for the entire scene, per the brief.
+// One consistent symmetric ease-in-out for the entire scene, per the brief's
+// explicit "use ease-in-out timing" — the standard CSS ease-in-out cubic.
 const EASE_IN_OUT = [0.42, 0.0, 0.58, 1.0]
 
-function kf(t, value, easeOut) {
+function kf(t, value, ease) {
   const k = { t, s: Array.isArray(value) ? value : [value] }
-  if (easeOut) {
-    const [x1, y1, x2, y2] = easeOut
+  if (ease) {
+    const [x1, y1, x2, y2] = ease
     k.o = { x: [x1], y: [y1] }
     k.i = { x: [x2], y: [y2] }
   }
@@ -182,7 +201,7 @@ function strokeItem(colorHex, width, sid, opacity = 100, nm = 'Stroke') {
   return { ty: 'st', nm, o: { a: 0, k: opacity }, w: { a: 0, k: width }, c, lc: 2, lj: 2 }
 }
 
-// Static (non-animated) linear gradient stroke — color stops then alpha
+// Static (non-animated) linear gradient stroke — colour stops then alpha
 // stops, concatenated, matching the house convention.
 /** One ramp object, shared by the shape and by the slot it is published as —
  *  two copies of the same numbers drift apart after the first edit. */
@@ -216,22 +235,16 @@ function group(nm, items, transform) {
   return { ty: 'gr', nm, it: [...items, groupTransform(transform)] }
 }
 
-function trimItem({ eKeys, m = 1, nm = 'Trim' } = {}) {
-  return { ty: 'tm', nm, s: { a: 0, k: 0 }, e: { a: 1, k: trimEaseKeys(eKeys) }, o: { a: 0, k: 0 }, m }
-}
-
 function trimEaseKeys(points) {
   points = ensureStartsAtZero(points)
   return points.map((p, idx) => {
     const isLast = idx === points.length - 1
-    const k = { t: p.t, s: [p.v] }
-    if (!isLast) {
-      const [x1, y1, x2, y2] = EASE_IN_OUT
-      k.o = { x: [x1], y: [y1] }
-      k.i = { x: [x2], y: [y2] }
-    }
-    return k
+    return kf(p.t, p.v, isLast ? null : EASE_IN_OUT)
   })
+}
+
+function trimItem({ eKeys, m = 1, nm = 'Trim' } = {}) {
+  return { ty: 'tm', nm, s: { a: 0, k: 0 }, e: { a: 1, k: trimEaseKeys(eKeys) }, o: { a: 0, k: 0 }, m }
 }
 
 function bboxOf(subpaths) {
@@ -252,27 +265,50 @@ function layer({ nm, ind, shapes, ks }) {
   return { ddd: 0, ind, ty: 4, nm, sr: 1, ks, ao: 0, shapes, ip: 0, op: FRAMES, st: 0, bm: 0 }
 }
 
+// A pop with a small overshoot: scale 0 -> peak -> 100 (entrance) or
+// 100 -> peak -> 100 (a completed gesture's stamp-settle). One shared
+// ease-in-out curve throughout, per the brief.
+function popScale(fromValue, peak, t0, t1, t2) {
+  return animProp([
+    { t: t0, v: [fromValue, fromValue, 100] },
+    { t: t1, v: [peak, peak, 100] },
+    { t: t2, v: [100, 100, 100] },
+  ])
+}
+
 // ============================================================
 // LAYER CONTENT ASSEMBLY
 // ============================================================
 let ind = 1
 const layers = []
 
-// Stage timing (see header). Circle first, checkmark second, clouds third.
-const CIRCLE_DRAW = [8, 74]      // gradient circle trims on
-const CHECK_DRAW = [82, 128]     // checkmark trims on, after circle closes
-const CLOUD_WINDOW = 34          // draw+drift duration per cloud
+// Stage timing (see header). The circle leads with a short head start; the
+// checkmark starts while the circle is still mid-stroke and both draw
+// concurrently for most of the window, per this brief's "checkmark draws...
+// WITH the circle also drawing" — a deliberate re-read, not sequential.
+const CIRCLE_DRAW = [4, 80]          // gradient circle trims on
+const CHECK_DRAW = [24, 96]          // checkmark trims on, overlapping the circle
+const CIRCLE_SETTLE = [80, 90]       // circle's own completed-gesture stamp
+const CHECK_SETTLE = [96, 108]       // checkmark's completed-gesture stamp (hero: stronger)
+const END_MARK_POP = [74, 86]        // end-dot + end-flourish pop as the circle nears/reaches close
+const START_DOT_POP = [0, 10]
+const CLOUD_WINDOW = 34              // draw+drift duration per cloud
+const CLOUD_START = 90               // last cast member to settle in, once circle has closed
 
 // ---- checkmark (frontmost): reversed direction, draws left to right ------
 {
   const sp = reverseSubpath(parsePath(SVG_PATHS.checkmark)[0])
-  // Degenerate source gradient (both stops identical #22E243) -> flat color.
+  const center = bboxCenter(bboxOf([sp]))
+  // Degenerate source gradient (both stops identical #22E243) -> flat colour.
   const shapes = [group('checkmark', [
     shapeFromSubpath(sp, 'checkmark-path'),
     strokeItem('#22E243', 14, 'accentColor'),
     trimItem({ eKeys: [{ t: CHECK_DRAW[0], v: 0 }, { t: CHECK_DRAW[1], v: 100 }] }),
   ])]
-  layers.push(layer({ nm: 'checkmark', ind: ind++, shapes, ks: baseTransform() }))
+  const ks = baseTransform({ a: [center[0], center[1], 0], p: [center[0], center[1], 0] })
+  // Hero completed-gesture stamp: strongest personality of the scene's pops.
+  ks.s = popScale(100, 104, CHECK_SETTLE[0], (CHECK_SETTLE[0] + CHECK_SETTLE[1]) / 2, CHECK_SETTLE[1])
+  layers.push(layer({ nm: 'checkmark', ind: ind++, shapes, ks }))
 }
 
 // ---- start dot: pops in first, as the circle begins drawing --------------
@@ -283,39 +319,44 @@ const CLOUD_WINDOW = 34          // draw+drift duration per cloud
     fillItem('#22E243', 'accentColor'),
   ])]
   const ks = baseTransform({ a: [c[0], c[1], 0], p: [c[0], c[1], 0] })
-  ks.s = animProp([{ t: 0, v: [0, 0, 100] }, { t: 12, v: [100, 100, 100] }])
-  ks.o = animProp([{ t: 0, v: 0 }, { t: 10, v: 100 }])
+  ks.s = popScale(0, 106, START_DOT_POP[0], (START_DOT_POP[0] + START_DOT_POP[1]) / 2, START_DOT_POP[1])
+  ks.o = animProp([{ t: START_DOT_POP[0], v: 0 }, { t: START_DOT_POP[0] + 8, v: 100 }])
   layers.push(layer({ nm: 'start-dot', ind: ind++, shapes, ks }))
 }
 
-// ---- end dot + end flourish: pop as the circle stroke closes -------------
+// ---- end dot + end flourish: pop as the circle stroke closes; this IS the
+// ---- circle's completed-gesture punctuation, doubling as its "pen lift" --
 for (const [nm, key] of [['end-dot', 'endDot'], ['end-flourish', 'endFlourish']]) {
   const sp = parsePath(SVG_PATHS[key])[0]
   const c = bboxCenter(bboxOf([sp]))
   const shapes = [group(nm, [shapeFromSubpath(sp, `${nm}-path`), fillItem('#22E243', 'accentColor')])]
   const ks = baseTransform({ a: [c[0], c[1], 0], p: [c[0], c[1], 0] })
-  ks.s = animProp([{ t: 70, v: [0, 0, 100] }, { t: 82, v: [100, 100, 100] }])
-  ks.o = animProp([{ t: 70, v: 0 }, { t: 78, v: 100 }])
+  ks.s = popScale(0, 106, END_MARK_POP[0], (END_MARK_POP[0] + END_MARK_POP[1]) / 2, END_MARK_POP[1])
+  ks.o = animProp([{ t: END_MARK_POP[0], v: 0 }, { t: END_MARK_POP[0] + 8, v: 100 }])
   layers.push(layer({ nm, ind: ind++, shapes, ks }))
 }
 
-// ---- circle stroke: static gradient, draws itself first ------------------
+// ---- circle stroke: static gradient, draws itself, then its own quiet
+// ---- completed-gesture stamp (support role -> subtler than the checkmark) -
 {
   const sp = parsePath(SVG_PATHS.circleStroke)[0]
+  const center = bboxCenter(bboxOf([sp]))
   const shapes = [group('circle-stroke', [
     shapeFromSubpath(sp, 'circle-stroke-path'),
     gradientStrokeItem({ width: 14, s: [199, 114], e: [11.4997, 240], ramp: CIRCLE_RAMP }),
     trimItem({ eKeys: [{ t: CIRCLE_DRAW[0], v: 0 }, { t: CIRCLE_DRAW[1], v: 100 }] }),
   ])]
-  layers.push(layer({ nm: 'circle-stroke', ind: ind++, shapes, ks: baseTransform() }))
+  const ks = baseTransform({ a: [center[0], center[1], 0], p: [center[0], center[1], 0] })
+  ks.s = popScale(100, 102, CIRCLE_SETTLE[0], (CIRCLE_SETTLE[0] + CIRCLE_SETTLE[1]) / 2, CIRCLE_SETTLE[1])
+  layers.push(layer({ nm: 'circle-stroke', ind: ind++, shapes, ks }))
 }
 
-// ---- clouds: draw on (m:2, bump then its two dash accents) while --------
-// ---- fading in and drifting up, as the checkmark is ~80% drawn -----------
-const cloudsStart = Math.round(CHECK_DRAW[0] + 0.8 * (CHECK_DRAW[1] - CHECK_DRAW[0]))
+// ---- clouds: draw on (m:2, bump then its two dash accents) while fading in
+// ---- and drifting up into their source position — the last cast member to
+// ---- join, settling once, exactly where the source SVG draws it ----------
 for (const [nm, bumpKey, dashLKey, dashRKey, driftStart] of [
-  ['cloud-left', 'cloudLeftBump', 'cloudLeftDashL', 'cloudLeftDashR', cloudsStart],
-  ['cloud-right', 'cloudRightBump', 'cloudRightDashL', 'cloudRightDashR', cloudsStart + 4],
+  ['cloud-left', 'cloudLeftBump', 'cloudLeftDashL', 'cloudLeftDashR', CLOUD_START],
+  ['cloud-right', 'cloudRightBump', 'cloudRightDashL', 'cloudRightDashR', CLOUD_START + 4],
 ]) {
   const bump = parsePath(SVG_PATHS[bumpKey])[0]
   const dashL = parsePath(SVG_PATHS[dashLKey])[0]
@@ -340,7 +381,7 @@ for (const [nm, bumpKey, dashLKey, dashRKey, driftStart] of [
 
 // ============================================================
 const doc = {
-  v: '5.9.0', fr: FPS, ip: 0, op: FRAMES, w: W, h: H, nm: 'create-animation-from-c3tg',
+  v: '5.9.0', fr: FPS, ip: 0, op: FRAMES, w: W, h: H, nm: 'create-animation-from-w62d',
   ddd: 0, assets: [], layers, markers: [],
   slots: {
     circleRamp: { p: CIRCLE_RAMP },
@@ -350,7 +391,7 @@ const doc = {
 }
 
 mkdirSync(OUT_DIR, { recursive: true })
-writeFileSync(OUT, JSON.stringify(doc))
+writeFileSync(OUT, JSON.stringify(doc, (k, v) => (typeof v === 'number' ? +v.toFixed(3) : v)))
 console.log(`Wrote ${OUT} — ${layers.length} layers, ${FRAMES}f @ ${FPS}fps`)
 
 const controls = {
@@ -370,7 +411,7 @@ const controls = {
   ],
   layerControls: [
     { target: 'cloud-left', kind: 'amount', property: 'position', label: 'Cloud float height', description: 'How far the clouds drift upward as they draw themselves in.' },
-    { target: 'start-dot', kind: 'amount', property: 'scale', label: 'Badge pop', description: 'How much the circle\'s start and end sparks bounce in as it closes.' },
+    { target: 'checkmark', kind: 'amount', property: 'scale', label: 'Check finish pop', description: 'How much the checkmark bounces as it finishes drawing.' },
   ],
 }
 writeFileSync(join(OUT_DIR, 'controls.json'), JSON.stringify(controls, null, 2))

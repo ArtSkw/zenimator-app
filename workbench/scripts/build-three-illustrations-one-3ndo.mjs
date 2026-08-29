@@ -1195,21 +1195,27 @@ const ribbonDrawSeg = {
 }
 // Gradient endpoints from the source (paint0_linear): x1,y1 -> x2,y2, alpha 1 -> 0.3.
 const RIBBON_G0 = [186.843, 117.997], RIBBON_G1 = [75.038, 134.874]
+// The ribbon's ramp as ONE object, referenced by the shape AND published as a
+// slot. Two copies of the same numbers is how a slot and its property drift
+// apart after the first edit — see player-contract "Content Parameters".
+const RIBBON_RAMP = {
+  p: 2,
+  k: sk([
+    0, GREEN2[0], GREEN2[1], GREEN2[2],
+    1, GREEN2[0], GREEN2[1], GREEN2[2],
+    0, 1,
+    1, 0.3,
+  ]),
+  sid: 'ribbonRamp',
+}
+
 function gradientStroke(w) {
   return {
     ty: 'gs', o: sk(100), w: sk(w), lc: 2, lj: 2,
     t: 1,
     s: sk([RIBBON_G0[0], RIBBON_G0[1]]),
     e: sk([RIBBON_G1[0], RIBBON_G1[1]]),
-    g: {
-      p: 2,
-      k: sk([
-        0, GREEN2[0], GREEN2[1], GREEN2[2],
-        1, GREEN2[0], GREEN2[1], GREEN2[2],
-        0, 1,
-        1, 0.3,
-      ]),
-    },
+    g: RIBBON_RAMP,
   }
 }
 const ribbonDrawTrim = anim([
@@ -1388,6 +1394,7 @@ const lottie = {
     { cm: 'intro', tm: 0, dr: T },
     { cm: 'loop', tm: T, dr: OP - T },
   ],
+  slots: { ribbonRamp: { p: RIBBON_RAMP } },
   assets: PRECOMP_ASSETS,
   // layers[0] is frontmost.
   layers: [
@@ -1403,6 +1410,16 @@ const lottie = {
 
 const controls = {
   controls: [],
+    parameters: [
+      {
+        id: 'ribbonRamp',
+        kind: 'gradient',
+        sid: 'ribbonRamp',
+        label: 'Ribbon ramp',
+        description: 'The green sweep behind the mascot — fades out along its tail.',
+        themable: true,
+      },
+    ],
   layerControls: [
     { target: 'mascot-root', kind: 'amount', property: 'position', label: 'Jump height', description: 'How high he springs at each beat of the celebration loop.' },
     { target: 'mascot-root', kind: 'amount', property: 'rotation', label: 'Bounce lean', description: 'How far he tilts at the top of each jump.' },

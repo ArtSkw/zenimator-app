@@ -211,6 +211,42 @@ function pathShape(seg, nm) {
   return { ty: 'sh', nm, ks: sk({ v: seg.v, i: seg.i, o: seg.o, c: seg.c }) }
 }
 
+// Most glyphs share ONE ramp; the odd one-off does not. Bind the shared one so
+// a single control retints the whole word instead of offering a knob per
+// letter — and memoise per gradient id so every glyph references the same
+// object rather than an equal copy.
+// Figma emits one gradient DEFINITION PER SHAPE, so thirteen letters carry
+// thirteen distinct ids holding identical stops. Keying by id would bind one
+// letter; key by the ramp's CONTENT so every glyph painted the same way shares
+// one object — and one control retints the whole word.
+const rampKey = (g) => JSON.stringify(g.stops)
+const RAMP_USES = {}
+for (const p of SRC_PATHS) {
+  if (p.solid || !p.gradId) continue
+  const k = rampKey(GRADIENTS[p.gradId])
+  RAMP_USES[k] = (RAMP_USES[k] ?? 0) + 1
+}
+const LETTERING_KEY = Object.keys(RAMP_USES).sort((a, b) => RAMP_USES[b] - RAMP_USES[a])[0]
+const RAMPS = {}
+function rampFor(gradId) {
+  const g = GRADIENTS[gradId]
+  const key = rampKey(g)
+  if (!RAMPS[key]) {
+    const colorArr = [], alphaArr = []
+    for (const st of g.stops) {
+      const [cr, cg, cb] = hexToRgb1(st.color)
+      colorArr.push(st.offset, cr, cg, cb)
+      alphaArr.push(st.offset, st.opacity)
+    }
+    RAMPS[key] = {
+      p: g.stops.length,
+      k: sk([...colorArr, ...alphaArr]),
+      ...(key === LETTERING_KEY ? { sid: 'letteringRamp' } : {}),
+    }
+  }
+  return RAMPS[key]
+}
+
 function fillFor(pathIdx) {
   const src = SRC_PATHS[pathIdx]
   const r = src.evenodd ? 2 : 1
@@ -219,16 +255,10 @@ function fillFor(pathIdx) {
   const rad = (a) => (a * Math.PI) / 180
   const s = [g.tx, g.ty]
   const e = [g.tx + g.sx * Math.cos(rad(g.rot)), g.ty + g.sx * Math.sin(rad(g.rot))]
-  const colorArr = [], alphaArr = []
-  for (const st of g.stops) {
-    const [cr, cg, cb] = hexToRgb1(st.color)
-    colorArr.push(st.offset, cr, cg, cb)
-    alphaArr.push(st.offset, st.opacity)
-  }
   return {
     ty: 'gf', nm: 'gradient', o: sk(100), r, t: 2,
     s: sk(s), e: sk(e),
-    g: { p: g.stops.length, k: sk([...colorArr, ...alphaArr]) },
+    g: rampFor(src.gradId),
   }
 }
 
@@ -353,6 +383,8 @@ layers.push(popLayer(tailDot.nm, ind++, tailDot))
 const doc = {
   v: '5.9.0', fr: FPS, ip: 0, op: FRAMES, w: W, h: H, nm: 'live-better-4sen',
   ddd: 0, assets: [], layers, markers: [],
+  // Published so the sid resolves in every renderer, not just Skottie.
+  slots: { letteringRamp: { p: RAMPS[LETTERING_KEY] } },
 }
 
 mkdirSync(OUT_DIR, { recursive: true })
