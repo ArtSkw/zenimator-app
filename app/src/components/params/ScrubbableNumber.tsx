@@ -50,6 +50,10 @@ export function ScrubbableNumber({
 
   function onPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
     if (disabled || editing) return
+    // Capture keeps the scrub alive past the button's edge. It MUST be released
+    // on every exit path: while it is held, pointer events are retargeted here,
+    // and a popover hosting this control (the gradient's angle) would stop
+    // seeing outside presses and could never be dismissed.
     e.currentTarget.setPointerCapture(e.pointerId)
     dragRef.current = { x: e.clientX, from: value, moved: false }
   }
@@ -65,10 +69,21 @@ export function ScrubbableNumber({
     onValueChange(clampTo(d.from + dx * step * scale, min, max), false)
   }
 
+  /** Guarded: `releasePointerCapture` THROWS when the element does not hold the
+   *  capture, which would abort this handler and strand the drag. */
+  function releaseCapture(el: HTMLButtonElement, pointerId: number) {
+    if (el.hasPointerCapture?.(pointerId)) el.releasePointerCapture(pointerId)
+  }
+
+  function onPointerCancel(e: React.PointerEvent<HTMLButtonElement>) {
+    dragRef.current = null
+    releaseCapture(e.currentTarget, e.pointerId)
+  }
+
   function onPointerUp(e: React.PointerEvent<HTMLButtonElement>) {
     const d = dragRef.current
     dragRef.current = null
-    e.currentTarget.releasePointerCapture(e.pointerId)
+    releaseCapture(e.currentTarget, e.pointerId)
     if (!d) return
     if (d.moved) onValueChange(value, true)
     else {
@@ -112,6 +127,7 @@ export function ScrubbableNumber({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
       onKeyDown={(e) => {
         const bump = e.shiftKey ? step * 10 : step
         if (e.key === 'ArrowUp') { e.preventDefault(); onValueChange(clampTo(value + bump, min, max), true) }

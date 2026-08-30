@@ -3,6 +3,11 @@
 > gradient-stops machinery was taken — a self-contained 7-file subset. The rest
 > of ZENimator's parameter controls are our own, built on Base UI, with
 > toolcraft used as a reference for interaction patterns only.
+>
+> ONE local deviation, marked in the source: `gradient-stops-controller.ts`
+> no longer calls `setPointerCapture` when a stop drag begins. Upstream never
+> released that capture, which retargeted every later pointer event to the
+> stop button and left the hosting popover unable to see an outside press.
 
 # MIT License
 

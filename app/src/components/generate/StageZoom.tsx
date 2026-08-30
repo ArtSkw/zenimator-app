@@ -252,7 +252,7 @@ export function ZoomableStage({
               <button
                 type="button"
                 aria-label="Zoom"
-                className="pressable flex h-8 items-center gap-1 rounded-full border border-border bg-background/80 pl-2.5 pr-2 font-mono text-[11px] font-medium tabular-nums text-foreground backdrop-blur-sm shadow-sm"
+                className="flex h-8 items-center gap-1 rounded-full border border-border bg-background/80 pl-2.5 pr-2 transition-colors font-mono text-[11px] font-medium tabular-nums text-foreground backdrop-blur-sm shadow-sm"
               >
                 {displayPct}%
                 <ChevronDown size={11} className="opacity-60" />

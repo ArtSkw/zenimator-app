@@ -279,7 +279,13 @@ export function useGradientStopsController(
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.focus();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    // LOCAL DEVIATION FROM UPSTREAM. Upstream captured the pointer here and
+    // never released it. Capture retargets every later pointer event to this
+    // button, so once a stop had been dragged the popover hosting the editor
+    // stopped seeing outside presses and could not be dismissed. The drag is
+    // already tracked by the window listeners in useGradientStopDragWindowEvents,
+    // which makes the capture redundant as well as harmful — dropped rather
+    // than released. Re-check when syncing with upstream toolcraft.
     playControlDragStartSound();
     dragHistoryGroupRef.current = createControlHistoryGroupId(
       `gradient:${options.name}`,

@@ -22,61 +22,73 @@ export type ColorFieldProps = {
   /** P3 fills these: the source artwork's own palette, then the ZEN tokens. */
   swatches?: ColorSwatchGroup[]
   showAlpha?: boolean
+  /** Taken for a uniform call site (the gallery labels every field the same
+   *  way) but deliberately NOT forwarded: Base UI owns the trigger's id. */
   id?: string
 }
 
 const sameRgba = (a: Rgba, b: Rgba) => a.every((n, i) => Math.abs(n - b[i]) < 0.002)
 
-/** Drag anywhere on a rect and get 0..1 coordinates, pointer-captured. */
+/**
+ * Drag anywhere on a rect and get 0..1 coordinates.
+ *
+ * Deliberately WINDOW listeners rather than `setPointerCapture`. Capture
+ * retargets every subsequent pointer event to the captured element, so once you
+ * had dragged inside the picker, the popover's outside-press detection saw every
+ * later click as "inside" — clicking away never dismissed it and the trigger
+ * never received its own click, leaving pickers stuck open. Window listeners
+ * track a drag past the element's edge just as well without hijacking the
+ * document, and they unwind on `pointercancel` and on unmount too.
+ */
 function useDragArea(onMove: (x: number, y: number) => void) {
   const ref = React.useRef<HTMLDivElement>(null)
-  const dragging = React.useRef(false)
+  const moveRef = React.useRef(onMove)
+  const endDragRef = React.useRef<(() => void) | null>(null)
 
-  const emit = React.useCallback((e: { clientX: number; clientY: number }) => {
+  React.useEffect(() => { moveRef.current = onMove }, [onMove])
+  // A drag interrupted by unmount must not leave listeners on the window.
+  React.useEffect(() => () => endDragRef.current?.(), [])
+
+  const emit = React.useCallback((clientX: number, clientY: number) => {
     const el = ref.current
     if (!el) return
     const r = el.getBoundingClientRect()
-    onMove(
-      Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
-      Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))
+    moveRef.current(
+      Math.min(1, Math.max(0, (clientX - r.left) / r.width)),
+      Math.min(1, Math.max(0, (clientY - r.top) / r.height))
     )
-  }, [onMove])
+  }, [])
 
-  return {
-    ref,
-    onPointerDown: (e: React.PointerEvent) => {
-      dragging.current = true
-      e.currentTarget.setPointerCapture(e.pointerId)
-      emit(e)
-    },
-    onPointerMove: (e: React.PointerEvent) => { if (dragging.current) emit(e) },
-    onPointerUp: (e: React.PointerEvent) => {
-      dragging.current = false
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    },
-  }
+  const onPointerDown = React.useCallback((e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    emit(e.clientX, e.clientY)
+    endDragRef.current?.()
+
+    const move = (ev: PointerEvent) => emit(ev.clientX, ev.clientY)
+    const end = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+      endDragRef.current = null
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
+    endDragRef.current = end
+  }, [emit])
+
+  return { ref, onPointerDown }
 }
 
 export function ColorField({
   label, description, value, authored, onValueChange,
-  swatches, showAlpha = true, id,
+  swatches, showAlpha = true,
 }: ColorFieldProps) {
   // Hue and saturation are kept locally while the popover is open: dragging to
   // pure black or pure white destroys them in RGB, and a picker that forgets
   // where you were is unusable.
   const [hsv, setHsv] = React.useState<Hsv>(() => rgbToHsv(value[0], value[1], value[2]))
   const [hexDraft, setHexDraft] = React.useState<string | null>(null)
-  const [open, setOpen] = React.useState(false)
-
-  // While the popover is OPEN the local HSV is the source of truth; re-derive
-  // from the incoming value only once it closes. Adjusted during render, not in
-  // an effect, so a colour arriving from elsewhere costs no extra paint.
-  const [syncedFrom, setSyncedFrom] = React.useState<string | null>(null)
-  const incoming = `${rgbaToHex(value)}:${value[3] ?? 1}`
-  if (!open && syncedFrom !== incoming) {
-    setSyncedFrom(incoming)
-    setHsv(rgbToHsv(value[0], value[1], value[2]))
-  }
 
   const alpha = value[3] ?? 1
   const commit = (next: Hsv, a = alpha, history: 'merge' | 'record' = 'merge') => {
@@ -111,18 +123,28 @@ export function ColorField({
       description={description}
       modified={!sameRgba(value, authored)}
       onReset={() => onValueChange(authored, { history: 'record' })}
-      htmlFor={id}
     >
-      <Popover open={open} onOpenChange={setOpen}>
+      {/* UNCONTROLLED, like every other popover in the panel. A controlled
+          Popover must also be handed `triggerId`; without it the root has no
+          active trigger, Base UI reads every press as landing on an INACTIVE
+          one, and the popup can only ever open — never toggle shut. The one
+          reason to hold `open` here was re-deriving HSV, and the open
+          notification gives that without taking the state. */}
+      <Popover
+        onOpenChange={(next) => {
+          // Re-derive on each OPEN: RGB cannot carry hue at pure black or white,
+          // so while the picker is open the local HSV is the source of truth,
+          // and every visit starts from whatever the value is now.
+          if (next) setHsv(rgbToHsv(value[0], value[1], value[2]))
+        }}
+      >
+        {/* No `render` wrapper and no `id`. PopoverTrigger already renders the
+            button and assigns its own id, and Base UI merges our props LAST —
+            either would overwrite the identity its own toggle and dismissal
+            resolve the trigger by. The label rides `aria-label` instead. */}
         <PopoverTrigger
-          render={
-            <button
-              id={id}
-              type="button"
-              aria-label={`${label} — ${hex}`}
-              className="pressable flex h-8 w-full items-center gap-2 rounded-control border border-control-border bg-control px-2 hover:bg-control-hover focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-            />
-          }
+          aria-label={`${label} — ${hex}`}
+          className="flex h-8 w-full items-center gap-2 rounded-control border border-control-border bg-control px-2 transition-colors hover:bg-control-hover focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           <span
             className="size-4 shrink-0 rounded-[4px] ring-1 ring-foreground/15 text-foreground"

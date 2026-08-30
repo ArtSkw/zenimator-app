@@ -179,7 +179,17 @@
 /* Press feedback for pressable chips, pills, and segmented options — the
    interface responds the instant it's touched (feedback on pointer-down,
    subtle 0.97 scale, strong ease-out). Owns the element's whole transition
-   so it composes color feedback too — don't stack with transition-colors. */
+   so it composes color feedback too — don't stack with transition-colors.
+
+   THE RULE: this is for controls that ACT on release — buttons, chips,
+   swatches, segmented options. Controls that OPEN A MENU never wear it, and
+   the boundary is physical, not taste: Base UI opens a Select and a Menu on
+   POINTER-DOWN, which takes the pointer and drops `:active` mid-transition,
+   so those triggers reach ~0.99 and snap back inside 90ms while a Popover
+   trigger — opened on click — holds the full 0.97. Measured. Half a press
+   next to a whole one reads as a broken control, so menu triggers get the
+   colour feedback and the menu's own entrance instead, and every one of them
+   behaves the same. */
 @utility pressable {
   transition:
     transform 160ms var(--ease-out-strong),
