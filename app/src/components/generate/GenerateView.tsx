@@ -1167,18 +1167,6 @@ export function GenerateView() {
                     if (canAttach) void handleAttach(e.dataTransfer.files)
                   }}
                 >
-                  {/* The panel's own title bar. It belongs INSIDE the card: a
-                      label and a Done button floating above an edged surface
-                      read as loose page furniture, not as this panel's chrome. */}
-                  {lottieJson && editingSetup && (
-                    <div className="flex items-center justify-between border-b border-border py-2 pl-5 pr-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Edit setup</p>
-                      <Button variant="ghost" size="sm" className="-my-1 rounded-full gap-1.5" onClick={() => setEditingSetup(false)}>
-                        <ChevronUp size={13} /> Done
-                      </Button>
-                    </div>
-                  )}
-
                   <AttachmentStrip
                     items={groundings}
                     onChange={setGroundings}
@@ -1207,6 +1195,23 @@ export function GenerateView() {
   
                   <TooltipProvider>
                     <div className="flex items-center gap-2 px-3 pb-3 pt-2">
+                      {/* Done sits exactly where "Edit setup" sat in the box this
+                          one replaced - the control that closes a panel takes the
+                          seat of the control that opened it, so the eye never has
+                          to go looking for the way back. That also retires the
+                          card's title bar: a panel that opens in a known place
+                          does not need a label saying what it is. */}
+                      {lottieJson && editingSetup && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0 rounded-full gap-1.5 text-xs text-muted-foreground"
+                          onClick={() => setEditingSetup(false)}
+                        >
+                          <ChevronUp size={13} /> Done
+                        </Button>
+                      )}
+
                       {/* Attach lives here at a FIXED width — the thumbnails
                           themselves sit in the strip at the top of the composer,
                           so no number of attachments can crowd the axes or push
@@ -1469,12 +1474,11 @@ export function GenerateView() {
                         </Button>
                       )}
                       {/* Progress reads on the LEFT, Stop on the right — the same
-                          arrangement the brief card uses while a scene builds. It
-                          shares the slot with "Fix this moment", which only
-                          offers itself when nothing is running anyway. min-w-0 so
-                          a long status truncates instead of shoving Stop out. */}
+                          arrangement the brief card uses while a scene builds.
+                          min-w-0 so a long status truncates instead of shoving
+                          Stop out. */}
                       <div className="flex min-w-0 flex-1 items-center">
-                        {applying ? (
+                        {applying && (
                           <span className="flex min-w-0 items-center gap-1.5 pl-1">
                             <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
                             <SwapText
@@ -1482,20 +1486,23 @@ export function GenerateView() {
                               className="text-xs text-muted-foreground"
                             />
                           </span>
-                        ) : (
-                          !isPlaying && momentFrame == null && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="rounded-full gap-1.5 text-xs text-muted-foreground"
-                              onClick={() => setMomentFrame(Math.round(playFrame))}
-                              title="Pin the frame on screen so your next note targets this exact moment - the agent renders it first"
-                            >
-                              <Crosshair size={13} /> Fix this moment
-                            </Button>
-                          )
                         )}
                       </div>
+
+                      {/* "Fix this moment" is an ARGUMENT to Apply - it scopes
+                          the note you are about to send - so it sits with the
+                          button it modifies, not across the row from it. */}
+                      {!applying && !isPlaying && momentFrame == null && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0 rounded-full gap-1.5 text-xs text-muted-foreground"
+                          onClick={() => setMomentFrame(Math.round(playFrame))}
+                          title="Pin the frame on screen so your next note targets this exact moment - the agent renders it first"
+                        >
+                          <Crosshair size={13} /> Fix this moment
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         className="shrink-0 rounded-full gap-1.5 font-semibold"
