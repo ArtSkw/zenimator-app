@@ -72,6 +72,18 @@ not the amount of craft — a top-tier idle is small but DENSE:
   volume roughly conserved, the face patch rides the deforming mass, props
   flex along their length. A companion whose outline never changes reads as
   a moved puppet next to the Rive rigs it sits beside in the portal.
+  **The breathe null's axes must be COUNTER-PHASED** — `sx = 100 + a·sin`,
+  `sy = 100 − a·sin`, area conserved to ~±0.2% — because an isotropic swell is
+  the failure this rule keeps producing: a shipped companion ran 256 keys of
+  `sx === sy` and read as the whole suit zooming. `check-motion.mjs` fails it
+  as SILHOUETTE STILL. Inside a rigid shell the division is physical and
+  settles the "but the suit can't deform" objection: the helmet, ring, visor
+  shine, frame, tag and beads take NO morph of their own — they ride the
+  shared squash like the decals they are — while the interior MASS and the
+  face patch carry real path keyframes, lagging the shell by about a quarter
+  cycle so it reads as the body settling inside the suit. Give the mass's
+  `__matte` the identical morph track, or the clip edge and the body edge
+  separate.
 - Partition before animating: the mascot plus everything it WEARS is one
   assembly on one rig — a spacesuit's helmet, visor shine, packs and badges
   drift with the body as one mass, never as separate floaters (motion-taste
@@ -191,8 +203,9 @@ bubble never "auto-sizes" inside the file. The portable contract instead:
 ```
 
 `max` is REQUIRED and comes from the stage, not taste: `max[0]` is the widest
-plate that still clears both stage edges by the safety margin (motion-taste
-"Render-Aware Motion") given where the plate sits; past it, tools WRAP the
+plate that still clears the stage edges by the safety margin (motion-taste
+"Render-Aware Motion") given where the plate sits AND which way it grows (see
+"A growable plate must grow INTO the room it has"); past it, tools WRAP the
 string onto more lines (`\r` separators — Skottie honors them in point text)
 and grow the plate downward in `lineHeight` steps, so `max[1]` documents the
 tallest plate the layout has vertical headroom for (2 lines → `2×lh + 2×padY`
@@ -255,6 +268,38 @@ Derive `max[1]` from the geometry rather than wishing for it: it is
 needs more lines than that allows, widen toward `max[0]` instead of growing
 taller. Verify by BAKING a string at `max[1]` and rendering: the plate must
 clear the stage top by the margin AND the trail by the authored gap.
+
+**A growable plate must grow INTO the room it has.** The same centred origin
+that pushes height downward spreads WIDTH both ways, so a plate that is not
+centred on the stage is capped at twice its NEAREST clearance and the room on
+its far side is unreachable. Measured on a real scene: a 131px plate at cx
+79.5 on a 240 comp derived `max[0] = 2 × (79.5 − 7.2) = 144.6`, a 112.6px text
+budget — while 153px of empty stage sat to its right. A 133px Polish string
+("Coraz bliżej celu…") wrapped onto two lines inside artwork that had room for
+it on one. Publish `grow` alongside `max` and pin the edge with less room:
+
+```json
+"autoFit": { "text": "bubble.text", "padding": [16, 8], "min": [90, 35],
+             "max": [196.5, 35], "leading": 2, "grow": "right" }
+```
+
+`"right"` pins the plate's LEFT edge and widens rightward, `"left"` mirrors
+it, and the default `"center"` keeps the legacy both-ways spread — correct
+only for a plate the artwork actually centred. Tools carry the pin on the same
+`<prefix>.anchor` slot as the bottom pin, adding `(defaultWidth − width) / 2`
+to its x, which moves the plate and the text inside it together and leaves the
+trail and mascot exactly where the artwork put them. Derive it, don't guess:
+
+```js
+const roomRight = W - MARGIN - (cx - defaultW / 2)  // left edge pinned
+const roomLeft  = (cx + defaultW / 2) - MARGIN      // right edge pinned
+const grow = roomRight >= roomLeft ? 'right' : 'left'
+```
+
+Stage room is not a licence for a 30-word line, so cap the derived width by a
+readable measure too — `1.5 × defaultWidth` is the widest that still reads as
+the shape the artwork drew, and anything longer is what the two-line wrap is
+for: `max[0] = Math.min(Math.max(roomRight, roomLeft), 1.5 * defaultW)`.
 
 **Wrapped lines need leading.** The design's line height is tuned for one
 line; stacked lines at the same value read cramped. Publish

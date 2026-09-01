@@ -54,7 +54,7 @@ export function AttachmentStrip({ items, onChange, disabled }: Props) {
                       draggable={!disabled}
                       tabIndex={0}
                       role="button"
-                      aria-label={multi ? `${g.name} — ${i + 1} of ${items.length}` : g.name}
+                      aria-label={multi ? `${g.name} - ${i + 1} of ${items.length}` : g.name}
                       onDragStart={(e) => {
                         setDragIndex(i)
                         e.dataTransfer.effectAllowed = 'move'

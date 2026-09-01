@@ -171,7 +171,7 @@ export function paramControlsFrom(
     return {
       id: `param:${name}`,
       label: `${layerLabel ? `${truncate(layerLabel)} · ` : ''}${spec.label ?? name}`,
-      description: spec.hint ?? 'A tunable from this animation’s motion program — changes re-run it live.',
+      description: spec.hint ?? 'A tunable from this animation’s motion program - changes re-run it live.',
       control: 'slider' as const,
       min: spec.min ?? Math.min(0, Math.round(spec.value - span * 1.5)),
       max: spec.max ?? Math.round(spec.value + span * 1.5),
@@ -191,7 +191,7 @@ const DESCRIPTIONS: Record<string, string> = {
   'trim-dur': 'How many frames the draw-on takes to complete.',
   'layer-speed': 'How many frames this layer’s motion takes (lower = faster).',
   'layer-delay': 'The frame this layer starts moving on (higher = later).',
-  'layer-motion': 'Whether this part animates at all — off holds it still in its visible pose.',
+  'layer-motion': 'Whether this part animates at all - off holds it still in its visible pose.',
   stagger: 'Low writes all parts at once and fast; high, one-by-one and slower.',
 }
 

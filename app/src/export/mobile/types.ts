@@ -30,8 +30,12 @@ export type SlotFit = {
    *  text-doc `ls`, so this slot IS the centering mechanism. */
   textPos: { sid: string; value: number[] } | null
   /** The `.anchor` plumbing slot — y = plate height / 2 pins the bottom edge
-   *  so the bubble grows upward, away from whatever sits beneath it. */
+   *  so the bubble grows upward, away from whatever sits beneath it; x shifts
+   *  by `layout.dx` to hold the pinned side. */
   anchor: { sid: string; value: number[] } | null
+  /** Which way the plate widens: `'right'` pins its left edge, `'left'` pins
+   *  its right, `'center'` spreads both ways. */
+  grow: 'center' | 'left' | 'right'
   /** Extra px added to the line height when the string wraps. */
   leading: number
 }

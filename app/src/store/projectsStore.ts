@@ -71,7 +71,25 @@ export type SavedProject = {
   sceneDoc?: string | null
   /** Epoch ms of the last studio session activity for this scene. */
   sessionAt?: number | null
+  /** The canvas fill this scene is VIEWED against, [r,g,b,a] 0..1. A viewing
+   *  preference only — it is never part of the document, so every export still
+   *  ships the animation on transparency. Absent = follow the theme. */
+  canvasBg?: [number, number, number, number] | null
 }
+
+/**
+ * Newest first, by the timestamp the rows actually SHOW.
+ *
+ * The list used to be in write order, which quietly stopped meaning "newest":
+ * a project's `createdAt` is minted once at generation and never re-derived,
+ * while a save moves it to the front — and plenty of saves have nothing to do
+ * with the user. A chat edit, a finished background run, the controls-spec
+ * sync that fires on merely OPENING a scene: each shuffled an old project to
+ * the top while its row went on reading "23d ago". Ordering by the same number
+ * the row prints is what makes the list legible.
+ */
+const byNewest = (list: SavedProject[]): SavedProject[] =>
+  [...list].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
 
 type ProjectsState = {
   projects: SavedProject[]
@@ -80,7 +98,7 @@ type ProjectsState = {
    *  finishes while the user is reading another project must not yank their
    *  view to the one that just landed. */
   saveProject: (p: SavedProject, opts?: { activate?: boolean }) => void
-  updateProject: (id: string, patch: Partial<Pick<SavedProject, 'name' | 'lottieJson' | 'slotOverrides' | 'groundings'>>) => void
+  updateProject: (id: string, patch: Partial<Pick<SavedProject, 'name' | 'lottieJson' | 'slotOverrides' | 'groundings' | 'canvasBg'>>) => void
   deleteProject: (id: string) => void
   setActiveProjectId: (id: string | null) => void
 }
@@ -94,9 +112,10 @@ export const useProjectsStore = create<ProjectsState>()(
       saveProject: (p, opts) =>
         set((s) => {
           const filtered = s.projects.filter((x) => x.id !== p.id)
-          // Keep the 10 most recent projects to stay within localStorage limits.
+          // Keep the 10 newest projects — the engine's own re-saves must not
+          // decide which one falls off the end.
           return {
-            projects: [p, ...filtered].slice(0, 10),
+            projects: byNewest([p, ...filtered]).slice(0, 10),
             activeProjectId: opts?.activate === false ? s.activeProjectId : p.id,
           }
         }),
@@ -119,6 +138,14 @@ export const useProjectsStore = create<ProjectsState>()(
       storage: createJSONStorage(() => idbStorage),
       // Don't persist activeProjectId — on reload nothing should appear pre-selected.
       partialize: (s) => ({ projects: s.projects }),
+      // Sort on the way IN as well: lists persisted before the rule above was
+      // in place come back in write order, and a user should not have to save
+      // something to see their projects straighten out.
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<ProjectsState>),
+        projects: byNewest(((persisted as Partial<ProjectsState>)?.projects ?? []) as SavedProject[]),
+      }),
     },
   ),
 )

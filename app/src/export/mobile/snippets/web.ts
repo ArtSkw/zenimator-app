@@ -36,6 +36,7 @@ function bubbleHelper(fit: SlotFit, loop: boolean): string {
     leading: fit.leading,
     textPos: fit.textPos,
     anchor: fit.anchor,
+    grow: fit.grow,
   }, null, 2)
 
   return `// zenimator-bubble.js — exported by ZENimator.
@@ -106,9 +107,11 @@ export async function fitBubble(text, opts) {
     min: PLATE.min,
     max: max,
     leading: PLATE.leading,
+    grow: PLATE.grow,
   }, String(text))
 
   const withY = function (value, y) { var out = value.slice(); out[1] = y; return out }
+  const withXY = function (value, x, y) { var out = value.slice(); out[0] = x; out[1] = y; return out }
 
   const slots = {}
   slots[PLATE.textSlot] = {
@@ -120,11 +123,15 @@ export async function fitBubble(text, opts) {
   if (PLATE.textPos) {
     slots[PLATE.textPos.sid] = { p: { a: 0, k: withY(PLATE.textPos.value, PLATE.textPos.value[1] + layout.dy) } }
   }
-  // The anchor slot pins the plate's BOTTOM edge (anchor y = height / 2), so a
-  // taller bubble grows upward instead of closing the gap to whatever sits
-  // below it — the thought trail keeps the spacing the artwork authored.
+  // The anchor slot pins the plate's edges. Y = height / 2 pins the BOTTOM, so
+  // a taller bubble grows upward instead of closing the gap to whatever sits
+  // below it — the thought trail keeps the spacing the artwork authored. X adds
+  // layout.dx, which holds the side the design composed against (0 when the
+  // plate grows from its centre).
   if (PLATE.anchor) {
-    slots[PLATE.anchor.sid] = { p: { a: 0, k: withY(PLATE.anchor.value, layout.h / 2) } }
+    slots[PLATE.anchor.sid] = {
+      p: { a: 0, k: withXY(PLATE.anchor.value, PLATE.anchor.value[0] + layout.dx, layout.h / 2) },
+    }
   }
   return slots
 }

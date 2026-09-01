@@ -85,7 +85,7 @@ export function ParamsGallery() {
 
         <Panel
           title="Surface ladder"
-          note="A control carries its own fill so it reads as actionable against a flat panel. Light steps DOWN from the panel, dark steps UP — the same move Figma, Framer and Mesh FX make. One step, affordances only; decorative containers keep the single surface tone."
+          note="A control carries its own fill so it reads as actionable against a flat panel. Light steps DOWN from the panel, dark steps UP - the same move Figma, Framer and Mesh FX make. One step, affordances only; decorative containers keep the single surface tone."
         >
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Surface token="bg-background" label="--background" note="The shell behind everything" />
@@ -96,7 +96,7 @@ export function ParamsGallery() {
         </Panel>
 
         <div className="grid gap-5 md:grid-cols-2">
-          <Panel title="Content" note="Text, numbers and sizes — the everyday edits.">
+          <Panel title="Content" note="Text, numbers and sizes - the everyday edits.">
             <TextField
               label="Headline" id="g-text"
               description="Try a locale string; the scene re-lays out around it."
@@ -126,17 +126,17 @@ export function ParamsGallery() {
             />
             <ColorField
               label="Shadow tint" id="g-accent" swatches={SWATCHES}
-              description="Carries alpha — the swatch shows it over a checkerboard."
+              description="Carries alpha - the swatch shows it over a checkerboard."
               value={v.accent} authored={AUTHORED.accent} onValueChange={set('accent')}
             />
             <GradientField
               label="Ribbon gradient" id="g-grad" swatches={SWATCHES}
-              description="Linear and radial only — Lottie cannot express conic or diamond."
+              description="Linear and radial only - Lottie cannot express conic or diamond."
               value={v.gradient} authored={AUTHORED.gradient} onValueChange={set('gradient')}
             />
           </Panel>
 
-          <Panel title="Choices" note="Named levels and on/off — matched components, not sliders.">
+          <Panel title="Choices" note="Named levels and on/off - matched components, not sliders.">
             <SelectField
               label="Fit" id="g-fit"
               value={v.ratio} authored={AUTHORED.ratio} onValueChange={set('ratio')}

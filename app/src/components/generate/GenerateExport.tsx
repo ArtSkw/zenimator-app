@@ -99,7 +99,7 @@ const CATEGORIES: { id: CategoryId; label: string; formats: FormatDef[] }[] = [
     id: 'video',
     label: 'Video',
     formats: [
-      { id: 'mp4', label: 'MP4 video', desc: 'H.264 — Slack, Keynote & stakeholders', icon: Film, action: 'Export', encode: true },
+      { id: 'mp4', label: 'MP4 video', desc: 'H.264 - Slack, Keynote & stakeholders', icon: Film, action: 'Export', encode: true },
       { id: 'webm', label: 'WebM video', desc: '2× crisp, white background', icon: Video, action: 'Export', encode: true },
       { id: 'gif', label: 'Animated GIF', desc: 'Up to 512 px, warns if over 5 MB', icon: ImageIcon, action: 'Export', encode: true },
     ],
@@ -153,10 +153,10 @@ function readFacts(json: string): Facts {
 async function runInstantExport(id: string, json: string, loop: boolean): Promise<void> {
   if (id === 'json') {
     triggerDownload(new Blob([json], { type: 'application/json' }), `zenimator-${Date.now()}.json`)
-    toast.success('Lottie JSON downloaded', { description: 'Plays in any Lottie player — web, iOS & Android.' })
+    toast.success('Lottie JSON downloaded', { description: 'Plays in any Lottie player - web, iOS & Android.' })
   } else if (id === 'html') {
     await downloadLottieHtml(json, { loop })
-    toast.success('HTML exported — open in any browser')
+    toast.success('HTML exported - open in any browser')
   } else if (id === 'dotlottie') {
     triggerDownload(makeDotLottie(json, { loop }), `zenimator-${Date.now()}.lottie`)
     toast.success('dotLottie downloaded', { description: 'One compact file for any dotLottie player.' })
@@ -171,7 +171,7 @@ async function runInstantExport(id: string, json: string, loop: boolean): Promis
     const parameters = parseParameterSpecs(controlsJson)
     const pack = buildMobilePack(framework, { lottieJson: json, loop, fonts, slotSpecs, parameters })
     triggerDownload(pack.blob, pack.filename)
-    if (pack.fontsMissing) toast.warning('Pack downloaded — the scene uses native text but its font wasn’t reachable (see README)')
+    if (pack.fontsMissing) toast.warning('Pack downloaded - the scene uses native text but its font wasn’t reachable (see README)')
     else toast.success('Pack downloaded', { description: 'Unzip and follow README.md.' })
   }
 }
@@ -192,7 +192,7 @@ async function runEncodeExport(id: string, label: string, json: string, loop: bo
         json, { loop, loopStart, signal: controller.signal }, progress,
       )
       triggerDownload(blob, `zenimator-${Date.now()}.gif`)
-      if (oversized) toast.warning(`GIF exported (${sizeKb} KB) — over 5 MB, consider shortening the animation`, { id: toastId })
+      if (oversized) toast.warning(`GIF exported (${sizeKb} KB) - over 5 MB, consider shortening the animation`, { id: toastId })
       else toast.success(`GIF exported (${sizeKb} KB)`, { id: toastId })
     } else if (id === 'webm') {
       const { exportLottieWebm } = await import('@/export/exportLottieWebm')
@@ -211,16 +211,16 @@ async function runEncodeExport(id: string, label: string, json: string, loop: bo
       await bakeSplashVideos(json, (p) => toast.loading(`Baking splash videos… ${Math.round(p * 100)}%`, { id: toastId }))
       toast.success('Baked logo-splash-light.webm + logo-splash-dark.webm', {
         id: toastId,
-        description: 'Move both into /public and commit — the boot splash will use them.',
+        description: 'Move both into /public and commit - the boot splash will use them.',
       })
     }
   } catch (err) {
     if (isAbort(err)) toast.dismiss(toastId)
     else if (err instanceof Error && err.name === 'Mp4UnsupportedError') {
-      toast.error('MP4 needs a WebCodecs browser — export WebM instead', { id: toastId })
+      toast.error('MP4 needs a WebCodecs browser - export WebM instead', { id: toastId })
     } else {
       console.error(`[zenimator] ${id} export error:`, err)
-      toast.error(`${label} export failed — check console`, { id: toastId })
+      toast.error(`${label} export failed - check console`, { id: toastId })
     }
   }
 }
@@ -283,7 +283,7 @@ export function GenerateExport({ loop }: { loop: boolean }) {
       setOpen(false)
     } catch (err) {
       console.error(`[zenimator] ${format.id} export error:`, err)
-      toast.error(`${format.label} export failed — check console`)
+      toast.error(`${format.label} export failed - check console`)
     }
   }
 
@@ -304,7 +304,7 @@ export function GenerateExport({ loop }: { loop: boolean }) {
           <DialogHeader>
             <DialogTitle>Export</DialogTitle>
             <DialogDescription>
-              Pick where this animation is headed — the file does the rest.
+              Pick where this animation is headed - the file does the rest.
             </DialogDescription>
           </DialogHeader>
 
@@ -403,7 +403,7 @@ export function GenerateExport({ loop }: { loop: boolean }) {
 
           <DialogFooter className="items-center sm:justify-between">
             <p className="font-mono text-[11px] tabular-nums text-muted-foreground">
-              {facts ? `${facts.w}×${facts.h} · ${facts.fps} fps · ${facts.frames} f · ${facts.seconds} s` : '—'}
+              {facts ? `${facts.w}×${facts.h} · ${facts.fps} fps · ${facts.frames} f · ${facts.seconds} s` : '-'}
             </p>
             <Button
               autoFocus

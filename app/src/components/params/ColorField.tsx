@@ -143,7 +143,7 @@ export function ColorField({
             either would overwrite the identity its own toggle and dismissal
             resolve the trigger by. The label rides `aria-label` instead. */}
         <PopoverTrigger
-          aria-label={`${label} — ${hex}`}
+          aria-label={`${label} - ${hex}`}
           className="flex h-8 w-full items-center gap-2 rounded-control border border-control-border bg-control px-2 transition-colors hover:bg-control-hover focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           <span

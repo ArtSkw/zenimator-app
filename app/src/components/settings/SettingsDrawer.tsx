@@ -33,7 +33,7 @@ export function SettingsDrawer() {
     try {
       const { studioHealth } = await import('@/engine/studio/studioClient')
       const ok = await studioHealth()
-      setEngineTest(ok ? { ok: true } : { ok: false, error: 'Not reachable — check URL & token' })
+      setEngineTest(ok ? { ok: true } : { ok: false, error: 'Not reachable - check URL & token' })
     } finally {
       setPinging(false)
     }

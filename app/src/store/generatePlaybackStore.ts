@@ -28,7 +28,7 @@ type GeneratePlaybackState = {
 
 /**
  * Bridges the Skottie preview engine (owned by the SkottiePlayer component) to
- * the footer TransportBar, which lives in a different part of the tree. The
+ * the floating transport pill, which lives in a different part of the tree. The
  * player attaches its controls on mount; the transport reads state and drives
  * playback through them.
  */

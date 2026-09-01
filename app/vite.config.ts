@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig, transformWithOxc, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -40,8 +41,13 @@ function portableSource(): Plugin {
   }
 }
 
+// The UI shows the app version; read it from package.json so there is exactly
+// ONE place it is written down.
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+
 export default defineConfig({
   base: '/zenimator-app/',
+  define: { __APP_VERSION__: JSON.stringify(version) },
   plugins: [portableSource(), react(), tailwindcss()],
   resolve: {
     alias: {

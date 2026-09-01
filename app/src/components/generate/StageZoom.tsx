@@ -2,9 +2,10 @@ import {
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import {
   DropdownMenu,
@@ -27,16 +28,52 @@ const WHEEL_ZOOM_K = 0.01
 /** Movement (px) before a press becomes a pan — below it, the click still
  *  reaches the layer-selection overlay. */
 const DRAG_THRESHOLD = 3
+/** Breathing room around the document at fit, so it never touches the chrome. */
+const FIT_PAD = 24
+
+/** Chrome floating over the canvas that the RESTING document should clear. The
+ *  camera ignores it entirely — pan and zoom range over the whole viewport, so
+ *  artwork travels under the rails exactly as it does in Figma. */
+export type Inset = { top: number; right: number; bottom: number; left: number }
+const NO_INSET: Inset = { top: 0, right: 0, bottom: 0, left: 0 }
 /** Idle after the last zoom event before the surface re-renders crisp. */
 const SETTLE_MS = 170
 
+/**
+ * Where the camera pill goes when the workspace wants it in its bottom cluster
+ * rather than pinned inside the artwork's frame. A module-scoped mount point
+ * rather than a DOM-id lookup: the stage SUBSCRIBES to it, so the pill appears
+ * the moment the slot commits and there is no effect writing state on mount.
+ */
+let pillSlot: HTMLElement | null = null
+const slotSubs = new Set<() => void>()
+const subscribeSlot = (cb: () => void) => { slotSubs.add(cb); return () => { slotSubs.delete(cb) } }
+
+/** Render this where the pill should live; pass `detachPill` to the stage. */
+export function ZoomSlot() {
+  return (
+    <span
+      className="contents"
+      ref={(el) => { pillSlot = el; slotSubs.forEach((f) => f()) }}
+    />
+  )
+}
+
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
-/** Clamp one pan axis: centre when content fits, else keep edges flush to the
- *  viewport (no empty gutters) — the Figma/Framer feel. */
-function clampAxis(t: number, viewport: number, content: number): number {
-  if (content <= viewport) return (viewport - content) / 2
-  return clamp(t, viewport - content, 0)
+/** Where the document rests at fit: the largest box of the doc's aspect that
+ *  fits the CLEAR area (the viewport minus whatever chrome floats over it),
+ *  centred in that area. The camera then moves this box around freely. */
+function fitBox(el: HTMLElement, aspect: number, inset: Inset) {
+  const availW = Math.max(1, el.clientWidth - inset.left - inset.right - FIT_PAD * 2)
+  const availH = Math.max(1, el.clientHeight - inset.top - inset.bottom - FIT_PAD * 2)
+  const w = Math.min(availW, availH * aspect)
+  const h = w / aspect
+  return {
+    w, h,
+    left: inset.left + FIT_PAD + (availW - w) / 2,
+    top: inset.top + FIT_PAD + (availH - h) / 2,
+  }
 }
 
 /** Zoom multiplier bounds relative to fit — always reaches fit and 25%..400%. */
@@ -45,12 +82,11 @@ function zoomRange(fit: number): { min: number; max: number } {
 }
 
 /** Camera that zooms `cam` to `nextZ` while pinning the content point under
- *  (cx, cy), with pan re-clamped to the viewport. */
-function anchoredCamera(el: HTMLElement, cam: Camera, nextZ: number, cx: number, cy: number): Camera {
+ *  (cx, cy). Nothing is clamped: the document may be parked anywhere, which is
+ *  what makes the canvas feel infinite rather than like a scroll box. */
+function anchoredCamera(cam: Camera, nextZ: number, cx: number, cy: number): Camera {
   const k = nextZ / cam.z
-  const tx = clampAxis(cx - (cx - cam.tx) * k, el.clientWidth, el.clientWidth * nextZ)
-  const ty = clampAxis(cy - (cy - cam.ty) * k, el.clientHeight, el.clientHeight * nextZ)
-  return { z: nextZ, tx, ty }
+  return { z: nextZ, tx: cx - (cx - cam.tx) * k, ty: cy - (cy - cam.ty) * k }
 }
 
 /**
@@ -68,21 +104,32 @@ function anchoredCamera(el: HTMLElement, cam: Camera, nextZ: number, cx: number,
  */
 export function ZoomableStage({
   docWidth,
-  sizingStyle,
+  aspect,
+  inset = NO_INSET,
   children,
+  detachPill = false,
+  onBackgroundClick,
 }: {
   /** Document width in animation pixels — the 100% reference. */
   docWidth: number
-  /** The viewport's sizing (aspectRatio + maxWidth) — unchanged from the
-   *  pre-zoom stage, so fit is pixel-identical to the old layout. */
-  sizingStyle: CSSProperties
+  /** Document aspect (w / h) — decides the resting box's shape. */
+  aspect: number
+  /** Chrome the RESTING document should clear. Does not constrain the camera.
+   *  Pass a STABLE reference (a module constant) — it is a re-measure dep. */
+  inset?: Inset
   children: (renderScale: number) => ReactNode
+  /** Send the camera pill to <ZoomSlot /> instead of the canvas corner. */
+  detachPill?: boolean
+  /** A click on bare canvas — not on the document, not the tail of a pan. */
+  onBackgroundClick?: () => void
 }) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const [cam, setCam] = useState<Camera>({ z: 1, tx: 0, ty: 0 })
   /** Debounced `cam.z` → the player's backing-store density. */
   const [committed, setCommitted] = useState(1)
-  /** What fit equals in absolute percent (measured). */
+  /** Where the document rests at z = 1, and what that equals in absolute
+   *  percent — both measured, both re-measured on resize. */
+  const [box, setBox] = useState({ w: 0, h: 0, left: 0, top: 0 })
   const [fitPct, setFitPct] = useState(100)
 
   // Latest values for the once-subscribed DOM listeners (synced post-render;
@@ -114,7 +161,7 @@ export function ZoomableStage({
   const zoomToPct = (pct: number) => {
     const el = viewportRef.current
     if (!el) return
-    apply(anchoredCamera(el, ref.current.cam, pct / ref.current.fitPct, el.clientWidth / 2, el.clientHeight / 2), { commit: true })
+    apply(anchoredCamera(ref.current.cam, pct / ref.current.fitPct, el.clientWidth / 2, el.clientHeight / 2), { commit: true })
   }
 
   const zoomToFit = () => apply({ z: 1, tx: 0, ty: 0 }, { commit: true })
@@ -122,22 +169,21 @@ export function ZoomableStage({
   const zoomOut = () =>
     zoomToPct([...STOPS].reverse().find((s) => s < ref.current.cam.z * ref.current.fitPct - 0.5) ?? MIN_PCT)
 
-  // Measure what fit means, and keep pan clamped when the viewport resizes.
+  // Re-measure the resting box on resize. The camera is deliberately left
+  // alone: a window resize must not yank a document the user has parked.
   // ResizeObserver delivers an initial entry on observe, so setState stays in
   // the async callback.
   useEffect(() => {
     const el = viewportRef.current
     if (!el) return
     const ro = new ResizeObserver(() => {
-      setFitPct(Math.max(1, (el.clientWidth / docWidth) * 100))
-      const { cam: c } = ref.current
-      const tx = clampAxis(c.tx, el.clientWidth, el.clientWidth * c.z)
-      const ty = clampAxis(c.ty, el.clientHeight, el.clientHeight * c.z)
-      if (tx !== c.tx || ty !== c.ty) setCam({ ...c, tx, ty })
+      const b = fitBox(el, aspect, inset)
+      setBox(b)
+      setFitPct(Math.max(1, (b.w / docWidth) * 100))
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [docWidth])
+  }, [docWidth, aspect, inset])
 
   // Wheel: ⌘/ctrl (or trackpad pinch) zooms toward the cursor; plain two-finger
   // scroll pans while zoomed in. Non-passive so preventDefault can stop the
@@ -153,12 +199,12 @@ export function ZoomableStage({
         const { min, max } = zoomRange(fit)
         const nextZ = clamp(c.z * Math.exp(-e.deltaY * WHEEL_ZOOM_K), min, max)
         if (Math.abs(nextZ - c.z) < 1e-4) return
-        applyRef.current(anchoredCamera(el, c, nextZ, e.clientX - rect.left, e.clientY - rect.top))
-      } else if (c.z > 1.001) {
+        applyRef.current(anchoredCamera(c, nextZ, e.clientX - rect.left, e.clientY - rect.top))
+      } else {
+        // Plain scroll pans at ANY zoom, including fit — on an infinite canvas
+        // there is no "too small to move".
         e.preventDefault()
-        const tx = clampAxis(c.tx - e.deltaX, el.clientWidth, el.clientWidth * c.z)
-        const ty = clampAxis(c.ty - e.deltaY, el.clientHeight, el.clientHeight * c.z)
-        setCam({ z: c.z, tx, ty })
+        setCam({ z: c.z, tx: c.tx - e.deltaX, ty: c.ty - e.deltaY })
       }
     }
     el.addEventListener('wheel', onWheel, { passive: false })
@@ -177,7 +223,7 @@ export function ZoomableStage({
     let panned = false
 
     const onDown = (e: PointerEvent) => {
-      if (e.button !== 0 || ref.current.cam.z <= 1.001) return
+      if (e.button !== 0) return
       start = { x: e.clientX, y: e.clientY, tx: ref.current.cam.tx, ty: ref.current.cam.ty, id: e.pointerId }
       dragging = false
       panned = false
@@ -195,8 +241,8 @@ export function ZoomableStage({
       e.preventDefault()
       panned = true
       const { cam: c } = ref.current
-      const tx = clampAxis(start.tx + dx, el.clientWidth, el.clientWidth * c.z)
-      const ty = clampAxis(start.ty + dy, el.clientHeight, el.clientHeight * c.z)
+      const tx = start.tx + dx
+      const ty = start.ty + dy
       setCam({ z: c.z, tx, ty })
     }
     const onUp = () => {
@@ -225,14 +271,32 @@ export function ZoomableStage({
   }, [])
 
   const displayPct = Math.round(cam.z * fitPct)
-  const pannable = cam.z > 1.001
+
+  const slot = useSyncExternalStore(subscribeSlot, () => pillSlot, () => null)
+
+  /** In the workspace the pill belongs to the bottom cluster; everywhere else
+   *  it stays pinned to the frame's corner. While a detached slot has not
+   *  committed yet the pill simply waits — drawing it in the corner for one
+   *  frame first would read as a glitch. */
+  const portal = (ui: ReactNode) =>
+    detachPill
+      ? (slot ? createPortal(ui, slot) : null)
+      : <div className="absolute bottom-3 right-3">{ui}</div>
 
   return (
     <>
+      {/* The viewport is the whole canvas — no frame, no aspect box, nothing
+          drawn around the document. The camera plane fills it, and the document
+          is one absolutely-placed box on that plane: that is what lets artwork
+          travel anywhere, under the rails included, with no visible edge. */}
       <div
         ref={viewportRef}
-        className="relative mx-auto w-full select-none overflow-hidden [touch-action:none]"
-        style={{ ...sizingStyle, cursor: grabbing ? 'grabbing' : pannable ? 'grab' : undefined }}
+        className="absolute inset-0 select-none overflow-hidden [touch-action:none]"
+        style={{ cursor: grabbing ? 'grabbing' : 'grab' }}
+        // Empty canvas clears the selection. Only a click that landed on the
+        // canvas ITSELF counts — one that reached the document bubbles up from
+        // a child, and a pan's trailing click is already suppressed below.
+        onClick={(e) => { if (e.target === e.currentTarget) onBackgroundClick?.() }}
       >
         <div
           className="absolute inset-0 will-change-transform"
@@ -241,18 +305,28 @@ export function ZoomableStage({
             transformOrigin: '0 0',
           }}
         >
-          {children(committed)}
+          <div className="absolute" style={{ left: box.left, top: box.top, width: box.w, height: box.h }}>
+            {children(committed)}
+          </div>
         </div>
       </div>
 
-      <div className="absolute bottom-3 right-3">
+      {portal(
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <button
                 type="button"
                 aria-label="Zoom"
-                className="flex h-8 items-center gap-1 rounded-full border border-border bg-background/80 pl-2.5 pr-2 transition-colors font-mono text-[11px] font-medium tabular-nums text-foreground backdrop-blur-sm shadow-sm"
+                className={
+                  // In the rail it is a plain control among other plain
+                  // controls — an edged, shadowed pill there would be the only
+                  // raised thing in a panel that has no raised things. Over the
+                  // canvas it still needs its own edge to be readable.
+                  detachPill
+                    ? 'flex h-8 items-center gap-1 rounded-full px-2.5 font-mono text-[11px] font-medium tabular-nums text-foreground transition-colors hover:bg-muted'
+                    : 'flex h-8 items-center gap-1 rounded-full border border-border bg-background/80 pl-2.5 pr-2 transition-colors font-mono text-[11px] font-medium tabular-nums text-foreground backdrop-blur-sm shadow-sm'
+                }
               >
                 {displayPct}%
                 <ChevronDown size={11} className="opacity-60" />
@@ -269,8 +343,8 @@ export function ZoomableStage({
             <DropdownMenuItem onClick={() => zoomToPct(100)}>Zoom to 100%</DropdownMenuItem>
             <DropdownMenuItem onClick={() => zoomToPct(200)}>Zoom to 200%</DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+        </DropdownMenu>,
+      )}
     </>
   )
 }

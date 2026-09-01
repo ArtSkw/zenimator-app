@@ -52,6 +52,11 @@ marks, and SVG logo sources.
   before revealing the wordmark. Do not show the full answer too early.
 - Avoid distorting brand geometry through squash, bounce, rotation, or blur-like
   effects unless the user requests that personality.
+  A mark is the one body the silhouette rule does NOT apply to: where a logo
+  carries a deliberate uniform pulse, `check-motion.mjs` may raise SILHOUETTE
+  STILL asking it to squash. That is the gate over-reaching, not the design —
+  declare `{ "layer": "<the mark's rig>", "reason": "brand geometry must not
+  distort" }` in controls.json rather than deforming the mark.
 - If a background is requested, expose `bgColor` and keep logo colors editable
   only when useful.
 

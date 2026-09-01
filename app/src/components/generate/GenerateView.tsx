@@ -1,19 +1,16 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import {
-  Loader2, Wand2, X, Paperclip, CornerDownLeft, ChevronDown, ChevronUp, Info, IterationCw, AlertCircle, Play,
-  Image as ImageIcon, Monitor, LogIn, Repeat, Square, Crosshair, Sparkles,
-  type LucideIcon,
+  Loader2, Wand2, X, Paperclip, CornerDownLeft, ChevronUp, Info, IterationCw, AlertCircle, Play, Image as ImageIcon, Monitor, LogIn, Repeat, Square, Crosshair, Sparkles, type LucideIcon, SlidersHorizontal,
 } from 'lucide-react'
-import { History } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { rgbaToCss } from '@/components/params/color'
 import { Button } from '@/components/ui/button'
 import { SwapText } from '@/components/ui/swap-text'
 import { SkottiePlayer } from '@/components/player/SkottiePlayer'
 import { SkeletonSelectionOverlay } from '@/components/generate/SkeletonSelectionOverlay'
 import { StudioSelectionOverlay } from '@/components/generate/StudioSelectionOverlay'
-import { StudioFeed } from '@/components/generate/StudioFeed'
 import { AttachmentStrip } from '@/components/generate/AttachmentStrip'
 import { ZoomableStage } from '@/components/generate/StageZoom'
 import { useGenerateStore, useBakedLottieJson, setupSignature, type Subject, type Kind } from '@/store/generateStore'
@@ -32,6 +29,9 @@ import { deriveControls, parseLayerControlSpecs, INTENSITY_FEEL_PREFIX } from '@
 import { studioCancel, studioGenerate, studioPropose, studioEdit, studioRevert, studioSlugFor, labelsFromDoc, studioPreflight, studioTitle, studioActivity, studioScene, studioSourceAssets } from '@/engine/studio/studioClient'
 import { useEngineConnect } from '@/store/engineConnectStore'
 import { HEARTBEAT_QUIET_MS, HEARTBEAT_TICK_MS, heartbeatLine } from '@/engine/studio/studioHeartbeat'
+import { GenerateTransport } from '@/components/shell/GenerateTransport'
+import { RAIL_LEFT, RAIL_RIGHT, GUTTER, CANVAS_DEFAULT_HEX } from '@/components/shell/chrome'
+import { REVEAL, REVEAL_LATE, useViewReveal } from '@/components/shell/reveal'
 
 /** Every generation runs through the STUDIO engine: headless Claude Code in
  *  the workbench (server/agent.mjs) — deep, minutes-long, verified against its
@@ -66,12 +66,27 @@ const CHECKER_BG = {
  *  own luminance and made the label vanish for most of every cycle. */
 const CANVAS_INK = { title: 'text-[#54545A]', note: 'text-[#6E6E76]' }
 
+/** Horizontal inset that keeps a centred element inside the room the two
+ *  floating rails leave. Used by every fixed cluster so they share one centre
+ *  line — the eye reads a single column of chrome, not three that nearly
+ *  agree. */
+const CLEAR_INSET = { left: RAIL_LEFT + GUTTER * 2, right: RAIL_RIGHT + GUTTER * 2 }
+/** What the RESTING document clears: both rails, the setup bar above and the
+ *  chat + transport stack below. The camera ignores all of it — this only
+ *  decides where a freshly-opened scene sits before anyone touches it. */
+const STAGE_INSET = {
+  top: 24,
+  bottom: 232,
+  left: RAIL_LEFT + GUTTER * 2,
+  right: RAIL_RIGHT + GUTTER * 2,
+}
+
 export function GenerateView() {
   const {
     subject, kind, prompt, groundings, lottieJson, resultSignature, resultKind,
     status, stage, error, skeleton, selectedLayer, cast,
     setSubject, setKind, setPrompt, setGroundings,
-    startGenerating, setStage, setResult, setError, resetStatus, setSelectedLayer, setCast, setHistoryOpen,
+    startGenerating, setStage, setResult, setError, resetStatus, setSelectedLayer, setCast,
   } = useGenerateStore()
   const { attach, detach, setPlaying, setProgress } = useGeneratePlayback()
   const isPlaying = useGeneratePlayback((s) => s.isPlaying)
@@ -118,7 +133,13 @@ export function GenerateView() {
     const proj = useProjectsStore.getState().projects.find((p) => p.studioSlug === slug)
     if (!proj || useGenerateStore.getState().status !== 'done') return
     const scene = await studioScene(slug)
-    if (!scene || scene.lottieJson === useGenerateStore.getState().lottieJson) return
+    if (!scene) return
+    // A finished job can change the SPEC without touching the document — a
+    // widened autoFit `max`, a new label. Comparing only lottie.json dropped
+    // those on the floor and left the panel driving the old numbers.
+    const docChanged = scene.lottieJson !== useGenerateStore.getState().lottieJson
+    const specChanged = (scene.controlsJson ?? null) !== (useGenerateStore.getState().agentControlsJson ?? null)
+    if (!docChanged && !specChanged) return
     try {
       const doc = JSON.parse(scene.lottieJson)
       const labels = labelsFromDoc(scene.lottieJson)
@@ -136,7 +157,11 @@ export function GenerateView() {
         layerLabels: labels, slotOverrides: kept,
         agentControlsJson: scene.controlsJson ?? proj.agentControlsJson ?? null, sessionAt: Date.now(),
       })
-      toast.success('Scene updated by the engine', { description: 'An external edit just finished — this is the fresh result.' })
+      if (docChanged) {
+        toast.success('Scene updated by the engine', { description: 'An external edit just finished - this is the fresh result.' })
+      } else {
+        toast.success('Controls updated', { description: 'The scene\u2019s control spec changed on the engine; the animation is unchanged.' })
+      }
     } catch { /* malformed fetch — keep the current scene */ }
   }
 
@@ -166,6 +191,35 @@ export function GenerateView() {
     return () => { alive = false; clearInterval(iv) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProject?.studioSlug, status, applying])
+
+  // ── Controls-spec drift ───────────────────────────────────────────────
+  // A project stores the agent's controls.json AS IT WAS AT GENERATION, but
+  // that file keeps improving on disk — a widened autoFit `max`, a `grow` pin
+  // that lets a bubble use the room beside it. Those never touch lottie.json,
+  // so the external-job poll above has no edge to fire on and the panel goes
+  // on measuring translations against the old numbers. Pull the CURRENT spec
+  // once per project open. The DOCUMENT is deliberately not touched here: the
+  // engine's copy is not automatically newer than what the user is looking at,
+  // and only the spec is known to go stale invisibly. (The derived control
+  // MANIFEST — bespoke `layerControls` labels — still refreshes only through a
+  // real job, since re-deriving it would reset knob values mid-session.)
+  const controlsSyncRef = useRef<string | null>(null)
+  useEffect(() => {
+    const proj = activeProject
+    if (!proj?.studioSlug || !proj.lottieJson || status !== 'done') return
+    if (controlsSyncRef.current === proj.id) return
+    controlsSyncRef.current = proj.id
+    let alive = true
+    void (async () => {
+      const scene = await studioScene(proj.studioSlug!)
+      if (!alive || !scene?.controlsJson) return
+      if (scene.controlsJson === (proj.agentControlsJson ?? null)) return
+      useGenerateStore.getState().setAgentControlsJson(scene.controlsJson)
+      saveProject({ ...proj, agentControlsJson: scene.controlsJson }, { activate: false })
+    })()
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProject?.id, activeProject?.studioSlug, status])
 
   // ── Recover lost source artwork ───────────────────────────────────────
   // A finished project with no attachment can't be regenerated (the button
@@ -250,35 +304,36 @@ export function GenerateView() {
   // projects (whose loadProject reads the saved snapshot) never races a
   // pending write.
   const slotOverrides = useGenerateStore((s) => s.slotOverrides)
-  const pendingSync = useRef<{ id: string; lottieJson: string; slotOverrides: Record<string, unknown> } | null>(null)
+  // The canvas fill rides the same write: it is a per-project VIEWING setting,
+  // so it belongs in the saved snapshot — and nowhere near the document.
+  const canvasBg = useGenerateStore((s) => s.canvasBg)
+  type Sync = { id: string; lottieJson: string; slotOverrides: Record<string, unknown>; canvasBg: typeof canvasBg }
+  const pendingSync = useRef<Sync | null>(null)
   useEffect(() => {
     if (!activeProjectId || !lottieJson) return
-    pendingSync.current = { id: activeProjectId, lottieJson, slotOverrides }
-    const t = setTimeout(() => {
-      if (pendingSync.current) {
-        updateProject(pendingSync.current.id, {
-          lottieJson: pendingSync.current.lottieJson,
-          slotOverrides: pendingSync.current.slotOverrides,
-        })
-        pendingSync.current = null
-      }
-    }, 400)
-    return () => {
-      clearTimeout(t)
-      if (pendingSync.current) {
-        updateProject(pendingSync.current.id, {
-          lottieJson: pendingSync.current.lottieJson,
-          slotOverrides: pendingSync.current.slotOverrides,
-        })
-        pendingSync.current = null
-      }
+    pendingSync.current = { id: activeProjectId, lottieJson, slotOverrides, canvasBg }
+    const flush = () => {
+      if (!pendingSync.current) return
+      updateProject(pendingSync.current.id, {
+        lottieJson: pendingSync.current.lottieJson,
+        slotOverrides: pendingSync.current.slotOverrides,
+        canvasBg: pendingSync.current.canvasBg,
+      })
+      pendingSync.current = null
     }
-  }, [activeProjectId, lottieJson, slotOverrides, updateProject])
+    const t = setTimeout(flush, 400)
+    return () => { clearTimeout(t); flush() }
+  }, [activeProjectId, lottieJson, slotOverrides, canvasBg, updateProject])
 
   // "Edit setup" is a per-project affordance — switching projects (or going
   // home) must not carry an expanded setup panel into the next context.
   // (Render-phase reset: the sanctioned "adjust state when a prop changes"
   // pattern — no extra commit, unlike a setState-in-effect.)
+  // Arriving at a view — home, or a project — plays a short staged entrance.
+  // Keyed on the project id so switching between two projects counts as an
+  // arrival too, and silent on the session's first view.
+  const reveal = useViewReveal(activeProjectId ?? 'home')
+
   const [setupProjectId, setSetupProjectId] = useState(activeProjectId)
   if (setupProjectId !== activeProjectId) {
     setSetupProjectId(activeProjectId)
@@ -311,11 +366,10 @@ export function GenerateView() {
   // browsing away from a build and back replays that job's own history — and
   // every run owns a project from its first click (auto-propose included), so
   // there is no project-less activity to show.
-  const feedChannel = activeProjectId
 
   // Apply control overrides onto the base Lottie for live preview — each control
   // re-writes the keyframes it was derived from (duration, visibility…).
-  // Shared with TopBar's export menu so exports ship what's on screen, not the
+  // Shared with the right rail's export menu so exports ship what's on screen, not the
   // un-adjusted base doc.
   const bakedLottieJson = useBakedLottieJson()
   // Show the full setup controls before the first result, or when reopened.
@@ -739,7 +793,7 @@ export function GenerateView() {
     // engine only emits it when the propose subprocess exits), so without a
     // line naming that moment the two phases blur into one long wait and a slow
     // brief is indistinguishable from a lost one.
-    publishStage('Brief ready — starting the build…')
+    publishStage('Brief ready - starting the build…')
 
     // Phase two — the build adopts this run: same project, same feed, no stop
     // for breath. Two ways it doesn't take: Stop landed during the handoff (the
@@ -773,7 +827,7 @@ export function GenerateView() {
       useGenerateStore.getState().setAgentControlsJson(controlsJson ?? null)
       setCast(nextCast)
       saveProject({ ...proj, lottieJson: json, controls: newControls, cast: nextCast, layerLabels: labels, slotOverrides: {}, agentControlsJson: controlsJson ?? null, sessionAt: Date.now() })
-      toast.success(`Restored version ${version}`, { description: 'The previous state was saved too — revert is undoable.' })
+      toast.success(`Restored version ${version}`, { description: 'The previous state was saved too - revert is undoable.' })
     } catch (err) {
       toast.error('Could not revert', { description: err instanceof Error ? err.message : String(err) })
     }
@@ -820,13 +874,13 @@ export function GenerateView() {
     }
     if (overBytes) {
       toast.error(`${overBytes} file${overBytes > 1 ? 's' : ''} too heavy to add`, {
-        description: `The engine takes ${MAX_ATTACHED_BYTES / 1_000_000} MB of SVG per animation — flatten or split embedded rasters.`,
+        description: `The engine takes ${MAX_ATTACHED_BYTES / 1_000_000} MB of SVG per animation - flatten or split embedded rasters.`,
       })
     }
     // Soft guidance, never a cap: long chains usually read better as scenes.
     if (next.length > 4 && !attachWarnedRef.current) {
       attachWarnedRef.current = true
-      toast('Long story — consider splitting into scenes', {
+      toast('Long story - consider splitting into scenes', {
         description: 'Many artworks in one animation can crowd the timeline.',
       })
     }
@@ -969,8 +1023,548 @@ export function GenerateView() {
     </label>
   )
 
+  // ── The pieces, named once ──────────────────────────────────────────────
+  // The column and the workspace need the same parts in different PLACES, so
+  // each is built once here and positioned below. Nothing is duplicated
+  // between the two layouts — that is what stops them drifting apart.
+  const setupSection = (
+            inProgress ? (
+              <div className="space-y-4 animate-in fade-in-0 duration-300">
+                {/* The brief reads as the composer does, and carries its own
+                    action bar — Stop belongs with the prompt it governs, in the
+                    same dark style as every other Stop in the app, not floating
+                    loose between the panels. */}
+                <div className="rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
+                  <div className="px-5 pt-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {subject} · {kind === 'intro-loop' ? 'Entry + loop' : kind === 'loop' ? 'Loop' : 'Entry'}
+                    </p>
+                    {/* The auto-propose chain reaches this screen BEFORE a brief
+                        exists — the studio is still reading the artwork. Say so,
+                        rather than leaving a blank where the brief will be. */}
+                    <p className={cn(
+                      'mt-1.5 text-sm leading-relaxed',
+                      prompt ? 'line-clamp-3 text-foreground' : 'italic text-muted-foreground',
+                    )}>
+                      {prompt || 'Writing the brief from your artwork…'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2.5 px-4 py-3">
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                      {/* A failed run gets a still icon: a spinner beside an
+                          error message claims work is continuing when it stopped. */}
+                      {activeJob?.error ? (
+                        <AlertCircle size={13} className="shrink-0 text-destructive" />
+                      ) : (
+                        <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
+                      )}
+                      <span
+                        key={stageLine ?? 'busy'}
+                        className={cn(
+                          'truncate text-xs animate-in fade-in duration-300',
+                          activeJob?.error ? 'text-destructive' : 'text-muted-foreground',
+                        )}
+                      >
+                        {activeJob?.error ?? stageLine ?? 'Setting up the studio…'}
+                      </span>
+                    </span>
+                    {activeJob?.error ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 shrink-0 rounded-full gap-1.5"
+                        onClick={() => {
+                          usePendingJobs.getState().finish(activeJob.id)
+                          useProjectsStore.getState().setActiveProjectId(null)
+                          resetStatus()
+                        }}
+                      >
+                        <X size={13} /> Dismiss
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="h-8 shrink-0 rounded-full gap-1.5 font-semibold"
+                        onClick={() => {
+                          if (!activeJob) return
+                          // Keep the project as an editable draft rather than
+                          // deleting it out from under the user — unless the
+                          // studio is still writing the brief, where there's
+                          // nothing authored to come back to and the composer
+                          // (which still holds the artwork) is the better landing.
+                          stopJob(activeJob.id, { keepDraft: !proposing, slug: activeSlugRef.current ?? undefined })
+                          resetStatus()
+                        }}
+                      >
+                        <Square size={13} /> Stop
+                      </Button>
+                    )}
+                  </div>
+                </div>
+  
+                <CanvasPlaceholder
+                  busy={!activeJob?.error}
+                  title="Your animation will appear here"
+                  note={activeJob?.error ? undefined : 'This takes a few minutes - you can browse other projects meanwhile.'}
+                />
+              </div>
+            ) : showFullSetup ? (
+              /* No entrance on this WRAPPER. It used to carry `animate-in
+                 fade-in-0`, which promotes the whole subtree to its own layer
+                 for the duration — and a layer containing a rounded,
+                 overflow-clipped, shadowed card can paint its UNCLIPPED
+                 rectangle for a frame before the radius lands. That is the
+                 square edge that flashed on expand. The fade now belongs to
+                 the card itself, so the element being composited is the one
+                 that owns the corners. */
+              <div className="relative space-y-4">
+                {/* Greeting floats ABOVE the composer (absolute) so the composer
+                    itself sits at the vertical center of the canvas; the feed
+                    flows below. Only on the pre-result setup — the feed's small
+                    cap keeps this from clipping the scroll during generation. */}
+                {!lottieJson && !activeJob && (
+                  <div className={cn('absolute bottom-full left-0 right-0 pb-6 text-center space-y-1.5', reveal.animate && REVEAL)}>
+                    <h2 className="font-heading text-2xl font-bold tracking-tight text-foreground">Bring the still. We’ll bring the motion.</h2>
+                    <p className="text-sm text-muted-foreground">Attach your SVG, describe how it moves - the studio does the rest.</p>
+                  </div>
+                )}
+  
+                {/* Unified composer — attachments, prompt, then action bar with
+                    axes centered. The whole card is a drop target for SVGs. */}
+                <div
+                  className={cn(
+                    // The one card the home screen is FOR: a wide, low-opacity
+                  // lift (big blur, small offset) reads as focus without reading
+                  // as weight — the rails deliberately have no shadow at all.
+                  'rounded-3xl border bg-card shadow-[0_18px_48px_-18px_rgb(0_0_0_/_0.22)] overflow-hidden transition-[border-color,box-shadow] duration-200',
+                  // On the home screen this is chunk two of the arrival, a beat
+                  // after the greeting. Everywhere else (opening Edit setup) it
+                  // is a plain fade with no delay - the box is REPLACING
+                  // something already on screen, so there is nothing to stage.
+                  reveal.animate && !lottieJson ? REVEAL_LATE : 'animate-in fade-in-0 duration-300',
+                    dropActive ? 'border-ring ring-3 ring-ring/50' : 'border-border',
+                  )}
+                  onDragOver={(e) => {
+                    // Only file drags from outside — an in-strip re-sequence carries
+                    // 'application/x-zen-attachment', never 'Files'.
+                    if (!e.dataTransfer.types.includes('Files')) return
+                    // preventDefault even mid-run: without it the browser treats the
+                    // drop as navigation and walks away from a streaming generation.
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = canAttach ? 'copy' : 'none'
+                    if (canAttach && !dropActive) setDropActive(true)
+                  }}
+                  onDragLeave={(e) => {
+                    // dragleave also fires crossing between children; ignore those.
+                    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+                    setDropActive(false)
+                  }}
+                  onDrop={(e) => {
+                    if (!e.dataTransfer.types.includes('Files')) return
+                    e.preventDefault()
+                    setDropActive(false)
+                    if (canAttach) void handleAttach(e.dataTransfer.files)
+                  }}
+                >
+                  {/* The panel's own title bar. It belongs INSIDE the card: a
+                      label and a Done button floating above an edged surface
+                      read as loose page furniture, not as this panel's chrome. */}
+                  {lottieJson && editingSetup && (
+                    <div className="flex items-center justify-between border-b border-border py-2 pl-5 pr-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Edit setup</p>
+                      <Button variant="ghost" size="sm" className="-my-1 rounded-full gap-1.5" onClick={() => setEditingSetup(false)}>
+                        <ChevronUp size={13} /> Done
+                      </Button>
+                    </div>
+                  )}
+
+                  <AttachmentStrip
+                    items={groundings}
+                    onChange={setGroundings}
+                    disabled={generating || proposing}
+                  />
+  
+                  {/* Tighter top padding under the strip — the thumbnails already
+                      carry their own breathing room. */}
+                  <div className={cn('px-4', groundings.length ? 'pt-2' : 'pt-4')}>
+                    <textarea
+                      ref={promptRef}
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      placeholder={
+                        groundings.length >= 2
+                          ? "Describe the journey - e.g. 'the card flies in, taps, and dissolves into the checkmark drawing on'"
+                          : placeholderFor(subject, kind)
+                      }
+                      rows={1}
+                      disabled={generating || proposing}
+                      /* The floor only has to clear a two-line placeholder — the
+                         field auto-grows with the brief up to MAX_PX. */
+                      className="w-full min-h-[3.25rem] resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
+                    />
+                  </div>
+  
+                  <TooltipProvider>
+                    <div className="flex items-center gap-2 px-3 pb-3 pt-2">
+                      {/* Attach lives here at a FIXED width — the thumbnails
+                          themselves sit in the strip at the top of the composer,
+                          so no number of attachments can crowd the axes or push
+                          Generate around. Empty state keeps the full invitation;
+                          once artwork is attached it collapses to a round +. */}
+                      {attachInput}
+  
+                      {/* The axes ride WITH Generate on the right edge (ml-auto),
+                          not centered in the row — centered, they shifted every
+                          time the attach control changed width. */}
+                      <div className={cn('ml-auto items-center gap-1.5', generating || proposing ? 'hidden' : 'flex')}>
+                        <AxisGroup<Subject>
+                          name="Subject" value={subject} onChange={setSubject}
+                          options={[
+                            { value: 'illustration', label: 'Illustration', icon: ImageIcon },
+                            { value: 'screen', label: 'Screen', icon: Monitor },
+                          ]}
+                        />
+                        <AxisGroup<Kind>
+                          name="Animation" value={kind} onChange={setKind}
+                          options={[
+                            { value: 'entry', label: 'Entry', icon: LogIn },
+                            { value: 'loop', label: 'Loop', icon: Repeat },
+                            { value: 'intro-loop', label: 'Entry + Loop', icon: IterationCw },
+                          ]}
+                        />
+                      </div>
+  
+                      {generating || proposing ? (
+                        /* Shared busy cluster for generation AND auto-propose.
+                           flex-1 (not ml-auto) so progress reads on the LEFT with
+                           Stop on the right — the same arrangement as the brief
+                           card and the chat box. min-w-0 so the status truncates
+                           while the spinner and Stop keep their size; a long line
+                           must never push Stop out of the composer's clip. */
+                        <div className="flex min-w-0 flex-1 items-center gap-2.5 pl-3">
+                          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                            <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
+                            <span
+                              key={stageLine ?? 'busy'}
+                              className="truncate text-xs text-muted-foreground animate-in fade-in duration-300"
+                            >
+                              {stageLine ?? (proposing ? readingArtwork(groundings.length) : 'Generating…')}
+                            </span>
+                          </span>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-8 shrink-0 rounded-full gap-1.5 font-semibold"
+                            onClick={handleStop}
+                          >
+                            <Square size={13} />
+                            Stop
+                          </Button>
+                        </div>
+                      ) : canResume ? (
+                        /* A run this user stopped: continuing it is the primary
+                           action, but starting clean stays one click away —
+                           people often stop precisely BECAUSE it was going wrong,
+                           and resuming that would just rebuild the wrong thing. */
+                        <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-3">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 rounded-full gap-1.5 px-3 text-muted-foreground"
+                            disabled={!canGenerate}
+                            onClick={() => handleGenerate()}
+                            title="Ignore the interrupted attempt and build this scene from scratch"
+                          >
+                            <Wand2 size={13} />
+                            Start over
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-8 rounded-full gap-1.5 px-3.5 font-semibold"
+                            disabled={!canGenerate}
+                            onClick={() => handleGenerate({ resume: true })}
+                            title="Pick the studio back up where it stopped - it keeps everything it had already worked out"
+                          >
+                            <Play size={13} />
+                            Resume
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          /* h-8 matches the 32px axis switches beside it. */
+                          className="h-8 rounded-full gap-1.5 px-3.5 font-semibold"
+                          disabled={!canGenerate}
+                          onClick={() => handleGenerate()}
+                          title="The studio engine builds the scene, renders its own frames, and verifies them before delivering"
+                        >
+                          <Wand2 size={13} />
+                          {lottieJson ? 'Regenerate' : 'Generate'}
+                        </Button>
+                      )}
+                    </div>
+                  </TooltipProvider>
+                </div>
+  
+                {/* Auto-propose: with an SVG attached and no brief written yet,
+                    let the studio study the artwork and draft the brief. While
+                    it runs, progress + Stop live in the composer's busy cluster
+                    above (same as generation). */}
+                {groundings.length > 0 && !prompt.trim() && !generating && !proposing && (
+                  <button
+                    onClick={handlePropose}
+                    className="pressable mx-auto flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <Sparkles size={13} />
+                    {/* Says what it now does: this starts a real run that writes
+                        the brief AND builds from it, so promising only a brief
+                        would under-sell it into a surprise. */}
+                    {groundings.length >= 2
+                      ? 'Let the studio write the story and animate it'
+                      : 'Let the studio write the brief and animate it'}
+                  </button>
+                )}
+                {stale && !generating && !proposing && (
+                  <p className="flex items-center justify-center gap-1.5 text-xs text-foreground text-center"><Info size={13} className="shrink-0" />Properties changed - regenerate to apply.</p>
+                )}
+                {error && <p className="text-xs text-destructive leading-snug text-center">{error}</p>}
+  
+                {/* Stopped before anything was produced: the composer above is
+                    live again (brief, artwork, Generate), and this says what
+                    happened without pretending work is still going on — so the
+                    activity from the partial run stays readable below it. */}
+                {stoppedDraft && (
+                  <>
+                    <CanvasPlaceholder
+                      title="Generation stopped"
+                      note={canResume
+                        ? 'Resume picks the studio back up where it left off - or start over for a clean take.'
+                        : 'Your brief and artwork are saved - press Generate to run it again.'}
+                    />
+                  </>
+                )}
+              </div>
+            ) : (
+              /* Collapsed, the setup shows NOTHING here. In the workspace its
+                 button lives in the chat box below and opens in that box's
+                 place; on the home screen this branch is unreachable, because
+                 `showFullSetup` is always true there. */
+              null
+            )
+  )
+  // Guarded here rather than at the call site so TypeScript narrows the doc
+  // for the player inside — the workspace branch is the only place it renders.
+  const stageSection = bakedLottieJson && (
+                <div className="absolute inset-0">
+                  <ZoomableStage
+                    detachPill
+                    key={activeProject?.studioSlug ?? 'draft'}
+                    docWidth={docMeta.w}
+                    aspect={docAspect}
+                    inset={STAGE_INSET}
+                    onBackgroundClick={() => setSelectedLayer(null)}
+                  >
+                    {(renderScale) => (
+                      <>
+                        <SkottiePlayer
+                          lottieJson={bakedLottieJson}
+                          loop={resultKind === 'loop' || resultKind === 'intro-loop'}
+                          renderScale={renderScale}
+                          onReady={(c, lp) => (c ? attach(c, lp) : detach())}
+                          onPlayStateChange={setPlaying}
+                          onFrame={setProgress}
+                          className="h-full w-full"
+                        />
+                        {skeleton ? <SkeletonSelectionOverlay /> : <StudioSelectionOverlay />}
+                      </>
+                    )}
+                  </ZoomableStage>
+                  {/* External engine work on THIS scene — visible even when the
+                      job wasn't started from this app. */}
+                  {engineJob && engineJob.slug === activeProject?.studioSlug && (
+                    <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center">
+                      <div className="flex items-center gap-2 rounded-full border border-border bg-background/95 px-3.5 py-1.5 text-xs font-medium shadow-sm animate-in fade-in-0 slide-in-from-top-1 duration-300">
+                        <span className="relative flex size-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-foreground/40" />
+                          <span className="relative inline-flex size-2 rounded-full bg-foreground" />
+                        </span>
+                        {engineJob.state === 'queued' ? 'Engine job queued for this scene' : 'Engine is working on this scene…'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+  )
+  const chatSection = (
+                canChat ? (
+                  <div className="rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
+                    {/* Anchor chips: the pinned moment and/or selected layer the
+                        next note targets. Both dismissible. */}
+                    {anchor && (
+                      <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
+                        {anchor.frame != null && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-2.5 pr-1.5 text-xs font-medium text-primary">
+                            <span className="font-mono tabular-nums">@ frame {anchor.frame}</span>
+                            <button
+                              type="button"
+                              onClick={() => setMomentFrame(null)}
+                              aria-label="Clear pinned frame"
+                              className="grid size-4 place-items-center rounded-full text-primary/70 transition-colors hover:bg-primary/20 hover:text-primary"
+                            >
+                              <X size={11} />
+                            </button>
+                          </span>
+                        )}
+                        {anchor.label && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-2.5 pr-1.5 text-xs font-medium text-primary">
+                            {anchor.label}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLayer(null)}
+                              aria-label="Clear layer scope"
+                              className="grid size-4 place-items-center rounded-full text-primary/70 transition-colors hover:bg-primary/20 hover:text-primary"
+                            >
+                              <X size={11} />
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <div className="px-4 pt-4">
+                      <textarea
+                        ref={changeRef}
+                        value={changeText}
+                        onChange={(e) => setChangeText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAskChange() }
+                        }}
+                        placeholder={anchor?.frame != null
+                          ? 'What should happen at this moment?'
+                          : 'Ask for a change - e.g. "wider bag sway, blink twice per loop"'}
+                        rows={1}
+                        disabled={applying}
+                        className="w-full min-h-[2.5rem] resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2.5 px-3 pb-3 pt-1">
+                      {/* This box's SECOND job, pinned to the far left so the
+                          row reads as its two ends: what you can OPEN on the
+                          left, what you can SEND on the right, with the
+                          run status between them. One surface at the bottom of
+                          the canvas answers both "change the animation" and
+                          "change what it was made from" - the setup opens in
+                          THIS box's place, not as a second box elsewhere.
+                          Hidden mid-run, where the row belongs to Stop. */}
+                      {!applying && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0 rounded-full gap-1.5 text-xs text-muted-foreground"
+                          onClick={() => setEditingSetup(true)}
+                          title="Change the brief, the artwork or the animation type, then regenerate"
+                        >
+                          <SlidersHorizontal size={13} /> Edit setup
+                        </Button>
+                      )}
+                      {/* Progress reads on the LEFT, Stop on the right — the same
+                          arrangement the brief card uses while a scene builds. It
+                          shares the slot with "Fix this moment", which only
+                          offers itself when nothing is running anyway. min-w-0 so
+                          a long status truncates instead of shoving Stop out. */}
+                      <div className="flex min-w-0 flex-1 items-center">
+                        {applying ? (
+                          <span className="flex min-w-0 items-center gap-1.5 pl-1">
+                            <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
+                            <SwapText
+                              text={stage || 'Applying…'}
+                              className="text-xs text-muted-foreground"
+                            />
+                          </span>
+                        ) : (
+                          !isPlaying && momentFrame == null && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="rounded-full gap-1.5 text-xs text-muted-foreground"
+                              onClick={() => setMomentFrame(Math.round(playFrame))}
+                              title="Pin the frame on screen so your next note targets this exact moment - the agent renders it first"
+                            >
+                              <Crosshair size={13} /> Fix this moment
+                            </Button>
+                          )
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        className="shrink-0 rounded-full gap-1.5 font-semibold"
+                        disabled={applying ? false : !changeText.trim()}
+                        onClick={applying ? handleStop : () => handleAskChange()}
+                      >
+                        {applying ? <Square size={13} /> : <CornerDownLeft size={13} />}
+                        {applying ? 'Stop' : 'Apply'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  activeProject && !activeProject.studioSlug && (
+                    <p className="px-1 text-center text-xs text-muted-foreground">
+                      This scene predates the studio engine - regenerate it to refine through conversation.
+                    </p>
+                  )
+                )
+  )
+
+  // ── Workspace ────────────────────────────────────────────────────────────
+  // Once a scene exists the view stops being a document and becomes a
+  // workspace: the canvas owns the whole window and every piece of chrome
+  // floats over it at a FIXED address. That is the point of the shape — a
+  // growing activity log can no longer shove the artwork down the page, and
+  // the eye finds the same control in the same place on every scene.
+  if (bakedLottieJson) {
+    return (
+      // The canvas fill. `null` is the constant canvas tone, not a theme
+      // token: artwork gets judged against ONE ground in both themes.
+      <div className="absolute inset-0" style={{ background: canvasBg ? rgbaToCss(canvasBg) : CANVAS_DEFAULT_HEX }}>
+        {/* The canvas itself: full bleed, no frame, nothing drawn around the
+            document. Its own bounds are invisible — the fill runs straight
+            through them — so the only thing on screen is the artwork, free to
+            be dragged and zoomed anywhere. Chunk one of the arrival. */}
+        <div key={`stage-${reveal.key}`} className={cn('absolute inset-0', reveal.animate && REVEAL)}>
+          {stageSection}
+        </div>
+
+        {/* Bottom-centre — one box with two jobs, then the transport under it.
+            Asking for a change and changing the setup are the same act at
+            different depths, so they share a surface: the setup opens IN PLACE
+            of the note field rather than as a second box elsewhere on screen.
+            The transport is the floor: playback is what you reach for without
+            looking, so it sits at the edge. */}
+        <div
+          key={`dock-${reveal.key}`}
+          className={cn('pointer-events-none absolute bottom-3 z-20 flex flex-col items-center gap-4', reveal.animate && REVEAL_LATE)}
+          style={CLEAR_INSET}
+        >
+          <div className="pointer-events-auto w-full max-w-xl">
+            {editingSetup ? setupSection : chatSection}
+          </div>
+          {/* One width for the whole stack — a transport wider than the box
+              above it reads as two unrelated bars, not one cluster. */}
+          <div className="pointer-events-auto w-full max-w-xl">
+            <GenerateTransport />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Column ───────────────────────────────────────────────────────────────
+  // Before a scene exists there is nothing to hold still around: you compose,
+  // then watch it build, reading top to bottom. The same centred column as
+  // before, now sized to the room between the floating rails.
   return (
-    <div className="h-full w-full overflow-auto">
+    <div className="absolute inset-0 overflow-auto" style={CLEAR_INSET}>
       {/* NOTE: vertical centering via my-auto on the child, NOT justify-center
           on this flex parent — justify-center in a scroll container pushes tall
           content above the scroll origin where it can never be scrolled to.
@@ -979,519 +1573,14 @@ export function GenerateView() {
         className="min-h-full flex flex-col items-center p-8"
         onClick={(e) => { if (e.target === e.currentTarget) setSelectedLayer(null) }}
       >
-        <div className="w-full max-w-xl my-auto">
-          {/* ── Building ─────────────────────────────────────────────────
-              An open project whose scene doesn't exist yet gets its OWN
-              screen: its brief, a placeholder where the animation will be,
-              and the live status. Not the marketing headline (this isn't a
-              blank start) and not an empty composer (the setup is already
-              decided) — the two things that leaked through before. */}
-          {inProgress ? (
-            <div className="space-y-4 animate-in fade-in-0 duration-300">
-              {/* The brief reads as the composer does, and carries its own
-                  action bar — Stop belongs with the prompt it governs, in the
-                  same dark style as every other Stop in the app, not floating
-                  loose between the panels. */}
-              <div className="rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
-                <div className="px-5 pt-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {subject} · {kind === 'intro-loop' ? 'Entry + loop' : kind === 'loop' ? 'Loop' : 'Entry'}
-                  </p>
-                  {/* The auto-propose chain reaches this screen BEFORE a brief
-                      exists — the studio is still reading the artwork. Say so,
-                      rather than leaving a blank where the brief will be. */}
-                  <p className={cn(
-                    'mt-1.5 text-sm leading-relaxed',
-                    prompt ? 'line-clamp-3 text-foreground' : 'italic text-muted-foreground',
-                  )}>
-                    {prompt || 'Writing the brief from your artwork…'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2.5 px-4 py-3">
-                  <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                    {/* A failed run gets a still icon: a spinner beside an
-                        error message claims work is continuing when it stopped. */}
-                    {activeJob?.error ? (
-                      <AlertCircle size={13} className="shrink-0 text-destructive" />
-                    ) : (
-                      <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
-                    )}
-                    <span
-                      key={stageLine ?? 'busy'}
-                      className={cn(
-                        'truncate text-xs animate-in fade-in duration-300',
-                        activeJob?.error ? 'text-destructive' : 'text-muted-foreground',
-                      )}
-                    >
-                      {activeJob?.error ?? stageLine ?? 'Setting up the studio…'}
-                    </span>
-                  </span>
-                  {activeJob?.error ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 shrink-0 rounded-full gap-1.5"
-                      onClick={() => {
-                        usePendingJobs.getState().finish(activeJob.id)
-                        useProjectsStore.getState().setActiveProjectId(null)
-                        resetStatus()
-                      }}
-                    >
-                      <X size={13} /> Dismiss
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="h-8 shrink-0 rounded-full gap-1.5 font-semibold"
-                      onClick={() => {
-                        if (!activeJob) return
-                        // Keep the project as an editable draft rather than
-                        // deleting it out from under the user — unless the
-                        // studio is still writing the brief, where there's
-                        // nothing authored to come back to and the composer
-                        // (which still holds the artwork) is the better landing.
-                        stopJob(activeJob.id, { keepDraft: !proposing, slug: activeSlugRef.current ?? undefined })
-                        resetStatus()
-                      }}
-                    >
-                      <Square size={13} /> Stop
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <CanvasPlaceholder
-                busy={!activeJob?.error}
-                title="Your animation will appear here"
-                note={activeJob?.error ? undefined : 'This takes a few minutes — you can browse other projects meanwhile.'}
-              />
-
-              {/* Activity is the LAST thing on every screen it appears on —
-                  under the canvas here, under the chat box once a scene
-                  exists. It's reference material you drop to, so it must not
-                  move around between the states of one run. */}
-              {feedChannel && <StudioFeed channel={feedChannel} />}
-            </div>
-          ) : showFullSetup ? (
-            <div className="relative space-y-4 animate-in fade-in-0 duration-300">
-              {/* Greeting floats ABOVE the composer (absolute) so the composer
-                  itself sits at the vertical center of the canvas; the feed
-                  flows below. Only on the pre-result setup — the feed's small
-                  cap keeps this from clipping the scroll during generation. */}
-              {!lottieJson && !activeJob && (
-                <div className="absolute bottom-full left-0 right-0 pb-6 text-center space-y-1.5">
-                  <h2 className="font-heading text-2xl font-bold tracking-tight text-foreground">Bring the still. We’ll bring the motion.</h2>
-                  <p className="text-sm text-muted-foreground">Attach your SVG, describe how it moves — the studio does the rest.</p>
-                </div>
-              )}
-              {lottieJson && editingSetup && (
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Edit setup</p>
-                  <Button variant="ghost" size="sm" className="rounded-full gap-1.5" onClick={() => setEditingSetup(false)}>
-                    <ChevronUp size={13} /> Done
-                  </Button>
-                </div>
-              )}
-
-              {/* Unified composer — attachments, prompt, then action bar with
-                  axes centered. The whole card is a drop target for SVGs. */}
-              <div
-                className={cn(
-                  'rounded-3xl border bg-card shadow-sm overflow-hidden transition-[border-color,box-shadow] duration-200',
-                  dropActive ? 'border-ring ring-3 ring-ring/50' : 'border-border',
-                )}
-                onDragOver={(e) => {
-                  // Only file drags from outside — an in-strip re-sequence carries
-                  // 'application/x-zen-attachment', never 'Files'.
-                  if (!e.dataTransfer.types.includes('Files')) return
-                  // preventDefault even mid-run: without it the browser treats the
-                  // drop as navigation and walks away from a streaming generation.
-                  e.preventDefault()
-                  e.dataTransfer.dropEffect = canAttach ? 'copy' : 'none'
-                  if (canAttach && !dropActive) setDropActive(true)
-                }}
-                onDragLeave={(e) => {
-                  // dragleave also fires crossing between children; ignore those.
-                  if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
-                  setDropActive(false)
-                }}
-                onDrop={(e) => {
-                  if (!e.dataTransfer.types.includes('Files')) return
-                  e.preventDefault()
-                  setDropActive(false)
-                  if (canAttach) void handleAttach(e.dataTransfer.files)
-                }}
-              >
-                <AttachmentStrip
-                  items={groundings}
-                  onChange={setGroundings}
-                  disabled={generating || proposing}
-                />
-
-                {/* Tighter top padding under the strip — the thumbnails already
-                    carry their own breathing room. */}
-                <div className={cn('px-4', groundings.length ? 'pt-2' : 'pt-4')}>
-                  <textarea
-                    ref={promptRef}
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder={
-                      groundings.length >= 2
-                        ? "Describe the journey — e.g. 'the card flies in, taps, and dissolves into the checkmark drawing on'"
-                        : placeholderFor(subject, kind)
-                    }
-                    rows={1}
-                    disabled={generating || proposing}
-                    /* The floor only has to clear a two-line placeholder — the
-                       field auto-grows with the brief up to MAX_PX. */
-                    className="w-full min-h-[3.25rem] resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
-                  />
-                </div>
-
-                <TooltipProvider>
-                  <div className="flex items-center gap-2 px-3 pb-3 pt-2">
-                    {/* Attach lives here at a FIXED width — the thumbnails
-                        themselves sit in the strip at the top of the composer,
-                        so no number of attachments can crowd the axes or push
-                        Generate around. Empty state keeps the full invitation;
-                        once artwork is attached it collapses to a round +. */}
-                    {attachInput}
-
-                    {/* The axes ride WITH Generate on the right edge (ml-auto),
-                        not centered in the row — centered, they shifted every
-                        time the attach control changed width. */}
-                    <div className={cn('ml-auto items-center gap-1.5', generating || proposing ? 'hidden' : 'flex')}>
-                      <AxisGroup<Subject>
-                        name="Subject" value={subject} onChange={setSubject}
-                        options={[
-                          { value: 'illustration', label: 'Illustration', icon: ImageIcon },
-                          { value: 'screen', label: 'Screen', icon: Monitor },
-                        ]}
-                      />
-                      <AxisGroup<Kind>
-                        name="Animation" value={kind} onChange={setKind}
-                        options={[
-                          { value: 'entry', label: 'Entry', icon: LogIn },
-                          { value: 'loop', label: 'Loop', icon: Repeat },
-                          { value: 'intro-loop', label: 'Entry + Loop', icon: IterationCw },
-                        ]}
-                      />
-                    </div>
-
-                    {generating || proposing ? (
-                      /* Shared busy cluster for generation AND auto-propose.
-                         flex-1 (not ml-auto) so progress reads on the LEFT with
-                         Stop on the right — the same arrangement as the brief
-                         card and the chat box. min-w-0 so the status truncates
-                         while the spinner and Stop keep their size; a long line
-                         must never push Stop out of the composer's clip. */
-                      <div className="flex min-w-0 flex-1 items-center gap-2.5 pl-3">
-                        <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                          <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
-                          <span
-                            key={stageLine ?? 'busy'}
-                            className="truncate text-xs text-muted-foreground animate-in fade-in duration-300"
-                          >
-                            {stageLine ?? (proposing ? readingArtwork(groundings.length) : 'Generating…')}
-                          </span>
-                        </span>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="h-8 shrink-0 rounded-full gap-1.5 font-semibold"
-                          onClick={handleStop}
-                        >
-                          <Square size={13} />
-                          Stop
-                        </Button>
-                      </div>
-                    ) : canResume ? (
-                      /* A run this user stopped: continuing it is the primary
-                         action, but starting clean stays one click away —
-                         people often stop precisely BECAUSE it was going wrong,
-                         and resuming that would just rebuild the wrong thing. */
-                      <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-3">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 rounded-full gap-1.5 px-3 text-muted-foreground"
-                          disabled={!canGenerate}
-                          onClick={() => handleGenerate()}
-                          title="Ignore the interrupted attempt and build this scene from scratch"
-                        >
-                          <Wand2 size={13} />
-                          Start over
-                        </Button>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="h-8 rounded-full gap-1.5 px-3.5 font-semibold"
-                          disabled={!canGenerate}
-                          onClick={() => handleGenerate({ resume: true })}
-                          title="Pick the studio back up where it stopped — it keeps everything it had already worked out"
-                        >
-                          <Play size={13} />
-                          Resume
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        /* h-8 matches the 32px axis switches beside it. */
-                        className="h-8 rounded-full gap-1.5 px-3.5 font-semibold"
-                        disabled={!canGenerate}
-                        onClick={() => handleGenerate()}
-                        title="The studio engine builds the scene, renders its own frames, and verifies them before delivering"
-                      >
-                        <Wand2 size={13} />
-                        {lottieJson ? 'Regenerate' : 'Generate'}
-                      </Button>
-                    )}
-                  </div>
-                </TooltipProvider>
-              </div>
-
-              {/* Auto-propose: with an SVG attached and no brief written yet,
-                  let the studio study the artwork and draft the brief. While
-                  it runs, progress + Stop live in the composer's busy cluster
-                  above (same as generation). */}
-              {groundings.length > 0 && !prompt.trim() && !generating && !proposing && (
-                <button
-                  onClick={handlePropose}
-                  className="pressable mx-auto flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <Sparkles size={13} />
-                  {/* Says what it now does: this starts a real run that writes
-                      the brief AND builds from it, so promising only a brief
-                      would under-sell it into a surprise. */}
-                  {groundings.length >= 2
-                    ? 'Let the studio write the story and animate it'
-                    : 'Let the studio write the brief and animate it'}
-                </button>
-              )}
-              {stale && !generating && !proposing && (
-                <p className="flex items-center justify-center gap-1.5 text-xs text-foreground text-center"><Info size={13} className="shrink-0" />Properties changed — regenerate to apply.</p>
-              )}
-              {error && <p className="text-xs text-destructive leading-snug text-center">{error}</p>}
-
-              {/* Stopped before anything was produced: the composer above is
-                  live again (brief, artwork, Generate), and this says what
-                  happened without pretending work is still going on — so the
-                  activity from the partial run stays readable below it. */}
-              {stoppedDraft && (
-                <>
-                  <CanvasPlaceholder
-                    title="Generation stopped"
-                    note={canResume
-                      ? 'Resume picks the studio back up where it left off — or start over for a clean take.'
-                      : 'Your brief and artwork are saved — press Generate to run it again.'}
-                  />
-                  {/* Same rule as the building screen: activity last. */}
-                  {feedChannel && <StudioFeed channel={feedChannel} />}
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3 animate-in fade-in-0 duration-300">
-              <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  <span>{SUBJECT_LABEL[subject]}</span>
-                  <span className="opacity-40">·</span>
-                  <span>{KIND_LABEL[kind]}</span>
-                </div>
-                <p className="text-sm text-foreground/90 truncate">
-                  {prompt.trim() || 'Untitled animation'}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="rounded-full gap-1.5 shrink-0"
-                onClick={() => setEditingSetup(true)}
-              >
-                <ChevronDown size={13} /> Edit setup
-              </Button>
-            </div>
-          )}
-
-          {/* Preview — below the setup, the focus once generated. Clean normal
-              flow (no height-animating wrappers) so the WebGL canvas sizes
-              correctly; eases in via a transform. */}
-          {bakedLottieJson && (
-            <div className="mt-6 space-y-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-400 ease-out-strong">
-              <div className="relative rounded-2xl border border-border p-2" style={CHECKER_BG}>
-                <ZoomableStage
-                  key={activeProject?.studioSlug ?? 'draft'}
-                  docWidth={docMeta.w}
-                  sizingStyle={{
-                    aspectRatio: docAspect,
-                    maxWidth: `min(100%, max(20rem, calc((100dvh - 21rem) * ${docAspect.toFixed(4)})))`,
-                  }}
-                >
-                  {(renderScale) => (
-                    <>
-                      <SkottiePlayer
-                        lottieJson={bakedLottieJson}
-                        loop={resultKind === 'loop' || resultKind === 'intro-loop'}
-                        renderScale={renderScale}
-                        onReady={(c, lp) => (c ? attach(c, lp) : detach())}
-                        onPlayStateChange={setPlaying}
-                        onFrame={setProgress}
-                        className="h-full w-full"
-                      />
-                      {skeleton ? <SkeletonSelectionOverlay /> : <StudioSelectionOverlay />}
-                    </>
-                  )}
-                </ZoomableStage>
-                {/* External engine work on THIS scene — visible even when the
-                    job wasn't started from this app. */}
-                {engineJob && engineJob.slug === activeProject?.studioSlug && (
-                  <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center">
-                    <div className="flex items-center gap-2 rounded-full border border-border bg-background/95 px-3.5 py-1.5 text-xs font-medium shadow-sm animate-in fade-in-0 slide-in-from-top-1 duration-300">
-                      <span className="relative flex size-2">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-foreground/40" />
-                        <span className="relative inline-flex size-2 rounded-full bg-foreground" />
-                      </span>
-                      {engineJob.state === 'queued' ? 'Engine job queued for this scene' : 'Engine is working on this scene…'}
-                    </div>
-                  </div>
-                )}
-                {canChat && activeProject?.studioSlug && (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          type="button"
-                          aria-label="History"
-                          onClick={() => setHistoryOpen(true)}
-                          className="pressable absolute bottom-3 left-3 flex size-8 items-center justify-center rounded-full border border-border bg-background/80 text-foreground backdrop-blur-sm shadow-sm"
-                        >
-                          <History size={13} />
-                        </button>
-                      }
-                    />
-                    <TooltipContent side="top">History</TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
-
-              {/* Conversational follow-up — resumes the scene's studio session */}
-              {canChat ? (
-                <div className="rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
-                  {/* Anchor chips: the pinned moment and/or selected layer the
-                      next note targets. Both dismissible. */}
-                  {anchor && (
-                    <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
-                      {anchor.frame != null && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-2.5 pr-1.5 text-xs font-medium text-primary">
-                          <span className="font-mono tabular-nums">@ frame {anchor.frame}</span>
-                          <button
-                            type="button"
-                            onClick={() => setMomentFrame(null)}
-                            aria-label="Clear pinned frame"
-                            className="grid size-4 place-items-center rounded-full text-primary/70 transition-colors hover:bg-primary/20 hover:text-primary"
-                          >
-                            <X size={11} />
-                          </button>
-                        </span>
-                      )}
-                      {anchor.label && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-2.5 pr-1.5 text-xs font-medium text-primary">
-                          {anchor.label}
-                          <button
-                            type="button"
-                            onClick={() => setSelectedLayer(null)}
-                            aria-label="Clear layer scope"
-                            className="grid size-4 place-items-center rounded-full text-primary/70 transition-colors hover:bg-primary/20 hover:text-primary"
-                          >
-                            <X size={11} />
-                          </button>
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <div className="px-4 pt-4">
-                    <textarea
-                      ref={changeRef}
-                      value={changeText}
-                      onChange={(e) => setChangeText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAskChange() }
-                      }}
-                      placeholder={anchor?.frame != null
-                        ? 'What should happen at this moment?'
-                        : 'Ask for a change — e.g. "wider bag sway, blink twice per loop"'}
-                      rows={1}
-                      disabled={applying}
-                      className="w-full min-h-[2.5rem] resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2.5 px-3 pb-3 pt-1">
-                    {/* Progress reads on the LEFT, Stop on the right — the same
-                        arrangement the brief card uses while a scene builds. It
-                        shares the slot with "Fix this moment", which only
-                        offers itself when nothing is running anyway. min-w-0 so
-                        a long status truncates instead of shoving Stop out. */}
-                    <div className="flex min-w-0 flex-1 items-center">
-                      {applying ? (
-                        <span className="flex min-w-0 items-center gap-1.5 pl-1">
-                          <Loader2 size={13} className="shrink-0 animate-spin [animation-duration:600ms] text-muted-foreground" />
-                          <SwapText
-                            text={stage || 'Applying…'}
-                            className="text-xs text-muted-foreground"
-                          />
-                        </span>
-                      ) : (
-                        !isPlaying && momentFrame == null && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="rounded-full gap-1.5 text-xs text-muted-foreground"
-                            onClick={() => setMomentFrame(Math.round(playFrame))}
-                            title="Pin the frame on screen so your next note targets this exact moment — the agent renders it first"
-                          >
-                            <Crosshair size={13} /> Fix this moment
-                          </Button>
-                        )
-                      )}
-                    </div>
-                    <Button
-                      size="sm"
-                      className="shrink-0 rounded-full gap-1.5 font-semibold"
-                      disabled={applying ? false : !changeText.trim()}
-                      onClick={applying ? handleStop : () => handleAskChange()}
-                    >
-                      {applying ? <Square size={13} /> : <CornerDownLeft size={13} />}
-                      {applying ? 'Stop' : 'Apply'}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                activeProject && !activeProject.studioSlug && (
-                  <p className="px-1 text-center text-xs text-muted-foreground">
-                    This scene predates the studio engine — regenerate it to refine through conversation.
-                  </p>
-                )
-              )}
-            </div>
-          )}
-
-          {/* Studio activity — narration, tool lines, and the agent's own
-              verification frames; live during a job, reviewable after. The
-              building and stopped screens render their own copy in reading
-              order, so this one stands down to avoid two activity bars. */}
-          {!inProgress && !stoppedDraft && (
-            <div className="mt-4">
-              {feedChannel && <StudioFeed channel={feedChannel} />}
-            </div>
-          )}
+        <div key={reveal.key} className="w-full max-w-xl my-auto">
+          {setupSection}
         </div>
       </div>
     </div>
   )
 }
+
 
 /** Where the animation will land. Breathing while the studio works; perfectly
  *  still once it isn't — a stopped run must never keep a pulse going, since
@@ -1517,9 +1606,6 @@ function CanvasPlaceholder({ busy = false, title, note }: { busy?: boolean; titl
     </div>
   )
 }
-
-const SUBJECT_LABEL: Record<Subject, string> = { illustration: 'Illustration', screen: 'Screen' }
-const KIND_LABEL: Record<Kind, string> = { entry: 'Entry', loop: 'Loop', 'intro-loop': 'Entry + Loop' }
 
 /** The overrides that still target something real on a fresh doc: a control
  *  id that survived, or an intensity-feel entry whose layer survived. ONE
@@ -1586,17 +1672,17 @@ function nameFromArtwork(groundings: { name: string }[]): string {
 function placeholderFor(subject: Subject, kind: Kind): string {
   if (kind === 'intro-loop') {
     return subject === 'screen'
-      ? 'Describe the arrival, then the idle — e.g. "the toast slides in once, then its icon pulses forever".'
-      : 'Describe the arrival, then the idle — e.g. "the bubble pops in once, then the mascot breathes forever".'
+      ? 'Describe the arrival, then the idle - e.g. "the toast slides in once, then its icon pulses forever".'
+      : 'Describe the arrival, then the idle - e.g. "the bubble pops in once, then the mascot breathes forever".'
   }
   if (subject === 'screen') {
     return kind === 'loop'
-      ? 'Describe the ambient screen motion — e.g. "subtle floating accents while the screen idles".'
-      : 'Describe how the screen enters — e.g. "sections reveal top-to-bottom as the screen loads".'
+      ? 'Describe the ambient screen motion - e.g. "subtle floating accents while the screen idles".'
+      : 'Describe how the screen enters - e.g. "sections reveal top-to-bottom as the screen loads".'
   }
   return kind === 'loop'
-    ? 'Describe the looping motion — e.g. "the badge floats and the dots twinkle".'
-    : 'Describe the entrance — e.g. "the card launches upward as the cloud appears beneath it".'
+    ? 'Describe the looping motion - e.g. "the badge floats and the dots twinkle".'
+    : 'Describe the entrance - e.g. "the card launches upward as the cloud appears beneath it".'
 }
 
 // ── AxisGroup: an icon-only segmented control; names show on hover ───────────

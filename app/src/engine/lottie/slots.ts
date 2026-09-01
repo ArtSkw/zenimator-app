@@ -49,6 +49,10 @@ export type SizeSlotMeta = {
      *  text keeps the authored spec exactly, while stacked lines get the air
      *  they need to stay readable. */
     leading?: number
+    /** Which edge stays put as the plate widens. Absent means `'center'` —
+     *  what every scene did before this field, and still the right answer for
+     *  a plate the artwork centred on the stage. */
+    grow?: 'center' | 'left' | 'right'
   }
 }
 
@@ -100,12 +104,16 @@ export function parseSlotSpecs(controlsJson: string | null | undefined): SlotSpe
           Array.isArray(v) && v.length === 2 ? [Number(v[0]) || 0, Number(v[1]) || 0] : null
         const min = pair(af.min)
         const max = pair(af.max)
+        // Anything but the two pinning directions means 'center' — the legacy
+        // behavior, and the safe read of a value this parser doesn't recognize.
+        const grow = af.grow === 'right' || af.grow === 'left' ? af.grow : undefined
         spec.autoFit = {
           text: af.text,
           padding: [Number(af.padding[0]) || 0, Number(af.padding[1]) || 0],
           ...(min ? { min } : {}),
           ...(max && max[0] > 0 ? { max } : {}),
           ...(Number(af.leading) > 0 ? { leading: Number(af.leading) } : {}),
+          ...(grow ? { grow } : {}),
         }
       }
       out.push(spec)
@@ -285,13 +293,16 @@ export function layoutSlotText(
     min: [fit?.min?.[0] ?? Math.max(defaultH, 2 * padX + 16), fit?.min?.[1] ?? defaultH],
     max: fit?.max ?? null,
     leading: fit?.leading ?? 0,
+    grow: fit?.grow ?? 'center',
   }, raw)
 }
 
 /** The `<prefix>.anchor` plumbing slot: the plate layer's anchor point. Tools
  *  set its y to HALF the plate height, which pins the plate's bottom edge —
  *  so a growing bubble expands upward, away from the thought trail beneath it,
- *  instead of swallowing the gap the artwork authored. */
+ *  instead of swallowing the gap the artwork authored. Its x carries the same
+ *  idea sideways (`layout.dx`, added to the authored value): with `grow:'right'`
+ *  the left edge holds and the plate widens into the room on its right. */
 export function anchorMeta(textSid: string, metas: SlotMeta[]): SizeSlotMeta | null {
   const prefix = textSid.replace(/\.[^.]*$/, '')
   return metas.find(
@@ -302,6 +313,12 @@ export function anchorMeta(textSid: string, metas: SlotMeta[]): SizeSlotMeta | n
 /** Replace a vec's y while keeping every other component (a vec3's z). */
 export function withY(meta: SizeSlotMeta, y: number): number[] {
   return [meta.value[0], y, ...(meta.extra ?? [])]
+}
+
+/** Both components at once — the anchor slot needs them together: y pins the
+ *  plate's bottom edge, x pins whichever side the artwork composed against. */
+export function withXY(meta: SizeSlotMeta, x: number, y: number): number[] {
+  return [x, y, ...(meta.extra ?? [])]
 }
 
 /** A text override carrying the wrapped string and its line height. Plain

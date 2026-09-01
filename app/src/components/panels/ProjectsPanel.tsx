@@ -49,6 +49,7 @@ export function ProjectsPanel() {
       cast: p.cast ?? [],
       layerLabels: p.layerLabels,
       slotOverrides: p.slotOverrides,
+      canvasBg: p.canvasBg,
       resultKind: p.resultKind,
     })
     setActiveProjectId(p.id)

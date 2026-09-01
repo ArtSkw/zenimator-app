@@ -15,18 +15,18 @@ export const HEARTBEAT_QUIET_MS = 14_000
 export const HEARTBEAT_TICK_MS = 4_000
 
 const LINES = [
-  'Still animating — good motion takes a beat',
+  'Still animating - good motion takes a beat',
   'Deep in the keyframes, this is the fun part',
-  'Working the in-betweens — hang tight',
+  'Working the in-betweens - hang tight',
   'Fussing over the easing; it won’t ship a wobble',
   'Squinting at frames like a real animator',
   'Nudging curves by a pixel or two',
-  'Making the loop seamless — worth the wait',
+  'Making the loop seamless - worth the wait',
   'Still here, still drawing',
   'Chasing the last 10% of polish',
   'No rushing a good bounce',
   'Tightening the timing, frame by frame',
-  'The cup must not spill — steadying it',
+  'The cup must not spill - steadying it',
 ]
 
 /** "45s" · "2m 10s" — compact, human. */

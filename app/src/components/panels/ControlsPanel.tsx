@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { SlidersHorizontal, MousePointerClick, X, RotateCcw, Layers, Film, Type, type LucideIcon } from 'lucide-react'
+import { BookOpen, Film, Layers, MousePointerClick, RotateCcw, SlidersHorizontal, Type, X, type LucideIcon } from 'lucide-react'
+import { RAIL, RAIL_HEADER, RAIL_RIGHT, CANVAS_DEFAULT_HEX } from '@/components/shell/chrome'
+import { ZoomSlot } from '@/components/generate/StageZoom'
+import { SettingsDrawer } from '@/components/settings/SettingsDrawer'
+import { GenerateExport } from '@/components/generate/GenerateExport'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
@@ -14,7 +18,11 @@ import { claimedSids, useParameters } from '@/store/useParameters'
 import { PropertyRow } from '@/components/params'
 import { useSlotMetas } from '@/store/useSlotMetas'
 import { SlotControlsPanel } from '@/components/generate/SlotControlsPanel'
-import { SceneDossier } from '@/components/generate/SceneDossier'
+import { SceneDossierButton, SceneDossierBody } from '@/components/generate/SceneDossier'
+import { cn } from '@/lib/utils'
+import { ColorField } from '@/components/params'
+import { hexToRgba } from '@/components/params/color'
+import type { Rgba } from '@/components/params/types'
 import { useGenerateStore } from '@/store/generateStore'
 import { useProjectsStore } from '@/store/projectsStore'
 import { useStudioEditBridge } from '@/store/studioEditBridge'
@@ -27,7 +35,7 @@ import { INTENSITY_FEEL_PREFIX, type ParamControl } from '@/engine/controls/deri
  *  the panel says so instead of faking sliders that would fight the build
  *  script (no dead knobs). */
 export function ControlsPanel() {
-  const { lottieJson, controls, skeleton, selectedLayer, layerLabels, slotOverrides, setSlotOverride, cast: storeCast, historyOpen, setHistoryOpen } = useGenerateStore()
+  const { lottieJson, resultKind, controls, skeleton, selectedLayer, layerLabels, slotOverrides, setSlotOverride, cast: storeCast, historyOpen, setHistoryOpen, dossierOpen, setDossierOpen } = useGenerateStore()
   const activeSlug = useProjectsStore((s) => s.projects.find((p) => p.id === s.activeProjectId)?.studioSlug)
   const isStudioScene = Boolean(activeSlug)
 
@@ -123,12 +131,27 @@ export function ControlsPanel() {
   if (isStudioScene && historyOpen && activeSlug) {
     return <HistoryPanel slug={activeSlug} onClose={() => setHistoryOpen(false)} />
   }
+  if (isStudioScene && dossierOpen && activeSlug) {
+    return <DossierPanel slug={activeSlug} onClose={() => setDossierOpen(false)} />
+  }
 
   return (
-    <aside className="w-[320px] border-l border-border bg-background flex flex-col shrink-0 overflow-hidden">
-      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-        <SlidersHorizontal size={14} className="text-foreground" />
-        <span className="text-[13px] font-semibold text-foreground">Controls</span>
+    <aside className={cn(RAIL, 'right-3')} style={{ width: RAIL_RIGHT }}>
+      {/* The retired top bar's right half — the app-level actions, now riding
+          the rail that already owns "what you can do to this scene". */}
+      {/* The rail's own header — the app-level actions plus the camera. There is
+          no "Controls" label under it any more: the rail IS the controls, and a
+          heading that repeats the panel's identity is a row of chrome the eye
+          has to skip on the way to the first knob. */}
+      <div className={RAIL_HEADER}>
+        <ZoomSlot />
+        <div className="ml-auto flex items-center gap-2">
+          <SettingsDrawer />
+          {/* Bake lazily in the export handlers (not here): a second mounted
+              useBakedLottieJson would re-parse/clone/stringify the whole doc on
+              every control commit just to keep this button current. */}
+          {lottieJson && <GenerateExport loop={resultKind === 'loop'} />}
+        </div>
       </div>
 
       <ScrollArea className="flex-1 min-h-0">
@@ -150,9 +173,31 @@ export function ControlsPanel() {
               <Section
                 title="Animation"
                 icon={Film}
-                action={isStudioScene && activeSlug ? <SceneDossier slug={activeSlug} variant="inline" /> : undefined}
+                action={isStudioScene && activeSlug ? (
+                  /* Provenance lives together: how the scene was made, and
+                     every version it has been. */
+                  <div className="flex items-center gap-0.5">
+                    <SceneDossierButton variant="inline" />
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            aria-label="History"
+                            onClick={() => setHistoryOpen(true)}
+                            className="pressable flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                          >
+                            <RotateCcw size={14} />
+                          </button>
+                        }
+                      />
+                      <TooltipContent side="bottom">History</TooltipContent>
+                    </Tooltip>
+                  </div>
+                ) : undefined}
               >
                 <SlotControlsPanel manifest={{ controls: general }} />
+                <CanvasBackgroundField />
               </Section>
             )}
 
@@ -200,7 +245,7 @@ export function ControlsPanel() {
                             </span>
                           }
                         />
-                        <TooltipContent side="left">Applies motion to this part — off holds it still</TooltipContent>
+                        <TooltipContent side="left">Applies motion to this part - off holds it still</TooltipContent>
                       </Tooltip>
                     </PropertyRow>
                   </TooltipProvider>
@@ -213,7 +258,7 @@ export function ControlsPanel() {
                       !movesControl && (
                         <p className="text-xs leading-snug text-muted-foreground">
                           {isStudioScene
-                            ? 'This layer’s motion is authored by the studio — nudge it below or ask in chat.'
+                            ? 'This layer’s motion is authored by the studio - nudge it below or ask in chat.'
                             : 'This layer has no adjustable motion.'}
                         </p>
                       )
@@ -224,7 +269,7 @@ export function ControlsPanel() {
                   </>
                 ) : (
                   <p className="text-xs leading-snug text-muted-foreground">
-                    Motion is off for this layer — turn it on to adjust or tweak it.
+                    Motion is off for this layer - turn it on to adjust or tweak it.
                   </p>
                 )}
               </Section>
@@ -253,11 +298,70 @@ function relTime(at: number): string {
   return `${Math.round(h / 24)}d ago`
 }
 
+const CANVAS_DEFAULT: Rgba = hexToRgba(CANVAS_DEFAULT_HEX)
+
+/** The canvas fill, under Feel — the last thing in "Animation" because it is
+ *  the only control here that changes nothing about the animation.
+ *
+ *  It is a VIEWING preference and lives outside the Lottie document entirely,
+ *  so no export path can pick it up: every delivered file still ships on
+ *  transparency. The label says so, because a colour control sitting among
+ *  controls that DO bake would otherwise imply the opposite.
+ *
+ *  `null` means "the default tone", which is constant across themes — see
+ *  CANVAS_DEFAULT_HEX for why the canvas does not follow light/dark. */
+function CanvasBackgroundField() {
+  const canvasBg = useGenerateStore((s) => s.canvasBg)
+  const setCanvasBg = useGenerateStore((s) => s.setCanvasBg)
+
+  return (
+    <ColorField
+      label="Background"
+      description="Canvas only - exports stay transparent."
+      swatches={undefined}
+      value={canvasBg ?? CANVAS_DEFAULT}
+      authored={CANVAS_DEFAULT}
+      onValueChange={(next) => {
+        // Landing back on the default stores `null`, not a copy of it, so the
+        // row reads as unmodified and its reset dot disappears.
+        const same = next.every((n, i) => Math.abs(n - CANVAS_DEFAULT[i]) < 0.002)
+        setCanvasBg(same ? null : [...next] as [number, number, number, number])
+      }}
+    />
+  )
+}
+
+/** "How it was made", in the rail — same shell as History, so the two rail
+ *  takeovers read as the same kind of thing rather than two conventions. */
+function DossierPanel({ slug, onClose }: { slug: string; onClose: () => void }) {
+  const resultKind = useGenerateStore((s) => s.resultKind)
+  return (
+    <aside className={cn(RAIL, 'right-3')} style={{ width: RAIL_RIGHT }}>
+      <div className={RAIL_HEADER}>
+        <ZoomSlot />
+        <div className="ml-auto flex items-center gap-2">
+          <SettingsDrawer />
+          <GenerateExport loop={resultKind === 'loop'} />
+        </div>
+      </div>
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+        <BookOpen size={14} className="text-foreground" />
+        <span className="text-[13px] font-semibold text-foreground">How it was made</span>
+        <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close" className="ml-auto rounded-full">
+          <X />
+        </Button>
+      </div>
+      <SceneDossierBody slug={slug} />
+    </aside>
+  )
+}
+
 /** History log — replaces the Controls panel when opened. The service
  *  snapshots the scene before every edit/revert, so each entry restores (and
  *  the restore is itself undoable). Reverts go through the edit bridge so the
  *  result lands in the same store/save path as an edit. */
 function HistoryPanel({ slug, onClose }: { slug: string; onClose: () => void }) {
+  const resultKind = useGenerateStore((s) => s.resultKind)
   const revert = useStudioEditBridge((s) => s.revert)
   const applying = useStudioEditBridge((s) => s.applying)
   // 'loading' → fetching · null → engine has no /history (needs restart) ·
@@ -270,8 +374,17 @@ function HistoryPanel({ slug, onClose }: { slug: string; onClose: () => void }) 
   useEffect(() => { if (!applying) refresh() }, [applying]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <aside className="w-[320px] border-l border-border bg-background flex flex-col shrink-0 overflow-hidden">
-      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+    <aside className={cn(RAIL, 'right-3')} style={{ width: RAIL_RIGHT }}>
+      {/* Same header as the controls variant: opening history must not take the
+          camera and the export away with it. */}
+      <div className={RAIL_HEADER}>
+        <ZoomSlot />
+        <div className="ml-auto flex items-center gap-2">
+          <SettingsDrawer />
+          <GenerateExport loop={resultKind === 'loop'} />
+        </div>
+      </div>
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <RotateCcw size={14} className="text-foreground" />
         <span className="text-[13px] font-semibold text-foreground">History</span>
         {/* Same ghost icon button the Settings / dossier sheets use for close —
@@ -289,7 +402,7 @@ function HistoryPanel({ slug, onClose }: { slug: string; onClose: () => void }) 
             <EmptyHeader>
               <EmptyMedia variant="icon"><RotateCcw /></EmptyMedia>
               <EmptyTitle>History unavailable</EmptyTitle>
-              <EmptyDescription>The studio engine needs a restart to record version history — run <span className="font-mono">npm run agent</span> again.</EmptyDescription>
+              <EmptyDescription>The studio engine needs a restart to record version history - run <span className="font-mono">npm run agent</span> again.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : versions.length === 0 ? (
@@ -303,7 +416,7 @@ function HistoryPanel({ slug, onClose }: { slug: string; onClose: () => void }) 
         ) : (
           <div className="p-3 space-y-1.5">
             <p className="px-1 pb-1 text-[11px] leading-relaxed text-muted-foreground">
-              Restore any earlier state — the current one is saved first, so this is always undoable.
+              Restore any earlier state - the current one is saved first, so this is always undoable.
             </p>
             {versions.map((v) => (
               <button
@@ -335,9 +448,9 @@ function HistoryPanel({ slug, onClose }: { slug: string; onClose: () => void }) 
 // computed from the studio's originals, so switching never compounds and
 // "Original" is always one click back to the authored motion.
 const INTENSITY_MODES = [
-  { key: 'steadier', label: 'Calmer', icon: Waves, amp: 0.6, feel: 1, speed: 1.25, hint: 'Calmer — less travel, gentler easing, a touch slower' },
+  { key: 'steadier', label: 'Calmer', icon: Waves, amp: 0.6, feel: 1, speed: 1.25, hint: 'Calmer - less travel, gentler easing, a touch slower' },
   { key: 'default', label: 'Original', icon: Check, amp: 1, feel: 0, speed: 1, hint: 'The studio’s original motion' },
-  { key: 'stronger', label: 'Bolder', icon: TrendingUp, amp: 1.4, feel: 3, speed: 0.8, hint: 'Bolder — more travel, snappier easing, more impact' },
+  { key: 'stronger', label: 'Bolder', icon: TrendingUp, amp: 1.4, feel: 3, speed: 0.8, hint: 'Bolder - more travel, snappier easing, more impact' },
 ] as const
 type IntensityMode = (typeof INTENSITY_MODES)[number]
 type IntensityKey = IntensityMode['key']

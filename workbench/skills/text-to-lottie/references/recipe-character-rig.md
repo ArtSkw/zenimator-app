@@ -360,7 +360,10 @@ below.
 - The parts articulate, not just the rig: joints bend, extremities lead or lag
   the mass they hang from, and at least half the nameable parts move by MEASURED
   amplitude. The torso/mass carries a continuous breath under whatever the limbs
-  are doing.
+  are doing, and that breath changes the body's SHAPE: counter-phased scale axes
+  with area roughly conserved, or path keyframes on the soft mass. A uniform
+  `sx === sy` swell is a zoom — the outline is identical on every frame — and
+  fails `check-motion.mjs` as SILHOUETTE STILL.
 - Any held object is parented to its holder AND measurably alive on top of the
   inherited motion. "Provably steady" is NOT a passing state — an object whose
   pixels are identical across the extremes while the holder moves reads as a prop

@@ -213,6 +213,20 @@ makes it verifiable:
   px opposite) and never lands on its final value dead — it overshoots
   slightly and eases back. Mass never starts or stops instantly.
 
+- **A pure sine is compliant but restless.** A raw `sin2pi`-style baked driver
+  (breathing, idle sway, any continuous cyclical squash/morph) always scores
+  max/median ≈ 1.41 on the Fluidity check — comfortably under the 3× gate,
+  but its angular speed is constant, so the element moves FASTEST at the
+  exact midpoint and never dwells at its own extremes. When that reads as
+  restless rather than alive, reshape the driver instead of just shrinking
+  its amplitude: pass a raised cosine through a smoothstep — `u = (1 -
+  cos θ)/2, drive = 2·smoothstep(u) - 1` (θ = the same `2π·t/period +
+  phase` angle the raw sine used) — same ±1 range, same period, same phase,
+  so any lag between dependent tracks (e.g. a body morph quarter-cycle
+  behind its shell) carries over unchanged; only the speed profile changes,
+  hanging at the extremes and moving faster through the crossing. Pushes
+  max/median toward ~2.8 — still under the 3× ceiling, now with real settle.
+
 **The spacing check (blocking for hero moves):** render a moving element at
 every 2–3 frames across its move and READ the trail like an animator flipping
 pages. The positions must form a smooth arc whose spacing grows and shrinks
@@ -377,7 +391,16 @@ Four properties separate a living idle from a placed one:
 - **The silhouette breathes — morphs, not just transforms.** Rigid
   transforms (position/rotation/scale) MOVE a character; they never make it
   read alive the way a rigged Rive mesh does, because the OUTLINE never
-  changes. The missing layer is shape-path keyframes: animate the actual
+  changes. **A uniform scale is a ZOOM, not a breath** — this is the shape
+  the defect actually takes in the field, and it survives every other gate:
+  a shipped companion carried 256 dense breathe keys running 97%→103% with
+  `sx === sy` to four decimals on every one of them, so the body grew and
+  shrank while staying the identical circle. Contacts all measured 0.00px and
+  the mechanical checker reported the scene clean, because at the time nothing
+  in it could see a silhouette. The cheapest real fix is counter-phased axes
+  with area conserved (`sx = 100 + a·sin`, `sy = 100 − a·sin`); the full one is
+  path keyframes below. `check-motion.mjs` now fails this as SILHOUETTE STILL.
+  The missing layer is shape-path keyframes: animate the actual
   bezier vertices (`{a:1}` on a shape's `ks`, same vertex count and order on
   every key) so the body squashes wide-and-low into the down-beat and draws
   tall-and-narrow at the top with area roughly conserved (±2%); a face patch
@@ -511,8 +534,9 @@ Four properties separate a living idle from a placed one:
   negative space (a hole in the body path), carve it into a real layer
   (recipe-character-rig, "Occupant-inside-shell") rather than moving the mass
   that surrounds it. Clearance is per SIDE and must exceed the drift.
-  - **The occupant rides the shell's FULL transform, breathe included.** It
-    sits INSIDE the body, so it must inherit the body's scale swell and be
+  - **The occupant rides the shell's FULL transform, breathe included.** (And
+    that swell is a SQUASH, not a size pulse — see "The silhouette breathes".)
+    It sits INSIDE the body, so it must inherit the body's scale swell and be
     nested UNDER that null — its own drift belongs inside the inherited
     scale, never beside it. Excluded from the swell, the occupant stays a
     fixed size while the shell inflates and deflates around it, and the read
@@ -874,7 +898,7 @@ be false the moment anyone measured it.
 |---|---|---|---|
 | 8 | Parts articulate | joints bend; ≥ half the nameable parts move by measured amplitude | the cardboard test — flat card swung on pins is not a rig |
 | 9 | Held objects live | parented to the holder AND carrying their own secondary motion | if the holder moves and the held thing's pixels don't, it isn't held |
-| 10 | The body breathes | continuous low-amplitude torso/mass cycle under whatever the limbs do | amplitude on the body track across the loop |
+| 10 | The body breathes, and the breath changes its SHAPE | continuous low-amplitude torso/mass cycle under whatever the limbs do — and the silhouette is not the same outline every frame: counter-phased scale axes (≥ ~1pp of `sx − sy`, area roughly conserved) or real path keyframes on the soft mass. A uniform `sx === sy` swell is a zoom and fails | `check-motion.mjs` (SILHOUETTE STILL), then render the two extreme breathe beats and compare outlines |
 | 11 | Effort is phase-locked | strain on the contraction, never on the release | RENDER the extreme frames and look; never reason about the sign convention |
 | 12 | No double-driven property | each property animated once down any parent chain | trace every animated property up through its parents |
 | 13 | Assemblies stay whole | rigid worn/built-on parts keep a constant offset to their wearer; independent drift only for genuinely free elements | render two idle frames; measure a gear-point↔body-point offset — identical, or a named joint/soft part explains why |

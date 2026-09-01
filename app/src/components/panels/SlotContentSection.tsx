@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { useGenerateStore } from '@/store/generateStore'
 import { ColorField, SizeField, TextField, type Rgba } from '@/components/params'
 import {
-  autoFitTextSid, layoutSlotText, textPosMeta, anchorMeta, withY, textOverrideValue,
+  autoFitTextSid, layoutSlotText, textPosMeta, anchorMeta, withY, withXY, textOverrideValue,
   SLOT_OVERRIDE_PREFIX,
   type SlotMeta, type TextSlotMeta, type SizeSlotMeta, type ColorSlotMeta,
 } from '@/engine/lottie/slots'
@@ -98,10 +98,18 @@ export function SlotContentSection({ metas }: { metas: SlotMeta[] }) {
         // Scenes with a `.textPos` plumbing slot keep wrapped blocks centered.
         const pos = textPosMeta(meta.sid, metas)
         if (pos) setSlotOverride(SLOT_OVERRIDE_PREFIX + pos.sid, withY(pos, pos.value[1] + layout.dy))
-        // …and an `.anchor` slot pins the plate's bottom edge, so the bubble
-        // grows UPWARD instead of closing the gap to the trail beneath it.
+        // …and an `.anchor` slot pins the plate's edges: y pins the BOTTOM, so
+        // the bubble grows upward instead of closing the gap to the trail
+        // beneath it, and x pins whichever side the artwork composed against,
+        // so it widens into the room it actually has (layout.dx is 0 for a
+        // centre-growing plate, which is every scene that predates `grow`).
         const anchor = anchorMeta(meta.sid, metas)
-        if (anchor) setSlotOverride(SLOT_OVERRIDE_PREFIX + anchor.sid, withY(anchor, layout.h / 2))
+        if (anchor) {
+          setSlotOverride(
+            SLOT_OVERRIDE_PREFIX + anchor.sid,
+            withXY(anchor, anchor.value[0] + layout.dx, layout.h / 2),
+          )
+        }
       }
       setSlotOverride(SLOT_OVERRIDE_PREFIX + size.sid, [layout.w, layout.h])
     }
@@ -131,7 +139,7 @@ export function SlotContentSection({ metas }: { metas: SlotMeta[] }) {
               value={value}
               authored={authored}
               onValueChange={(next) => void commitText(meta, next)}
-              description="Try locale strings here — the bubble follows. Exports keep this text as the default."
+              description="Try locale strings here - the bubble follows. Exports keep this text as the default."
             />
           )
         }

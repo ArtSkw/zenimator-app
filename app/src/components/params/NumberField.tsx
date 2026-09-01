@@ -56,7 +56,13 @@ export function NumberField({
           precision={precision}
           suffix={suffix}
           aria-label={label}
-          className={slider ? 'w-20 shrink-0' : 'w-full'}
+          // Narrow on purpose when a slider carries the range: the field holds
+          // a frame count or a percentage, never prose, and a box sized for
+          // text it will never hold steals width the slider actually uses.
+          // 4rem, not less: measured against the widest string a live control
+          // produces - "500 px" needs 62px with the field's own padding, and
+          // 3.5rem clipped it. Suffix-less rows keep the full width.
+          className={slider ? 'w-16 shrink-0' : 'w-full'}
           onValueChange={(v, committed) =>
             onValueChange(v, { history: committed ? 'record' : 'merge' })
           }

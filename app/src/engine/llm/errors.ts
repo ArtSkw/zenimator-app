@@ -8,12 +8,12 @@ export function humanizeLlmError(err: unknown): string {
 
   const status = (err as { status?: number }).status
 
-  if (status === 401) return 'Invalid API key — check Settings'
+  if (status === 401) return 'Invalid API key - check Settings'
   if (status === 403) return 'API key lacks access to this model'
-  if (status === 429) return 'Rate limit exceeded — try again shortly'
-  if (status === 529) return 'Claude is overloaded — try again shortly'
+  if (status === 429) return 'Rate limit exceeded - try again shortly'
+  if (status === 529) return 'Claude is overloaded - try again shortly'
   if (/network|fetch|failed to fetch|connect/i.test(err.message))
-    return 'Network error — check your connection'
+    return 'Network error - check your connection'
 
   return err.message.length > 120 ? err.message.slice(0, 120) + '…' : err.message
 }

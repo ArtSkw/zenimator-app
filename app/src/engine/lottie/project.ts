@@ -776,7 +776,7 @@ export function loopSeamWarnings(project: GenerateProject): string[] {
       if (keys.length < 2) continue
       const first = keys[0], last = keys[keys.length - 1]
       if (!close(first.v, last.v, key)) {
-        warnings.push(`"${layer.name}" / ${key}: first (${JSON.stringify(first.v)}) ≠ last (${JSON.stringify(last.v)}) — loop will seam`)
+        warnings.push(`"${layer.name}" / ${key}: first (${JSON.stringify(first.v)}) ≠ last (${JSON.stringify(last.v)}) - loop will seam`)
       }
     }
   }
@@ -965,33 +965,33 @@ export function deriveHandle(key: TrackKey, track: Track | undefined, op: number
   if (key === 'rotation') {
     const net = Math.abs(num(keys[keys.length - 1].v) - num(keys[0].v))
     if (net >= 180) {
-      return make({ track: key, type: 'duration', label: 'Spin duration', hint: 'Rotation — frames per full turn (lower is faster)', value: span, min: 6, max: op - first, step: 1, unit: 'f' })
+      return make({ track: key, type: 'duration', label: 'Spin duration', hint: 'Rotation - frames per full turn (lower is faster)', value: span, min: 6, max: op - first, step: 1, unit: 'f' })
     }
-    return make({ track: key, type: 'amount', label: 'Tilt amount', hint: 'Rotation — how far it tilts', value: dev, min: 0, max: AMOUNT_MAX.rotation, step: 1, unit: '°' })
+    return make({ track: key, type: 'amount', label: 'Tilt amount', hint: 'Rotation - how far it tilts', value: dev, min: 0, max: AMOUNT_MAX.rotation, step: 1, unit: '°' })
   }
 
   if (key === 'opacity') {
     if (osc) {
-      return make({ track: key, type: 'amount', label: 'Flicker amount', hint: 'Opacity — how deep it dims', value: dev, min: 0, max: AMOUNT_MAX.opacity, step: 1, unit: '%' })
+      return make({ track: key, type: 'amount', label: 'Flicker amount', hint: 'Opacity - how deep it dims', value: dev, min: 0, max: AMOUNT_MAX.opacity, step: 1, unit: '%' })
     }
     const rising = num(keys[keys.length - 1].v) >= num(keys[0].v)
-    return make({ track: key, type: 'delay', label: rising ? 'Fade-in start' : 'Fade-out start', hint: 'Opacity — the frame the fade begins', value: first, min: 0, max: op - span, step: 1, unit: 'f' })
+    return make({ track: key, type: 'delay', label: rising ? 'Fade-in start' : 'Fade-out start', hint: 'Opacity - the frame the fade begins', value: first, min: 0, max: op - span, step: 1, unit: 'f' })
   }
 
   // scale tracks
   if (key === 'scale') {
-    return make({ track: key, type: 'amount', label: osc ? 'Pulse strength' : 'Scale amount', hint: 'Scale — how much it grows or shrinks', value: dev, min: 0, max: AMOUNT_MAX.scale, step: 1, unit: '%' })
+    return make({ track: key, type: 'amount', label: osc ? 'Pulse strength' : 'Scale amount', hint: 'Scale - how much it grows or shrinks', value: dev, min: 0, max: AMOUNT_MAX.scale, step: 1, unit: '%' })
   }
   if (key === 'scaleX') {
-    return make({ track: key, type: 'amount', label: osc ? 'Flip speed' : 'Scale X amount', hint: 'Horizontal scale — use to simulate a spin or face-flip on its axis', value: dev, min: 0, max: AMOUNT_MAX.scaleX, step: 1, unit: '%' })
+    return make({ track: key, type: 'amount', label: osc ? 'Flip speed' : 'Scale X amount', hint: 'Horizontal scale - use to simulate a spin or face-flip on its axis', value: dev, min: 0, max: AMOUNT_MAX.scaleX, step: 1, unit: '%' })
   }
   // trim (draw-on progress)
   if (key === 'trim') {
-    return make({ track: key, type: 'amount', label: 'Draw-on amount', hint: 'Trim path — how much of the stroke is drawn on (0 = hidden, 100 = fully visible)', value: dev, min: 0, max: AMOUNT_MAX.trim, step: 1, unit: '%' })
+    return make({ track: key, type: 'amount', label: 'Draw-on amount', hint: 'Trim path - how much of the stroke is drawn on (0 = hidden, 100 = fully visible)', value: dev, min: 0, max: AMOUNT_MAX.trim, step: 1, unit: '%' })
   }
   // position
   const label = osc ? (posAxis(keys) === 'y' ? 'Float height' : 'Drift amount') : 'Slide distance'
-  return make({ track: key, type: 'amount', label, hint: 'Position — how far it travels', value: dev, min: 0, max: positionMax(ctx, osc), step: 1, unit: 'px' })
+  return make({ track: key, type: 'amount', label, hint: 'Position - how far it travels', value: dev, min: 0, max: positionMax(ctx, osc), step: 1, unit: 'px' })
 }
 
 /** All derived handles for a layer (one per animated track). Optional `controls`

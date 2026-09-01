@@ -1,6 +1,4 @@
 import { useEffect } from 'react'
-import { TopBar } from './TopBar'
-import { TransportBar } from './TransportBar'
 import { LayersPanel } from '@/components/panels/LayersPanel'
 import { ControlsPanel } from '@/components/panels/ControlsPanel'
 import { PreviewCanvas } from '@/components/panels/PreviewCanvas'
@@ -32,6 +30,7 @@ export function AppShell() {
         cast: project.cast ?? [],
         layerLabels: project.layerLabels,
         slotOverrides: project.slotOverrides,
+        canvasBg: project.canvasBg,
         resultKind: project.resultKind,
       })
       useProjectsStore.getState().setActiveProjectId(project.id)
@@ -50,17 +49,18 @@ export function AppShell() {
   const projects = useProjectsStore((s) => s.projects)
   useEffect(() => { syncProjectUrl(activeProjectId, projects) }, [activeProjectId, projects])
 
+  // One workspace, not three columns: the canvas owns the whole window and
+  // every panel is an object floating on it. There is no top bar — the logo
+  // rides the left rail and the global actions ride the right one, so the app
+  // has no fixed edge left to interrupt the canvas.
+  // `bg-secondary` is the home canvas: the rails are `bg-background`, so the
+  // tint beneath them is what makes them read as floating rather than as the
+  // page itself. A scene paints its own canvas over this.
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
-      <TopBar />
-
-      <div className="flex flex-1 overflow-hidden">
-        <LayersPanel />
-        <PreviewCanvas />
-        <ControlsPanel />
-      </div>
-
-      <TransportBar />
+    <div className="relative h-screen w-screen overflow-hidden bg-secondary text-foreground">
+      <PreviewCanvas />
+      <LayersPanel />
+      <ControlsPanel />
     </div>
   )
 }

@@ -49,7 +49,7 @@ export function EngineConnectDialog() {
   const title = unreachable ? 'Studio engine unavailable' : 'Connect the studio engine'
   const desc = unreachable
     ? "The studio engine isn't responding. Double-check the URL below, or ask the host to confirm it's running."
-    : 'ZENimator generates on a shared studio engine. Paste your access token to connect — then attach an SVG and describe the motion. Generation runs deep: a scene takes a few minutes.'
+    : 'ZENimator generates on a shared studio engine. Paste your access token to connect - then attach an SVG and describe the motion. Generation runs deep: a scene takes a few minutes.'
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) hide() }}>
@@ -77,7 +77,7 @@ export function EngineConnectDialog() {
           </div>
 
           <details className="text-xs text-muted-foreground">
-            <summary className="cursor-pointer select-none">Advanced — engine URL</summary>
+            <summary className="cursor-pointer select-none">Advanced - engine URL</summary>
             <Input
               className="mt-2 font-mono text-xs"
               value={agentUrl}

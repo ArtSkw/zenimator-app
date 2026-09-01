@@ -23,6 +23,9 @@
  *      the shell look like it inflates around a fixed-size face.
  *   5. INVENTED FILL — every colour must appear in the source artwork; a rig
  *      re-parents and re-times shapes, it never repaints them.
+ *   7. SILHOUETTE STILL — a body that only scales UNIFORMLY is a zoom, not a
+ *      breath: the outline is identical on every frame. Fires only where a
+ *      breathe was already authored, or an occupant proves it is a body.
  *   6. EXPORT COMPAT — Merge Paths (`ty:'mm'`) render here but not in the
  *      exported HTML (lottie-web paints the operands) or ThorVG/dotLottie;
  *      animated gradient stops render NOTHING even here. Both fail the build
@@ -893,6 +896,109 @@ for (const p of pairs.sort((x, y) => y.slide - x.slide).slice(0, 12)) {
     if (declaredLayer(nm)) continue
     fail(`MERGE PATHS WON'T EXPORT — layer "${nm}" uses \`ty:'mm'\`: correct in this preview, broken in the exported HTML (lottie-web paints the operand shapes, from frame 0) and unsupported by ThorVG/dotLottie.`,
       "Clip with a track matte (td/tt) or reveal with a trim window on the element's own stroke (player-contract: Export Compatibility). A deliberately preview-only scene may declare { layer, reason } in controls.json.")
+  }
+}
+
+// ── 7. SILHOUETTE STILL — a breathe that is a ZOOM, not a breath ─────────────
+// Rigid transforms MOVE a character; they never make it read alive, because the
+// OUTLINE never changes. Field origin: live-onboarding-companion-szpq shipped
+// 256 breathe keys with sx === sy to four decimals on EVERY one of them — a ball
+// that grew and shrank while staying the same circle. Every contact measured
+// 0.00px and this file printed "all contacts hold", because nothing here could
+// see the defect. motion-taste "The silhouette breathes — morphs, not just
+// transforms" (Aliveness gate 10) is the prose twin.
+//
+// Scope is deliberately narrow, so this fails only where it is certainly right:
+// an assembly that ALREADY carries a continuous breathe swell, or one holding an
+// occupant. It cannot tell a character from a card, so it never demands a breathe
+// where none was authored — it demands that an authored one change the SHAPE.
+{
+  const ANISO_MIN = 1.0    // percentage points of |sx − sy| peak-to-peak
+  const SWELL_MIN = 0.01   // 1% — below this a scale track is not a breathe
+  const REVERSALS = 3      // a breathe oscillates; an entrance pop settles once
+  const scaleX = (ind) => world.get(ind).map((m) => Math.hypot(m[0], m[1]))
+  const scaleY = (ind) => world.get(ind).map((m) => Math.hypot(m[2], m[3]))
+  /** Direction changes in a sampled track — what separates a cycle from a settle. */
+  const reversals = (a) => {
+    let n = 0
+    for (let i = 2; i < a.length; i++) {
+      const d1 = a[i - 1] - a[i - 2], d2 = a[i] - a[i - 1]
+      if (d1 !== 0 && d2 !== 0 && Math.sign(d1) !== Math.sign(d2)) n++
+    }
+    return n
+  }
+  const inAssembly = (l, rootInd) => {
+    let cur = l, h = 0
+    while (cur && h++ < MAX_PARENT_DEPTH) { if (cur.ind === rootInd) return true; cur = byInd.get(cur.parent) }
+    return false
+  }
+  const kinOf = (rootInd) => doc.layers.filter((l) => inAssembly(l, rootInd))
+  /** A path that actually deforms: bezier keyframes, or a primitive resized. */
+  const morphPaths = (l) => {
+    let n = 0
+    const walk = (items) => {
+      for (const it of items ?? []) {
+        if (it.ty === 'gr') walk(it.it)
+        else if (it.ty === 'sh' && it.ks?.a === 1) n++
+        else if ((it.ty === 'el' || it.ty === 'rc') && it.s?.a === 1) n++
+      }
+    }
+    walk(l.shapes)
+    return n
+  }
+
+  const roots = new Map()
+  // (a) An assembly-wide swell: a scale that cycles and carries real artwork.
+  for (const l of doc.layers) {
+    if (!l.ks?.s?.a) continue
+    const track = scaleX(l.ind)
+    if (p2p(track) < SWELL_MIN || reversals(track) < REVERSALS) continue
+    if (kinOf(l.ind).filter((k) => k.ty === 4 && !k.td).length < 3) continue
+    roots.set(l.ind, `${l.nm} carries the breathe`)
+  }
+  // (b) Anything holding an occupant is a body by construction — gate 15 already
+  // established that, so the silhouette rule applies whether or not it swells.
+  for (const occ of doc.layers.filter((l) => l.ty === 4 && isOccupant(l))) {
+    let root = occ, hops = 0
+    while (root.parent != null && hops++ < MAX_PARENT_DEPTH) { const p = byInd.get(root.parent); if (!p) break; root = p }
+    if (root.ind !== occ.ind) roots.set(root.ind, `${root.nm} holds ${occ.nm}`)
+  }
+  // Keep only the outermost of any nested pair, so one body reports once.
+  for (const ind of [...roots.keys()]) {
+    const l = byInd.get(ind)
+    if ([...roots.keys()].some((other) => other !== ind && inAssembly(l, other))) roots.delete(ind)
+  }
+
+  for (const [ind, why] of roots) {
+    const kin = kinOf(ind)
+    // A blink is a shutter, not a breath: it is anisotropic by design and would
+    // mask a rigid body if it counted. Same exemption gate 6 already grants it.
+    const deformable = kin.filter((l) => !EYE_RE.test(l.nm ?? ''))
+    let aniso = 0, anisoOn = null
+    for (const l of deformable) {
+      const d = scaleX(l.ind).map((sx, i) => (sx - scaleY(l.ind)[i]) * 100)
+      if (reversals(d) < REVERSALS) continue
+      if (p2p(d) > aniso) { aniso = p2p(d); anisoOn = l.nm }
+    }
+    const morphs = deformable.filter((l) => l.ty === 4).map((l) => [l.nm, morphPaths(l)]).filter(([, n]) => n > 0)
+    const morphCount = morphs.reduce((t, [, n]) => t + n, 0)
+    console.log(
+      `\nSilhouette (${byInd.get(ind).nm}): squash ${aniso.toFixed(1)}pp` +
+      `${anisoOn ? ` on ${anisoOn}` : ''} · ${morphCount} morphing path(s)` +
+      `${morphs.length ? ` on ${morphs.map(([nm]) => nm).join(', ')}` : ''}`,
+    )
+    if (aniso < ANISO_MIN && morphCount === 0 && !declaredLayer(byInd.get(ind).nm)) {
+      fail(
+        `SILHOUETTE STILL  ${byInd.get(ind).nm}: the body changes SIZE but never SHAPE ` +
+        `(squash ${aniso.toFixed(1)}pp, limit ${ANISO_MIN}pp; no morphing paths) — ${why}. ` +
+        `A uniform scale is a zoom, not a breath: the outline is identical on every frame.`,
+        'Counter-phase the breathe axes so area is roughly conserved (sx = 100 + a·sin, sy = 100 − a·sin), ' +
+        'and/or give the soft mass real path keyframes ({a:1}, identical vertex count and order on every ' +
+        'key) authored parametrically from its base path — motion-taste "The silhouette breathes". Rigid ' +
+        'gear (a helmet, a shell, a logo) stays rigid: it is the body inside that deforms. A mark that ' +
+        'must not distort declares { layer, reason } in controls.json.',
+      )
+    }
   }
 }
 

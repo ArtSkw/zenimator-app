@@ -32,6 +32,14 @@ export type FitPlate = {
   /** Extra px added to the line height when the string wraps; single-line text
    *  keeps the authored spec exactly. */
   leading: number
+  /** Which way the plate expands as the string grows. `'center'` (the default,
+   *  and every scene authored before this field) spreads both ways, so the
+   *  usable width is twice the NEAREST stage clearance — throwing away the room
+   *  on the far side whenever the plate is off-centre. `'right'` pins the left
+   *  edge and grows rightward, `'left'` mirrors it. The pinned edge is the one
+   *  the artwork composed against (a bubble's tail, the trail beneath it), so
+   *  pinning it is what keeps a translation looking like the design. */
+  grow?: 'center' | 'left' | 'right'
 }
 
 /** Just enough of CanvasRenderingContext2D to measure with. */
@@ -44,6 +52,10 @@ export type TextLayout = {
   h: number
   /** Shift for the text block so wrapped lines stay vertically centered. */
   dy: number
+  /** Shift for the plate's anchor so the pinned edge stays where the artwork
+   *  put it. Zero when the plate grows from its centre. Add it to the authored
+   *  anchor x — never assume that was zero. */
+  dx: number
   lineHeight: number
   lines: number
 }
@@ -97,6 +109,11 @@ export function layoutText(
   // its center, so the block must rise half a lineHeight per extra line to stay
   // centered. (Text-doc `ls` looks like the tool for this — Skottie ignores it.)
   const dy = -((lines.length - 1) * lineHeight) / 2
+  // The plate always grows about its own centre, so pinning an edge is a shift
+  // of half the growth — applied to the ANCHOR, which moves the plate and the
+  // text inside it together and leaves everything outside the group alone.
+  const grown = w - plate.defaultSize[0]
+  const dx = plate.grow === 'right' ? -grown / 2 : plate.grow === 'left' ? grown / 2 : 0
 
-  return { text: lines.join('\r'), w, h, dy, lineHeight, lines: lines.length }
+  return { text: lines.join('\r'), w, h, dy, dx, lineHeight, lines: lines.length }
 }

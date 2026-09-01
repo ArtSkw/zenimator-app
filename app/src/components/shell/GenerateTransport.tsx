@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Play, Pause, RotateCcw, Repeat } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { SURFACE } from './chrome'
 import { useGeneratePlayback } from '@/store/generatePlaybackStore'
 import { useGenerateStore, useBakedLottieJson } from '@/store/generateStore'
 import { loopStartFromJson } from '@/engine/lottie/markers'
@@ -81,7 +82,9 @@ export function GenerateTransport() {
   const seekTo = (f: number) => controls?.seek(f)
 
   return (
-    <footer className="h-16 border-t border-border bg-background flex items-center gap-3 px-5 shrink-0">
+    // A floating pill now, not a footer: the shell has no fixed edges left, so
+    // the transport carries its own — same surface vocabulary as the rails.
+    <div className={cn(SURFACE, 'flex h-14 w-full items-center gap-3 px-4')}>
       <TooltipProvider>
       <Tooltip>
         <TooltipTrigger
@@ -166,7 +169,7 @@ export function GenerateTransport() {
         )}
         <span>f</span>
       </div>
-    </footer>
+    </div>
   )
 }
 

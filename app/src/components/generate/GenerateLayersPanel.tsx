@@ -2,10 +2,14 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { SquarePen, Layers } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { RAIL, RAIL_HEADER, RAIL_LEFT } from '@/components/shell/chrome'
+import logoLightUrl from '@/assets/zenimator-logo-light.svg'
+import logoDarkUrl from '@/assets/zenimator-logo-dark.svg'
 import { useGenerateStore } from '@/store/generateStore'
 import { useProjectsStore } from '@/store/projectsStore'
 import { tracksSummary } from '@/engine/lottie/project'
 import { ProjectsPanel } from '@/components/panels/ProjectsPanel'
+import { StudioFeed } from '@/components/generate/StudioFeed'
 
 /** Row style shared by every clickable sidebar item — an inset row on the
  *  control corner radius, never a full-bleed bordered row. Selection = filled;
@@ -42,6 +46,9 @@ export function GenerateLayersPanel() {
   // idle once a project is loaded/generated.
   const atHome = activeProjectId === null
   const handleNewProject = () => { clearResult(); setActiveProjectId(null) }
+  /** The logo is a way home, and only when there is something to come back
+   *  FROM — on the empty canvas it is just the mark. */
+  const handleLogoClick = () => { if (lottieJson) handleNewProject() }
 
   // Legacy skeleton path — only once the animation is complete, so the
   // (still unnamed) parts don't flash into the panel mid-generation. Rig nulls
@@ -67,7 +74,23 @@ export function GenerateLayersPanel() {
   const STAGGER_IN = 'animate-in fade-in-0 slide-in-from-bottom-1 duration-200 ease-out-strong'
 
   return (
-    <aside className="w-[280px] border-r border-border bg-background flex flex-col shrink-0">
+    <aside className={cn(RAIL, 'left-3')} style={{ width: RAIL_LEFT }}>
+      {/* The retired top bar's left half. It lives here now because the logo
+          belongs to the same object as the project list it returns you to —
+          clicking it goes home, which is what this rail is FOR. */}
+      <div className={RAIL_HEADER}>
+        <button
+          onClick={handleLogoClick}
+          disabled={!lottieJson}
+          className="flex items-end gap-2 disabled:pointer-events-none cursor-pointer disabled:cursor-default"
+          title={lottieJson ? 'Return to home' : undefined}
+        >
+          <img src={logoLightUrl} alt="ZENimator" className="h-5 w-auto select-none dark:hidden" draggable={false} />
+          <img src={logoDarkUrl} alt="ZENimator" className="h-5 w-auto select-none hidden dark:block" draggable={false} />
+          <span className="text-[10px] text-muted-foreground font-mono select-none">v{__APP_VERSION__}</span>
+        </button>
+      </div>
+
       {/* New project — the one action item; active on the home canvas. */}
       <div className="px-2.5 pt-2.5">
         <button
@@ -137,6 +160,17 @@ export function GenerateLayersPanel() {
           )}
         </div>
       </ScrollArea>
+
+      {/* Studio activity — the last thing in the rail, and only while there IS
+          activity: StudioFeed renders nothing once a channel is silent and
+          empty, so this contributes no chrome to a resting project. It stays
+          collapsed until clicked, and its own expand is height-capped, so a
+          narrating job can never push the layer list off the bottom. */}
+      {activeProjectId && (
+        <div className="shrink-0 px-2.5 pb-2.5 pt-1">
+          <StudioFeed channel={activeProjectId} />
+        </div>
+      )}
     </aside>
   )
 }

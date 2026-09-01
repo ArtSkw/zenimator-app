@@ -1,9 +1,7 @@
-import { lazy, Suspense, useState } from 'react'
+import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { BookOpen, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react'
-import {
-  Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
-} from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useGenerateStore } from '@/store/generateStore'
 import { studioDossier, type SceneDossierData } from '@/engine/studio/studioClient'
 
 // react-markdown + its remark/micromark deps are heavy — load only when the
@@ -22,76 +20,110 @@ const PROSE =
   '[&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 ' +
   '[&_strong]:font-semibold [&_strong]:text-foreground [&_a]:underline [&_hr]:my-4 [&_hr]:border-border'
 
+
+/** Falls back to the raw markdown when the renderer chunk cannot load. */
+class MarkdownBoundary extends Component<{ raw: string; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  render() {
+    if (!this.state.failed) return this.props.children
+    return (
+      <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-foreground/80">
+        {this.props.raw}
+      </pre>
+    )
+  }
+}
+
 /**
  * "How it was made" — a slide-over showing the studio's own documentation of a
  * scene: the learnings doc the agent wrote, the build script that produced it,
  * and a pointer to version history. The agent's documentation becomes
  * user-facing product value (plan Phase 2.3).
  */
-export function SceneDossier({ slug, variant = 'floating' }: { slug: string; variant?: 'floating' | 'inline' }) {
-  const [open, setOpen] = useState(false)
+/**
+ * "How it was made" — the studio's own documentation of a scene: the learnings
+ * doc the agent wrote, the build script that produced it, and a pointer to
+ * version history. The agent's documentation becomes user-facing product value
+ * (plan Phase 2.3).
+ *
+ * It takes over the right rail rather than sliding over the app, the same way
+ * History does: both answer "where did this scene come from", and a slide-over
+ * covering the canvas hid the very thing the notes describe.
+ */
+export function SceneDossierButton({ variant = 'floating' }: { variant?: 'floating' | 'inline' }) {
+  const setDossierOpen = useGenerateStore((st) => st.setDossierOpen)
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label="How it was made"
+            onClick={() => setDossierOpen(true)}
+            className={
+              variant === 'inline'
+                ? 'pressable flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground'
+                : 'pressable flex size-8 items-center justify-center rounded-full border border-border bg-background/80 text-foreground backdrop-blur-sm shadow-sm'
+            }
+          >
+            <BookOpen size={variant === 'inline' ? 14 : 13} />
+          </button>
+        }
+      />
+      <TooltipContent side={variant === 'inline' ? 'bottom' : 'top'}>How it was made</TooltipContent>
+    </Tooltip>
+  )
+}
+
+/** The dossier's BODY — the caller supplies the rail shell and header, so this
+ *  matches whatever chrome the rail is wearing. */
+export function SceneDossierBody({ slug }: { slug: string }) {
   const [data, setData] = useState<SceneDossierData | null | 'loading'>('loading')
   const [showScript, setShowScript] = useState(false)
-
-  const onOpenChange = (o: boolean) => {
-    setOpen(o)
-    if (o) {
-      setData('loading')
-      setShowScript(false)
-      void studioDossier(slug).then(setData)
-    }
+  // Render-phase reset when the scene changes — the sanctioned "adjust state
+  // when a prop changes" pattern, and no extra commit the way an effect would
+  // cost. The fetch itself stays in the effect, where it belongs.
+  const [lastSlug, setLastSlug] = useState(slug)
+  if (lastSlug !== slug) {
+    setLastSlug(slug)
+    setData('loading')
+    setShowScript(false)
   }
+  useEffect(() => {
+    let alive = true
+    void studioDossier(slug).then((d) => { if (alive) setData(d) })
+    return () => { alive = false }
+  }, [slug])
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      {/* Icon-only trigger (controlled open — no SheetTrigger needed); the label
-          lives in the tooltip. 'floating' = pill over the canvas; 'inline' = a
-          quiet ghost button that sits in the Controls sidebar header. */}
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              aria-label="How it was made"
-              onClick={() => onOpenChange(true)}
-              className={
-                variant === 'inline'
-                  ? 'pressable flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground'
-                  : 'pressable flex size-8 items-center justify-center rounded-full border border-border bg-background/80 text-foreground backdrop-blur-sm shadow-sm'
-              }
-            >
-              <BookOpen size={variant === 'inline' ? 14 : 13} />
-            </button>
-          }
-        />
-        <TooltipContent side={variant === 'inline' ? 'bottom' : 'top'}>How it was made</TooltipContent>
-      </Tooltip>
-      <SheetContent side="right" className="w-full sm:max-w-2xl">
-        <SheetHeader>
-          <SheetTitle>How it was made</SheetTitle>
-          <SheetDescription>The studio’s own notes and the script that produced this scene.</SheetDescription>
-        </SheetHeader>
-
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
           {data === 'loading' ? (
             <p className="py-4 text-xs text-muted-foreground">Loading…</p>
           ) : data === null ? (
             <p className="py-4 text-xs text-muted-foreground leading-relaxed">
-              The dossier isn’t available — the studio engine needs a restart
+              The dossier isn’t available - the studio engine needs a restart
               (<span className="font-mono">npm run agent</span>) to serve it.
             </p>
           ) : (
             <div className="space-y-6">
               {/* Learnings doc */}
               {data.doc ? (
-                <Suspense fallback={<p className="py-4 text-xs text-muted-foreground">Rendering…</p>}>
-                  <div className={PROSE}>
-                    <Markdown>{data.doc}</Markdown>
-                  </div>
-                </Suspense>
+                /* react-markdown is a lazy chunk, and a chunk that fails to
+                   arrive (a stale dev dep-cache, a redeploy mid-session) used
+                   to take the WHOLE app down with it — an unhandled rejection
+                   inside Suspense blanks the tree. The notes are worth showing
+                   as plain text either way. */
+                <MarkdownBoundary raw={data.doc}>
+                  <Suspense fallback={<p className="py-4 text-xs text-muted-foreground">Rendering…</p>}>
+                    <div className={PROSE}>
+                      <Markdown>{data.doc}</Markdown>
+                    </div>
+                  </Suspense>
+                </MarkdownBoundary>
               ) : (
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  No learnings note for this scene yet — the studio writes one after non-trivial work.
+                  No learnings note for this scene yet - the studio writes one after non-trivial work.
                 </p>
               )}
 
@@ -121,13 +153,11 @@ export function SceneDossier({ slug, variant = 'floating' }: { slug: string; var
               {data.versions.length > 0 && (
                 <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   <RotateCcw size={12} className="shrink-0" />
-                  {data.versions.length} saved {data.versions.length === 1 ? 'version' : 'versions'} — roll back from the History panel.
+                  {data.versions.length} saved {data.versions.length === 1 ? 'version' : 'versions'} - roll back from the History panel.
                 </p>
               )}
             </div>
           )}
-        </div>
-      </SheetContent>
-    </Sheet>
+    </div>
   )
 }

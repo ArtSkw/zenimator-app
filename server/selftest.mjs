@@ -498,6 +498,14 @@ try {
         p.includes('Articulate the PARTS') && p.includes('cardboard test'))
       check(`living-motion (${kind}): the body breathes`,
         p.includes('The body always breathes'))
+      // A size-only breathe passed every gate for a whole scene: 256 keys of
+      // sx === sy read as the suit zooming, and "the body breathes" was
+      // literally true while the outline never changed (reported 2026-09-01).
+      check(`living-motion (${kind}): the breath changes SHAPE, not size`,
+        p.includes('a breath changes SHAPE, not size') &&
+        p.includes('UNIFORM scale swell') && p.includes('SILHOUETTE STILL'))
+      check(`living-motion (${kind}): rigid gear is exempt from the morph`,
+        p.includes('RIGID gear') && p.includes('takes no morph of its own'))
       check(`living-motion (${kind}): amplitude measured, not assumed`,
         p.includes('Measure AMPLITUDE, not keyframe count') &&
         p.includes('max(vertex, control-handle)'))

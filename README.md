@@ -69,29 +69,23 @@ activity feed shows you exactly what the agent is doing.
 
 ---
 
-## What's new in v1.2
+## What's new in v1.3
 
-Multi-artwork scenes, living companions, and exports that speak every language.
+A workspace instead of a page, and a body that actually breathes.
 
-- **Entry + Loop scenes.** A one-shot entrance that settles into an endless
-  idle, declared with standard Lottie markers — the preview, every export and
-  every player runtime honor the same boundary.
-- **Attach several artworks.** Multi-SVG briefs in story order, with a
-  drag-to-re-sequence attachment strip.
-- **Real text, really editable.** Native text layers bound to Lottie slots:
-  edit the copy, watch the speech bubble re-size to fit, try locale strings
-  live. Fonts travel with the scene, and the new Web pack ships a `fitBubble()`
-  helper so one animation file serves every language.
-- **Generate in the background.** A run becomes a project the moment you press
-  Generate — browse other projects while it builds, and **Resume** a stopped
-  run instead of starting it over.
-- **One click from artwork to animation.** Don't feel like writing a brief?
-  Attach an SVG and let the studio write it: it reads every path, drafts the
-  brief, then carries straight on into building the scene — one run, watchable
-  and stoppable throughout, with the brief on screen as soon as it's written.
-- **Deeper exports.** Lottie JSON · HTML · dotLottie · MP4 · WebM · GIF, plus
-  mobile packs for React Native, iOS, Android and Flutter.
-- **Canvas zoom + pan**, controls that reach inside nested compositions, and a
-  quieter control surface throughout.
+- **The canvas is the app.** No top bar: the logo rides the left rail, the
+  global actions ride the right one, and both rails float over one continuous
+  canvas you can drag and zoom freely — the scene has no frame around it.
+- **One box, two jobs.** The note field at the bottom either takes a change
+  you type, or opens the setup in its own place. Playback sits under it;
+  studio activity moved into the left rail, appearing only while there's work.
+- **Editable canvas background.** A viewing colour under Feel — canvas only,
+  every export still ships on transparency.
+- **The silhouette breathes.** `check-motion` gained a SILHOUETTE STILL gate:
+  a body that changes SIZE but never SHAPE now fails the build. A uniform
+  scale swell is a zoom, not a breath, and the contract, the recipes and the
+  gate all say so.
+- **Staged view transitions**, a narrower control surface, and interface copy
+  without em-dashes.
 
 Earlier releases live in the git history.

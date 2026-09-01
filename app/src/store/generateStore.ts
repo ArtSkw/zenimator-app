@@ -69,6 +69,14 @@ type GenerateState = {
   cast: CastMember[]
   /** Right panel shows the version-history log instead of Controls. */
   historyOpen: boolean
+  /** The dossier takes over the right rail the way history does — one rail,
+   *  one takeover, so the two can never be open at once. */
+  dossierOpen: boolean
+  /** The canvas fill behind the scene, as [r,g,b,a] 0..1. Purely a viewing
+   *  preference: it lives OUTSIDE the Lottie document, so no export can ever
+   *  pick it up and the delivered animation keeps its transparent background.
+   *  `null` = follow the theme's own canvas tone. */
+  canvasBg: [number, number, number, number] | null
   /** Friendly per-layer names straight from the agent's own layer naming. */
   layerLabels: Record<string, string>
   /** User-set slot value overrides (sid → raw value). Applied on top of
@@ -101,6 +109,8 @@ type GenerateState = {
   /** Replace the cast (generate) or set the reconciled cast (edit/revert). */
   setCast: (cast: CastMember[]) => void
   setHistoryOpen: (open: boolean) => void
+  setDossierOpen: (open: boolean) => void
+  setCanvasBg: (bg: [number, number, number, number] | null) => void
   setError: (msg: string) => void
   /** Reset status to idle without clearing the existing result (e.g. after abort). */
   resetStatus: () => void
@@ -133,6 +143,7 @@ type GenerateState = {
     layerLabels: Record<string, string>
     slotOverrides: Record<string, unknown>
     resultKind: Kind | null
+    canvasBg?: [number, number, number, number] | null
   }) => void
 }
 
@@ -160,7 +171,7 @@ export function setupSignature(s: {
 const SCENE_RESET = {
   lottieJson: null, resultSignature: null, resultKind: null,
   project: null, skeleton: null, controls: null, agentControlsJson: null,
-  cast: [], historyOpen: false, layerLabels: {}, slotOverrides: {},
+  cast: [], historyOpen: false, dossierOpen: false, canvasBg: null, layerLabels: {}, slotOverrides: {},
   selectedLayer: null,
 } satisfies Partial<GenerateState>
 
@@ -181,6 +192,8 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   setAgentControlsJson: (agentControlsJson) => set({ agentControlsJson }),
   cast: [],
   historyOpen: false,
+  dossierOpen: false,
+  canvasBg: null,
   layerLabels: {},
   slotOverrides: {},
   status: 'idle',
@@ -192,7 +205,7 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   setKind: (kind) => set({ kind }),
   setPrompt: (prompt) => set({ prompt }),
   setGroundings: (groundings) => set({ groundings }),
-  startGenerating: () => set({ status: 'generating', stage: null, error: null, historyOpen: false }),
+  startGenerating: () => set({ status: 'generating', stage: null, error: null, historyOpen: false, dossierOpen: false }),
   setStage: (stage) => set({ stage }),
   setResult: (lottieJson, resultSignature, resultKind, controls, layerLabels, keepOverrides) =>
     set({
@@ -205,7 +218,9 @@ export const useGenerateStore = create<GenerateState>((set) => ({
       status: 'done', stage: null, error: null,
     }),
   setCast: (cast) => set({ cast }),
-  setHistoryOpen: (historyOpen) => set({ historyOpen }),
+  setHistoryOpen: (historyOpen) => set({ historyOpen, dossierOpen: false }),
+  setDossierOpen: (dossierOpen) => set({ dossierOpen, historyOpen: false }),
+  setCanvasBg: (canvasBg) => set({ canvasBg }),
   setSlotOverride: (sid, value) =>
     set((s) => ({ slotOverrides: { ...s.slotOverrides, [sid]: value } })),
   patchSlotOverrides: (patch) =>
@@ -340,6 +355,8 @@ export const useGenerateStore = create<GenerateState>((set) => ({
       skeleton: data.skeleton,
       cast,
       historyOpen: false,
+      dossierOpen: false,
+      canvasBg: data.canvasBg ?? null,
       layerLabels,
       slotOverrides,
       resultKind: data.resultKind,

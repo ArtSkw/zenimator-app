@@ -131,6 +131,22 @@ parametric controls group under them. Naming is all-or-nothing:
 - Plumbing keeps its conventions and stays out of the panel: matte sources are
   `<host>__matte` (also how the app pairs a wipe's knobs to the layer it
   reveals), sheen/emerge/mask helpers keep their `__` suffixes.
+- **A track matte's source must be the literal PRECEDING entry in the `layers`
+  array** — Lottie/Skottie resolve `tt` purely by array adjacency, not by name
+  or `parent`/`ind`. Since this player's paint order is "`layers[0]`
+  frontmost" (array index 0 = most front), that means the `td:1` matte source
+  layer needs a SMALLER array index (more front) than the `tt`-carrying layer
+  it clips, with nothing else spliced between them — get this backwards (the
+  matted layer listed before its matte, as when hand-building a
+  front-to-back paint-order array) and the matte silently fails to apply: the
+  clipped layer renders as if unmasked at first glance, but shrinks to a bare
+  outline with its fill gone (observed on an occupant-face carve — the face
+  rendered as a thin stroke with no white fill and no eyes visible, because
+  its `td` matte source had been listed AFTER it instead of before). Fix by
+  ordering the pair `[..., <host>__matte, <matted-layer>, ...]` in whatever
+  front-to-back list assigns final array order — recipe-character-rig.md's
+  occupant-carve comment already shows the correct order; the failure mode
+  above is what happens when that ordering isn't followed literally.
 
 ## Slots And Controls
 
@@ -216,10 +232,15 @@ filler. 1–2 per key layer, only for motion that truly benefits from a handle.
   use it when your label/steps say it better than a generic "Rotation".
 - A `controls` slot entry may carry `autoFit` (companion-bubble scenes):
   `{ "sid": "bubble.size", "label": "Bubble size", "autoFit": { "text":
-  "bubble.text", "padding": [24, 16], "min": [120, 52] } }` — the app then
-  measures the text slot's current string in the scene's font and keeps the
-  size slot at text extents + 2×padding (never below `min`), live, while a
-  teammate previews locale strings. See `recipe-companion-bubble.md`.
+  "bubble.text", "padding": [24, 16], "min": [120, 52], "max": [196.5, 35],
+  "leading": 2, "grow": "right" } }` — the app then measures the text slot's
+  current string in the scene's font and keeps the size slot at text extents +
+  2×padding (never below `min`), live, while a teammate previews locale
+  strings. Past `max[0]` it wraps instead of overflowing. `grow` names the edge
+  that stays put as the plate widens — `"right"` pins its LEFT edge, `"left"`
+  pins its right, and the default `"center"` spreads both ways, which caps an
+  off-centre plate at twice its nearest clearance. Derive all of it from the
+  stage: see `recipe-companion-bubble.md`.
 
 ## Content Parameters — declare the KIND, never let it be guessed
 

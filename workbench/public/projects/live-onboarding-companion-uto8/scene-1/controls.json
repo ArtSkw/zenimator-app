@@ -56,7 +56,7 @@
       "kind": "amount",
       "property": "position",
       "label": "Inner float",
-      "description": "How much the mascot’s face drifts inside its own helmet, separate from the shell."
+      "description": "How much the mascot’s body drifts inside its own helmet, separate from the shell."
     },
     {
       "target": "moon-rig",

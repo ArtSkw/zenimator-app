@@ -36,7 +36,7 @@ export function StudioFeed({ channel }: { channel: string }) {
   const frames = entries.filter((e) => e.kind === 'preview').length
   const summary =
     queuedPosition != null
-      ? `Waiting for a studio slot — position ${queuedPosition}`
+      ? `Waiting for a studio slot - position ${queuedPosition}`
       : `Studio activity · ${entries.length} step${entries.length === 1 ? '' : 's'}${frames > 0 ? ` · ${frames} frame${frames === 1 ? '' : 's'}` : ''}`
 
   return (
@@ -121,7 +121,7 @@ function Entry({ entry, onZoom }: { entry: FeedEntry; onZoom: (dataUrl: string) 
       type="button"
       onClick={() => onZoom(entry.dataUrl)}
       className={`block overflow-hidden rounded-lg border border-border transition-opacity hover:opacity-80 ${ENTRY_IN}`}
-      title={entry.file ? `Verification frames — ${entry.file}` : 'Verification frames'}
+      title={entry.file ? `Verification frames - ${entry.file}` : 'Verification frames'}
     >
       <img src={entry.dataUrl} alt="The studio's own verification frames" className="max-h-28 w-auto" />
     </button>

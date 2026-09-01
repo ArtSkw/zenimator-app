@@ -12,6 +12,15 @@
 @theme inline {
   --font-sans: 'Nunito', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  /* JetBrains Mono ships programming ligatures in `calt`, and they are not
+     cosmetic: a run of periods is re-shaped into BLANK spacer glyphs plus one
+     composite that draws the dots back leftwards (`->` likewise becomes an
+     arrow). Shapers disagree about where that run ends, so "moon......" can
+     come out as five blanks and a two-dot glyph — the string is intact, the
+     field just stops showing it. In an IDE that feature is the point; in panels
+     that display LITERAL content — the locale string a developer will ship —
+     it misreports what was typed. Off wherever we set the mono face. */
+  --font-mono--font-feature-settings: 'calt' 0;
   --font-heading: var(--font-sans);
 
   --color-background: var(--background);

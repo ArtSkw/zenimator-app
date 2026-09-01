@@ -91,7 +91,7 @@ export function GradientField({
             either would overwrite the identity its own toggle and dismissal
             resolve the trigger by. The label rides `aria-label` instead. */}
         <PopoverTrigger
-          aria-label={`${label} — ${value.type} gradient, ${value.stops.length} stops`}
+          aria-label={`${label} - ${value.type} gradient, ${value.stops.length} stops`}
           className="flex h-8 w-full items-center gap-2 rounded-control border border-control-border bg-control px-2 transition-colors hover:bg-control-hover focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           {/* The trigger shows the ACTUAL ramp — never a single averaged swatch. */}

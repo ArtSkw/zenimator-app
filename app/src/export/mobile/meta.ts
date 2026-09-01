@@ -88,6 +88,7 @@ export function buildPackContext(
       textPos: posVal && posVal.length >= 2 ? { sid: posSid, value: posVal } : null,
       anchor: anchorVal && anchorVal.length >= 2 ? { sid: anchorSid, value: anchorVal } : null,
       leading: fit.leading ?? 0,
+      grow: fit.grow ?? 'center',
     })
   }
 

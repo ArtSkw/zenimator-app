@@ -210,8 +210,17 @@ const LIVING_MOTION_CONTRACT =
   `carries its own secondary motion on top: compressing into the squeeze, settling a beat ` +
   `after the arms, riding the breath. If the holder moves and the held thing's pixels do ` +
   `not, it is not being held.\n` +
-  `  - The body always breathes. Whatever the limbs are doing, the torso/mass carries a ` +
-  `continuous low-amplitude cycle; a still body under busy arms reads as a puppet.\n` +
+  `  - The body always breathes, and a breath changes SHAPE, not size. Whatever the limbs ` +
+  `are doing, the torso/mass carries a continuous low-amplitude cycle; a still body under ` +
+  `busy arms reads as a puppet. A UNIFORM scale swell (sx === sy) is a ZOOM, not a breath: ` +
+  `the outline is identical on every frame and the character reads as a puppet being ` +
+  `resized. Counter-phase the axes so area is roughly conserved (sx = 100 + a*sin, ` +
+  `sy = 100 - a*sin), and give the SOFT mass real path keyframes ({a:1}, identical vertex ` +
+  `count and order on every key) authored parametrically from its base path. RIGID gear — ` +
+  `a helmet, a shell, armor, a logo mark — takes no morph of its own and rides the shared ` +
+  `squash as the decal it is; it is the body INSIDE that deforms, which is what keeps the ` +
+  `gear's proportions while the character reads alive. check-motion.mjs fails a size-only ` +
+  `breathe as SILHOUETTE STILL.\n` +
   `  - Effort is phase-locked to the moment it physically happens — strain on the ` +
   `contraction, not on the release. Verify the sign by RENDERING the frames, not by ` +
   `reasoning about the sign convention.\n`
