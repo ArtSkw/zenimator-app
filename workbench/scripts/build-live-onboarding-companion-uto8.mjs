@@ -417,7 +417,14 @@ function trailCircle(nm, id, entrance, floatPeriod, floatAmp, floatPhaseDeg) {
   const ks = baseTransform()
   ks.s = animProp(entrance.scale.map((p) => ({ ...p, v: [p.v, p.v, 100] })))
   ks.o = animProp(entrance.opacity)
-  const posPts = sampleDense((t) => t < T ? [c.cx, c.cy, 0] : [c.cx, c.cy + floatAmp * sin2pi(t - T, floatPeriod, floatPhaseDeg), 0], 0, OP)
+  // Alive from the moment it ARRIVES, not from T: no freeze branch before the
+  // loop starts. floatPeriod divides IDLE(420) exactly, so the float is
+  // already periodic on 420 — evaluating it at a negative `t - T` is the same
+  // echo technique as sampling `(t + 420) - T` (a valid earlier occurrence of
+  // the same infinite cycle), just without the redundant offset arithmetic.
+  // Same tempo, amplitude, and phase as the in-loop float; only the pop-in's
+  // own scale/opacity keeps the circle invisible before it arrives.
+  const posPts = sampleDense((t) => [c.cx, c.cy + floatAmp * sin2pi(t - T, floatPeriod, floatPhaseDeg), 0], 0, OP)
   ks.p = bakedProp(posPts)
   pushLayer({ nm, shapes, ks })
 }

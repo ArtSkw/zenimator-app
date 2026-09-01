@@ -321,7 +321,10 @@ top-level Lottie markers — names are contract, lowercase:
   `play(fromMarker:toMarker:)` / `setMinAndMaxFrame`.
 - The seam pair is frames `T` and `op`: every property animating inside the
   loop must match exactly at both; everything that settled during the intro
-  must hold perfectly still from its settle through `op`.
+  must hold perfectly still from its settle through `op`. "Settled" means the
+  one-shot elements — a bubble that arrived and is done. An element with an
+  idle of its own (a free satellite drifting on its own clock) never settles:
+  it keeps moving through the seam, and it was moving before `T` too.
 - Duration/speed controls in the app rescale marker times together with the
   keyframes, so the boundary stays proportionally where it was authored.
 - **Verifying the seam: never diff `preview-scene.mjs`'s own PNG output for

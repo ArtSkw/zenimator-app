@@ -129,6 +129,22 @@ twice — zero extra state to keep in sync with the seam, and the cycle's own
 pacing ("slow contented breathe") never has to shrink just to fit inside the
 intro window.
 
+**Echo EVERY element, from its OWN arrival — satellites included.** The echo
+is not a mascot technique; it belongs to anything with an idle. The failure
+it exists to prevent, measured in a shipped companion: the two thought-trail
+circles popped in at f14 and f25, then held a CONSTANT position for the rest
+of the intro and began floating only at `T` — 76 frames of a visibly static
+element while the mascot, the occupant and the moon were all already moving.
+The tracks were there (212 dense keys spanning the whole timeline); they were
+simply parked. The reasoning that produces this is seductive and wrong: *these
+pop in during the entrance, so they don't exist yet, so they can't float yet.*
+They do exist. An element is alive from the frame it ARRIVES, and its echo
+runs from that frame, not from the loop marker. A second frozen circle in the
+same scene held flat to f88 and then SNAPPED 1.22px at f90 — the parked value
+and the loop's first value were never reconciled, which is what a hand-off
+looks like when the idle was authored as if the intro weren't there.
+`check-motion.mjs` fails both as FROZEN UNTIL THE LOOP.
+
 Verification (blocking): render and READ the seam pair `T` and `op` — they
 must be pixel-identical for looping elements. Render TWO mid-intro frames a
 dozen frames apart — the mascot must already differ between them (alive under

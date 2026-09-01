@@ -23,6 +23,9 @@
  *      the shell look like it inflates around a fixed-size face.
  *   5. INVENTED FILL — every colour must appear in the source artwork; a rig
  *      re-parents and re-times shapes, it never repaints them.
+ *   8. FROZEN UNTIL THE LOOP — an intro-loop element that pops in and then
+ *      holds still until the loop marker. The idle runs from frame 0; an
+ *      element is alive from its own arrival, not from T.
  *   7. SILHOUETTE STILL — a body that only scales UNIFORMLY is a zoom, not a
  *      breath: the outline is identical on every frame. Fires only where a
  *      breathe was already authored, or an occupant proves it is a body.
@@ -998,6 +1001,89 @@ for (const p of pairs.sort((x, y) => y.slide - x.slide).slice(0, 12)) {
         'gear (a helmet, a shell, a logo) stays rigid: it is the body inside that deforms. A mark that ' +
         'must not distort declares { layer, reason } in controls.json.',
       )
+    }
+  }
+}
+
+// ── 8. FROZEN UNTIL THE LOOP — alive only after the entrance ends ────────────
+// An intro-loop scene is ONE composition: the idle runs continuously from frame
+// 0 and the entrance plays over it. The failure this catches is the opposite —
+// an element that pops in, sits perfectly still for the rest of the intro, and
+// only starts moving when the loop marker arrives, so a viewer sees a second of
+// dead air before the scene comes alive.
+//
+// Field origin: a companion's two thought-trail circles carried 212 dense
+// position keyframes across the whole timeline, held at a CONSTANT value through
+// [0, T) and moving 2.8px and 3.8px only after it. Every other element in the
+// same scene was already moving during the intro, so the contract had been read
+// and then reasoned around for the satellites: they pop in during the entrance,
+// therefore "they don't exist yet, therefore they cannot float yet". They do
+// exist — the moment an element ARRIVES it is alive, and its idle runs from its
+// own entrance, not from the loop marker.
+//
+// Measured from arrival rather than from frame 0, so an element that genuinely
+// has not entered yet is never accused of being still.
+{
+  const introStart = doc.ip ?? 0
+  if (loopMarker && t0 - introStart >= 1) {
+    const SAMPLES_INTRO = 24
+    const MIN_WINDOW = 20      // frames — a shorter intro cannot show a slow float
+    const LIVE = 0.5           // px / % — a loop track quieter than this is not a float
+    const FROZEN = 0.1         // intro travel under a tenth of the loop's = held still
+    // The last frames before T belong to the HAND-OFF, not to the intro. One
+    // frozen scene held its circle flat to f88 and then snapped 1.22px at f90:
+    // sampled up to the marker, that step reads as movement and the element
+    // walks free. Judge the intro on its own body and the snap cannot hide it.
+    const BOUNDARY_GUARD = 4
+    const dims = (v) => (Array.isArray(v) ? v : [v])
+
+    /** When the layer is actually on screen: its own fade and pop have landed. */
+    const arrivalOf = (l) => {
+      const firstFull = (prop) => {
+        if (!prop || prop.a !== 1 || !Array.isArray(prop.k)) return introStart
+        for (const k of prop.k) if ('s' in k && Math.abs(dims(k.s)[0]) >= 90) return k.t
+        return introStart
+      }
+      return Math.max(introStart, firstFull(l.ks?.o), firstFull(l.ks?.s))
+    }
+    const travel = (prop, from, to) => {
+      const vals = []
+      for (let i = 0; i < SAMPLES_INTRO; i++) {
+        vals.push(dims(evalProp(prop, from + ((to - from) * i) / (SAMPLES_INTRO - 1), 0)))
+      }
+      let worst = 0
+      for (const a of vals) for (const b of vals) {
+        for (let i = 0; i < Math.min(a.length, b.length); i++) worst = Math.max(worst, Math.abs(a[i] - b[i]))
+      }
+      return worst
+    }
+
+    for (const l of doc.layers ?? []) {
+      const nm = l.nm ?? '?'
+      // A blink is a shutter, not an oscillation — gate 6 already exempts it,
+      // and one that happens to fall after T would read as a frozen eye here.
+      if (EYE_RE.test(nm) || declaredLayer(nm)) continue
+      const arrival = arrivalOf(l)
+      const introEnd = t0 - BOUNDARY_GUARD
+      if (introEnd - arrival < MIN_WINDOW) continue
+      for (const key of ['p', 'r', 's']) {
+        const prop = l.ks?.[key]
+        if (!prop || prop.a !== 1) continue
+        const inLoop = travel(prop, t0, t1)
+        if (inLoop < LIVE) continue
+        const inIntro = travel(prop, arrival, introEnd)
+        if (inIntro > inLoop * FROZEN) continue
+        fail(
+          `FROZEN UNTIL THE LOOP  ${nm} (${key}): ${inIntro.toFixed(2)} of travel between its ` +
+          `arrival at f${Math.round(arrival)} and the loop at f${Math.round(t0)}, then ${inLoop.toFixed(2)} ` +
+          `inside the loop — it is on screen and holding still until the marker.`,
+          'The idle runs from the element\'s OWN arrival, not from T. Echo the loop track backwards: with ' +
+          `IDLE = op - T, the value at any t in [arrival, T) is the loop's own value at t + IDLE, which is a ` +
+          'valid earlier occurrence of the identical cycle — same tempo, same amplitude, same phase against ' +
+          'everything else, and the seam at T and op is untouched. A deliberately still element declares ' +
+          '{ layer, reason } in controls.json.',
+        )
+      }
     }
   }
 }

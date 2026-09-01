@@ -18,5 +18,10 @@
     "v": 4,
     "at": 1788270150635,
     "note": "Let's change the..."
+  },
+  {
+    "v": 5,
+    "at": 1788289368184,
+    "note": "The two thought-trail circles are frozen until the loop starts. Their\nposition tracks carry 212 dense keyframes across 0..510, but the value is\nconstant through [0,90) and only starts moving at T - so"
   }
 ]

@@ -233,7 +233,15 @@ const KIND_CONTRACT = {
   'intro-loop':
     'INTRO + LOOP (a one-shot entrance layered OVER an endless idle). Author ONE composition where ' +
     'the idle motion runs CONTINUOUSLY from frame 0 — the subject is alive the whole time, never ' +
-    'frozen waiting for the entrance. The one-shot elements enter during [0..T], settle strictly ' +
+    'frozen waiting for the entrance. That applies to EVERY element, from its OWN arrival, and it ' +
+    'applies hardest to the satellites: a thought-trail circle, a spark, a star pops in during the ' +
+    'entrance and is alive from THAT frame, not from T. Reject the reasoning "it pops in during ' +
+    'the intro, so it does not exist yet, so it cannot float yet" - it does exist, and parking its ' +
+    'track at a constant value until the marker is dead air the viewer sits through (measured: two ' +
+    'circles held perfectly still for 76 frames while the mascot, the occupant and the moon were ' +
+    'all already moving). Echo each element back from its own arrival - value(t) = value(t + IDLE) ' +
+    '- which leaves the seam untouched because it is the same cycle. check-motion.mjs fails this ' +
+    'as FROZEN UNTIL THE LOOP. The one-shot elements enter during [0..T], settle strictly ' +
     'before T, then hold perfectly still through op. [T..op] carries a WHOLE number of idle cycles, ' +
     'so every property that moves during the idle matches exactly at frame T and frame op (that ' +
     'pair is the loop seam — render and READ both, and also render two mid-intro frames to prove ' +

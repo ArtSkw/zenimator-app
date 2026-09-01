@@ -601,10 +601,16 @@ Four properties separate a living idle from a placed one:
   ("half the parts move") must be counted from measured amplitude over the
   loop — per-track min-to-max, or max vertex travel for morphs — and every
   track that scores zero either gets real amplitude or gets deleted.
-  Measure over the track's OWN active span, not just the idle: an entrance
-  track that moves 100 during `[0..T]` and then reads zero across the loop
-  is CORRECT — the bubble and its trail must hold still once they arrive.
-  The defect is a track that measures zero EVERYWHERE. Report the audit as a
+  Measure over the track's OWN active span, not just the idle: an ENTRANCE
+  track (a pop's scale, a fade's opacity) that moves 100 during `[0..T]` and
+  then reads zero across the loop is CORRECT — the bubble settles and holds.
+  Say TRACK, not element, and say it in that direction only: this sentence
+  once read "the bubble and its trail must hold still once they arrive", and
+  a build took it at its word and parked the trail circles' POSITION at a
+  constant value through the whole intro, floating them only from `T`. Free
+  satellites keep their own drift (recipe-companion-bubble, "Free satellites
+  … get their own clocks"), and that drift runs from their arrival — see
+  gate 20. The defect is a track that measures zero EVERYWHERE. Report the audit as a
   table with each track's amplitude and its active span, so contract-holds
   and dead tracks can't be confused for one another.
   **For shape morphs, measure the HANDLES too, not just the vertices.** A
@@ -888,6 +894,7 @@ be false the moment anyone measured it.
 | 5 | Fluidity | `max / median-while-moving` under ~3× on every hero track | the velocity audit; entrances and deliberate accents exempt |
 | 6 | Accents resolve | half-cycle ≥ ~4 frames at 60fps, whole accent ≥ ~0.4 s — BLINKS ARE EXEMPT (a shutter, not an oscillation) | count frames per half-cycle in the data, not by eye |
 | 17 | Blinks close | the eye reaches zero height and is gone for a beat; ~6–8 frames total, closing faster than opening. A lid parked at 15–20% is a squint, not a blink | `check-motion.mjs` (BLINK NEVER CLOSES) reads the eye's own scale track |
+| 20 | Nothing is frozen waiting for the entrance | in an intro-loop scene every element's idle runs from that element's OWN arrival, not from `T` - an element that has popped in and then holds a constant value until the loop marker is dead air the viewer sits through. Echo the loop track backwards (`value(t) = value(t + IDLE)`); the seam is untouched because the echo is the same cycle | `check-motion.mjs` (FROZEN UNTIL THE LOOP) measures each track's travel between arrival and `T` against its travel inside the loop |
 | 7 | Loop seam | every clock's period DIVIDES the repeatable span (not the whole comp — a marker segment shorter than `op` has its own span), and the segment's first and last frame render as the same PICTURE | `check-loop-seam.mjs` pixel-diffs the segment's boundary frames. For a scrolling field, per-layer values differ by design at a clean seam (each tile one lap along, standing in for the next) — read pictures, not keyframes |
 | 18 | Ink follows the pen, and scale pivots on its artwork | a hand-drawn tick strokes LEFT to right, pen-down to pen-up (a ring/circle sweep is exempt — no handwriting order). ANY element whose scale animates — pen marks, trail bubbles, badges, plates, a breathe — pivots on its own geometry: origin-space geometry takes anchor `[0,0]` + position home, absolute geometry takes anchor = own center. Anchor = position over origin-space shapes cancels the transform and paints the artwork at the canvas corner (observed twice: a pen-down dot, then a thought-trail bubble) | `check-motion.mjs` (DRAW-ON AGAINST THE PEN; SCALE/POP PIVOTS OFF THE ARTWORK) |
 | 19 | The opening frame is the brief's opening | whoever the brief stages as arriving later is fully OFFSCREEN at frame 0 — not parked at 0% opacity or 0% scale — and enters with entrance energy (a leap, a slide, a bounce that hands off to the idle). Ambient fields the brief keeps moving (clouds, waves, traffic) run from the very first frame and stop only by the deceleration the brief names — never by omission, never mid-velocity. Wrap teleports happen fully offscreen | render frame 0 and READ it against the brief's beat 1; `check-motion.mjs` (WRAP TELEPORTS IN VIEW) guards the wraps |

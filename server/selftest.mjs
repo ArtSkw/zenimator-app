@@ -392,6 +392,13 @@ try {
     check('intro-loop: stream completes', events.at(-1)?.type === 'done')
     const ilPrompt = readFileSync(join(wb, 'assets', 'selftest-il.prompt.txt'), 'utf8')
     check('intro-loop: prompt names the kind', ilPrompt.includes('INTRO + LOOP'))
+    // A companion shipped with its two trail circles parked at a constant value
+    // until the loop marker: the contract said "alive from frame 0" and the
+    // SATELLITES were exempted anyway (reported 2026-09-01).
+    check('intro-loop: every element is alive from its OWN arrival',
+      ilPrompt.includes('from its OWN arrival') &&
+      ilPrompt.includes('applies hardest to the satellites') &&
+      ilPrompt.includes('FROZEN UNTIL THE LOOP'))
     check('intro-loop: prompt dictates the exact marker contract',
       ilPrompt.includes('"markers":[{"cm":"intro","tm":0,"dr":T},{"cm":"loop","tm":T,"dr":op-T}]'))
     check('intro-loop: prompt demands the seam be read',
