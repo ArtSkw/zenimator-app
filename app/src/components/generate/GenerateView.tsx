@@ -1102,12 +1102,6 @@ export function GenerateView() {
                     )}
                   </div>
                 </div>
-  
-                <CanvasPlaceholder
-                  busy={!activeJob?.error}
-                  title="Your animation will appear here"
-                  note={activeJob?.error ? undefined : 'This takes a few minutes - you can browse other projects meanwhile.'}
-                />
               </div>
             ) : showFullSetup ? (
               /* No entrance on this WRAPPER. It used to carry `animate-in
@@ -1218,7 +1212,28 @@ export function GenerateView() {
                           Generate around. Empty state keeps the full invitation;
                           once artwork is attached it collapses to a round +. */}
                       {attachInput}
-  
+
+                      {/* "Start over" is a SECONDARY escape from a stopped run,
+                          so it sits with the other quiet controls on the left
+                          rather than in the primary cluster. It used to live
+                          beside Resume, which meant the axis switches shifted
+                          sideways the moment a run was stopped - a control that
+                          moves when an unrelated one appears is a control you
+                          have to re-find. */}
+                      {canResume && !generating && !proposing && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 shrink-0 rounded-full gap-1.5 px-3 text-muted-foreground"
+                          disabled={!canGenerate}
+                          onClick={() => handleGenerate()}
+                          title="Ignore the interrupted attempt and build this scene from scratch"
+                        >
+                          <Wand2 size={13} />
+                          Start over
+                        </Button>
+                      )}
+
                       {/* The axes ride WITH Generate on the right edge (ml-auto),
                           not centered in the row — centered, they shifted every
                           time the attach control changed width. */}
@@ -1272,30 +1287,17 @@ export function GenerateView() {
                            action, but starting clean stays one click away —
                            people often stop precisely BECAUSE it was going wrong,
                            and resuming that would just rebuild the wrong thing. */
-                        <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-3">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 rounded-full gap-1.5 px-3 text-muted-foreground"
-                            disabled={!canGenerate}
-                            onClick={() => handleGenerate()}
-                            title="Ignore the interrupted attempt and build this scene from scratch"
-                          >
-                            <Wand2 size={13} />
-                            Start over
-                          </Button>
-                          <Button
-                            variant="default"
-                            size="sm"
-                            className="h-8 rounded-full gap-1.5 px-3.5 font-semibold"
-                            disabled={!canGenerate}
-                            onClick={() => handleGenerate({ resume: true })}
-                            title="Pick the studio back up where it stopped - it keeps everything it had already worked out"
-                          >
-                            <Play size={13} />
-                            Resume
-                          </Button>
-                        </div>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="h-8 shrink-0 rounded-full gap-1.5 px-3.5 font-semibold"
+                          disabled={!canGenerate}
+                          onClick={() => handleGenerate({ resume: true })}
+                          title="Pick the studio back up where it stopped - it keeps everything it had already worked out"
+                        >
+                          <Play size={13} />
+                          Resume
+                        </Button>
                       ) : (
                         <Button
                           variant="default"
@@ -1341,16 +1343,6 @@ export function GenerateView() {
                     live again (brief, artwork, Generate), and this says what
                     happened without pretending work is still going on — so the
                     activity from the partial run stays readable below it. */}
-                {stoppedDraft && (
-                  <>
-                    <CanvasPlaceholder
-                      title="Generation stopped"
-                      note={canResume
-                        ? 'Resume picks the studio back up where it left off - or start over for a clean take.'
-                        : 'Your brief and artwork are saved - press Generate to run it again.'}
-                    />
-                  </>
-                )}
               </div>
             ) : (
               /* Collapsed, the setup shows NOTHING here. In the workspace its
@@ -1523,6 +1515,63 @@ export function GenerateView() {
                 )
   )
 
+  // ── No scene yet ─────────────────────────────────────────────────────────
+  // Building, and stopped-mid-build, are the same SHAPE: a workspace whose
+  // canvas has nothing on it. Both get the transparency checker rather than a
+  // colour, because there is no artwork to judge against a ground yet - what
+  // the checker says is "this is where it will land". The brief takes the same
+  // seat the note field takes once the scene exists, so pressing Generate (or
+  // Stop) never moves the thing you were just reading to the other end of the
+  // screen.
+  if (inProgress || stoppedDraft) {
+    const failed = !!activeJob?.error
+    const live = inProgress && !failed
+    return (
+      <div className="absolute inset-0" style={CHECKER_BG}>
+        {/* White, not `bg-card`: the veil dims the checker it sits on, so it
+            has to be the same family of light as that checker in BOTH themes.
+            It breathes only while there IS work - a stopped run must not keep
+            a pulse going, since motion in an idle state reads as work still
+            happening. */}
+        <div
+          key={`build-${reveal.key}`}
+          className={cn(
+            'absolute inset-0 bg-white',
+            live ? 'animate-[skeleton-breathe_3.2s_ease-in-out_infinite]' : 'opacity-50',
+          )}
+        />
+        {/* Centred on the SCREEN, not on the room between the rails: this is
+            the one thing the eye is looking for while it waits, and optical
+            centre beats structural centre for a line you are reading. */}
+        <div className={cn('pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 px-8 text-center', reveal.animate && REVEAL)}>
+          <p className={cn('text-sm', CANVAS_INK.title)}>
+            {inProgress ? 'Your animation will appear here' : 'Generation stopped'}
+          </p>
+          {inProgress
+            ? !failed && (
+              <p className={cn('text-xs', CANVAS_INK.note)}>
+                This takes a few minutes - you can browse other projects meanwhile.
+              </p>
+            )
+            : (
+              <p className={cn('text-xs', CANVAS_INK.note)}>
+                {canResume
+                  ? 'Resume picks the studio back up where it left off - or start over for a clean take.'
+                  : 'Your brief and artwork are saved - press Generate to run it again.'}
+              </p>
+            )}
+        </div>
+
+        <div
+          className={cn('pointer-events-none absolute bottom-3 z-20 flex justify-center', reveal.animate && REVEAL_LATE)}
+          style={CLEAR_INSET}
+        >
+          <div className="pointer-events-auto w-full max-w-xl">{setupSection}</div>
+        </div>
+      </div>
+    )
+  }
+
   // ── Workspace ────────────────────────────────────────────────────────────
   // Once a scene exists the view stops being a document and becomes a
   // workspace: the canvas owns the whole window and every piece of chrome
@@ -1588,31 +1637,6 @@ export function GenerateView() {
   )
 }
 
-
-/** Where the animation will land. Breathing while the studio works; perfectly
- *  still once it isn't — a stopped run must never keep a pulse going, since
- *  motion in an idle state reads as work that's still happening. */
-function CanvasPlaceholder({ busy = false, title, note }: { busy?: boolean; title: string; note?: string }) {
-  return (
-    <div
-      className="relative overflow-hidden rounded-2xl border border-border"
-      style={{ aspectRatio: '1 / 1', ...CHECKER_BG }}
-    >
-      {/* White, not `bg-card`: the veil dims the checker it sits on, so it has
-          to be the same family of light as that checker in BOTH themes. */}
-      <div
-        className={cn(
-          'absolute inset-0 bg-white',
-          busy ? 'animate-[skeleton-breathe_3.2s_ease-in-out_infinite]' : 'opacity-50',
-        )}
-      />
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-8 text-center">
-        <p className={cn('text-sm', CANVAS_INK.title)}>{title}</p>
-        {note && <p className={cn('text-xs', CANVAS_INK.note)}>{note}</p>}
-      </div>
-    </div>
-  )
-}
 
 /** The overrides that still target something real on a fresh doc: a control
  *  id that survived, or an intensity-feel entry whose layer survived. ONE
