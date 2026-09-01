@@ -1,0 +1,14 @@
+{
+  "controls": [
+    { "sid": "inkColor", "label": "Ink color" }
+  ],
+  "layerControls": [
+    { "target": "zenek-root", "kind": "amount", "property": "position", "label": "Bounce", "description": "How much Zenek dips and rises each step." },
+    { "target": "bag-root", "kind": "amount", "property": "rotation", "label": "Bag sway", "description": "How far the grocery bag swings with each step." }
+  ],
+  "motionExceptions": [
+    { "a": "right-fist", "b": "cup", "reason": "brief: \"the coffee cup stays steady so it doesn't spill\" — cup + the fist holding it are excluded from the bounce rig entirely (the steady island), not counter-animated" },
+    { "a": "eye", "b": "face", "reason": "blink dips the eyelid to zero independently of the face patch it sits on — motion-taste \"A blink CLOSES, and it is fast\"" },
+    { "a": "eye", "b": "body", "reason": "same blink accent, also overlaps the body silhouette behind the face" }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "controls": [
+    {
+      "sid": "accentColor",
+      "label": "Checkmark & accent color"
+    },
+    {
+      "sid": "cloudColor",
+      "label": "Cloud line color"
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "cloud-left",
+      "kind": "amount",
+      "property": "position",
+      "label": "Cloud float height",
+      "description": "How far the clouds drift upward as they draw themselves in."
+    },
+    {
+      "target": "checkmark",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Check finish pop",
+      "description": "How much the checkmark bounces as it finishes drawing."
+    }
+  ],
+  "parameters": [
+    {
+      "id": "checkRingGradient",
+      "kind": "gradient",
+      "sid": "checkRingGradient",
+      "label": "Check ring ramp",
+      "description": "The green sweep around the checkmark — four stops, fading as it closes.",
+      "themable": true
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+{
+  "controls": [],
+  "parameters": [
+    {
+      "id": "ribbonRamp",
+      "kind": "gradient",
+      "sid": "ribbonRamp",
+      "label": "Ribbon ramp",
+      "description": "The green sweep behind the mascot — fades out along its tail.",
+      "themable": true
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "mascot-root",
+      "kind": "amount",
+      "property": "position",
+      "label": "Jump height",
+      "description": "How high he springs at each beat of the celebration loop."
+    },
+    {
+      "target": "mascot-root",
+      "kind": "amount",
+      "property": "rotation",
+      "label": "Bounce lean",
+      "description": "How far he tilts at the top of each jump."
+    },
+    {
+      "target": "mascot-airflow-rig",
+      "kind": "amount",
+      "property": "rotation",
+      "label": "Air swish",
+      "description": "How far the air-flow marks swish above him with each bounce."
+    },
+    {
+      "target": "badge-hand-rig",
+      "kind": "amount",
+      "property": "rotation",
+      "label": "Hand sweep",
+      "description": "How far the clock hand sweeps while waiting."
+    },
+    {
+      "target": "mascot-shadow",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Shadow pulse",
+      "description": "How much the ground shadow spreads on landing vs pulls in at the peak."
+    }
+  ],
+  "motionExceptions": [
+    {
+      "layer": "eyes",
+      "reason": "brief: \"His closed happy eyes keep their exact drawn shape and proportions throughout... they never squash, stretch, or squint... their own scale has to cancel the body's out\" — the eyes' scale track is the exact inverse of the body's squash/stretch (product 100%), never a blink or a squint."
+    },
+    {
+      "a": "ribbon",
+      "b": "outline",
+      "reason": "brief: \"Everything rests exactly where artwork 3 draws it\" — the ribbon/swoosh/spark are stage-fixed decoration behind him (\"sweeps in behind him\"), not a held or worn prop; they hold their source position while the body bounces near them."
+    },
+    {
+      "a": "ribbon",
+      "b": "belly",
+      "reason": "same as above — stage-fixed decoration, not welded to the body."
+    },
+    {
+      "a": "swoosh",
+      "b": "outline",
+      "reason": "designer direction: the greens appear together as one smooth decorative gesture behind him when the celebration starts, then rest at the source position while he keeps bouncing; stage-fixed decoration, not a held prop."
+    },
+    {
+      "a": "swoosh",
+      "b": "belly",
+      "reason": "same as above."
+    },
+    {
+      "a": "spark",
+      "b": "outline",
+      "reason": "same as above — pops at the gesture's end like a pen lift, then rests at the source position as stage decoration."
+    },
+    {
+      "a": "spark",
+      "b": "belly",
+      "reason": "same as above."
+    },
+    {
+      "a": "ribbon-sweep",
+      "b": "outline",
+      "reason": "the gleam-clip geometry shares the ribbon's static stage position; see the ribbon exception."
+    },
+    {
+      "a": "ribbon-sweep",
+      "b": "belly",
+      "reason": "same as above."
+    },
+    {
+      "a": "ribbon",
+      "b": "swoosh",
+      "reason": "same as above — both are stage-fixed decoration, not welded to each other or to the body."
+    },
+    {
+      "a": "ribbon",
+      "b": "eyes",
+      "reason": "same as above — stage-fixed decoration passing near the face, not welded to it."
+    },
+    {
+      "a": "swoosh",
+      "b": "airflow",
+      "reason": "same as above — stage-fixed decoration passing near the air-flow marks, not welded to them."
+    },
+    {
+      "a": "swoosh",
+      "b": "eyes",
+      "reason": "same as above — stage-fixed decoration passing near the face, not welded to it."
+    },
+    {
+      "a": "swoosh",
+      "b": "spark",
+      "reason": "the swoosh reveals by a static-geometry wipe while the spark pops around its own artwork centre at the wipe's end (scale-pivot gate), so their shared touching edge drifts a few px during the brief pop — an entrance artifact, not an independent clock."
+    },
+    {
+      "layer": "ribbon-sweep",
+      "reason": "a glint sweeping a surface is relative motion the aliveness contract positively requires (motion-taste.md, contact-weld notes)."
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "controls": [],
+  "parameters": [
+    {
+      "id": "ribbonRamp",
+      "kind": "gradient",
+      "sid": "ribbonRamp",
+      "label": "Ribbon ramp",
+      "description": "The green sweep behind the mascot — fades out along its tail.",
+      "themable": true
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "mascot-root",
+      "kind": "amount",
+      "property": "position",
+      "label": "Jump height",
+      "description": "How high he springs at each beat of the celebration loop."
+    },
+    {
+      "target": "mascot-root",
+      "kind": "amount",
+      "property": "rotation",
+      "label": "Bounce lean",
+      "description": "How far he tilts at the top of each jump."
+    },
+    {
+      "target": "mascot-airflow-rig",
+      "kind": "amount",
+      "property": "rotation",
+      "label": "Air swish",
+      "description": "How far the air-flow marks swish above him with each bounce."
+    },
+    {
+      "target": "badge-hand-rig",
+      "kind": "amount",
+      "property": "rotation",
+      "label": "Hand sweep",
+      "description": "How far the clock hand sweeps while waiting."
+    },
+    {
+      "target": "mascot-shadow",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Shadow pulse",
+      "description": "How much the ground shadow spreads on landing vs pulls in at the peak."
+    }
+  ],
+  "motionExceptions": [
+    {
+      "layer": "eyes",
+      "reason": "brief: \"His closed happy eyes keep their exact drawn shape and proportions throughout... they never squash, stretch, or squint... their own scale has to cancel the body's out\" — the eyes' scale track is the exact inverse of the body's squash/stretch (product 100%), never a blink or a squint."
+    },
+    {
+      "a": "ribbon",
+      "b": "outline",
+      "reason": "brief: \"The pale ribbon stays still\" — it holds its source position for the whole loop while the body bounces near it; not welded to the mascot."
+    },
+    {
+      "a": "ribbon",
+      "b": "belly",
+      "reason": "same as above."
+    },
+    {
+      "a": "swoosh",
+      "b": "outline",
+      "reason": "brief: \"The bright swoosh and its spark answer his landings too: on each impact they dip a couple of pixels and recover, a frame or two behind him, at low amplitude derived from his own bounce\" — a small world-response DERIVED from the mascot's own LANDINGS clock (same technique as the shadow), not a parented/welded part of the body."
+    },
+    {
+      "a": "swoosh",
+      "b": "belly",
+      "reason": "same as above."
+    },
+    {
+      "a": "spark",
+      "b": "outline",
+      "reason": "same as above — the spark shares the swoosh's exact landing-dip clock and amplitude."
+    },
+    {
+      "a": "spark",
+      "b": "belly",
+      "reason": "same as above."
+    },
+    {
+      "a": "ribbon-sweep",
+      "b": "outline",
+      "reason": "the gleam strokes ride the ribbon's own static path; see the ribbon exception."
+    },
+    {
+      "a": "ribbon-sweep",
+      "b": "belly",
+      "reason": "same as above."
+    },
+    {
+      "a": "ribbon",
+      "b": "swoosh",
+      "reason": "brief: \"The pale ribbon stays still\" while the swoosh now dips a couple of px on every landing — their touching edge (the ribbon's head meeting the swoosh's start) genuinely opens and closes by the dip amplitude on each impact, a brief-directed divergence between a static element and a landing-responsive one."
+    },
+    {
+      "a": "ribbon",
+      "b": "eyes",
+      "reason": "stage-fixed ribbon passing near the face, not welded to it."
+    },
+    {
+      "a": "swoosh",
+      "b": "airflow",
+      "reason": "the swoosh's small landing-dip passes near the air-flow marks; both are independently driven off the mascot's own LANDINGS clock (derived, not welded)."
+    },
+    {
+      "a": "swoosh",
+      "b": "eyes",
+      "reason": "the swoosh's small landing-dip passes near the face, not welded to it."
+    },
+    {
+      "a": "swoosh",
+      "b": "spark",
+      "reason": "swoosh and spark share the IDENTICAL landing-dip function (same lag, same amplitude) so they move in lockstep with each other; the residual is the spark's own pop scaling around its own artwork centre (scale-pivot gate) at the entrance, not an independent clock."
+    }
+  ]
+}
