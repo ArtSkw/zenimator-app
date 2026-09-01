@@ -71,21 +71,17 @@ activity feed shows you exactly what the agent is doing.
 
 ## What's new in v1.3
 
-A workspace instead of a page, and a body that actually breathes.
+A workspace instead of a page, and mascots that actually breathe.
 
-- **The canvas is the app.** No top bar: the logo rides the left rail, the
-  global actions ride the right one, and both rails float over one continuous
-  canvas you can drag and zoom freely — the scene has no frame around it.
-- **One box, two jobs.** The note field at the bottom either takes a change
-  you type, or opens the setup in its own place. Playback sits under it;
-  studio activity moved into the left rail, appearing only while there's work.
-- **Editable canvas background.** A viewing colour under Feel — canvas only,
-  every export still ships on transparency.
-- **The silhouette breathes.** `check-motion` gained a SILHOUETTE STILL gate:
-  a body that changes SIZE but never SHAPE now fails the build. A uniform
-  scale swell is a zoom, not a breath, and the contract, the recipes and the
-  gate all say so.
-- **Staged view transitions**, a narrower control surface, and interface copy
-  without em-dashes.
+- **The canvas is the app.** No top bar. Both sidebars float over one
+  continuous canvas you can drag and zoom freely, and the scene sits on it
+  with no frame drawn around it.
+- **One box, two jobs.** The field at the bottom either takes a change you
+  type or opens the setup in its own place, so there is one place to work.
+- **Editable canvas background.** A viewing colour under Feel. Exports are
+  unaffected and still ship on transparency.
+- **Bodies that breathe.** The engine now rejects a character whose body
+  changes size but never shape: a uniform swell is a zoom, not a breath.
+  Idles read alive instead of resized.
 
 Earlier releases live in the git history.
