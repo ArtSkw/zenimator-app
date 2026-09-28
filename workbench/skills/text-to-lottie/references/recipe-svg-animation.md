@@ -92,10 +92,17 @@ Always read `svg-compatibility.md` with this recipe.
 - A raster `<pattern>` fill gets flattened to a solid, dropping the texture.
 - Fill rules or masks break holes/intersections.
 - Arbitrary path fragments move without a readable idea.
+- Motion clips an element against the canvas edge: illustrations are often
+  drawn right up to the frame (a tree 1.7px from the left edge), so a gentle
+  ±2.5° sway already cuts its outline. Size each track to the room the art
+  leaves on that side, not to the mood alone.
 
 ## Acceptance Checks
 
 - Final frame matches the SVG source visually unless creative change was asked.
 - No holes, clips, masks, gradients, or intersections break in Skottie.
+- Nothing the source draws inside the canvas is cut by its edge on any frame
+  unless the brief sends it out of frame (`check-motion.mjs`: CLIPPED BY THE
+  FRAME — Aliveness gate 21).
 - The animation has a clear reading order or reveal logic.
 - Transparent/full-frame background policy is intentional.

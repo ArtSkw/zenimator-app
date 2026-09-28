@@ -190,6 +190,14 @@ const LIVING_MOTION_CONTRACT =
   `  - A sequence built from SEVERAL artworks must end on the LAST one. The first frame is the first artwork and the final frame is the final artwork: anything that comes to rest rests where its source file draws it — a scrolling field halts on a lap boundary, a subject settles on its authored transform, a draw-on ends fully drawn. Diff the assets first: elements at identical coordinates across files are ONE element that persists, built once and kept alive for the whole timeline, never rebuilt per chapter and never crossfaded. Applies to two attachments or four — see the sequence checklist in references/chapterization-transition-grammar.md.\n` +
   `  - Tile an ambient field a full CANVAS WIDTH apart, never by the artwork's own width. A lap narrower than the canvas puts two or three copies of the same cloud on screen at once and the sky reads as duplicated art rather than the drawing that was handed over (measured: a 139px lap on a 375px canvas). Valid window is [W, W + fieldWidth] — the lower bound keeps it sparse, the upper keeps a gap from opening. Parallax comes from SPEED, i.e. the whole-lap COUNT per loop, never from giving one depth layer a shorter lap; that makes parallax ratios ratios of small integers (2:1, 3:2).\n` +
   `  - A field that STOPS, stops on its SOURCE position. When an ambient field brakes to a halt under the payoff, a sequence assembled from several artworks has to end on the LAST one — so the field must rest a whole number of laps from where the artwork drew it. That is a SECOND condition beyond closing the loop, and meeting only the first is the trap: derive the repeatable span FROM the brake (span = distanceTime / k, where a cubic brake's distanceTime is decelStart + decelDur/3), rather than choosing the span first and discovering the field halts mid-lap. Neither the lap count nor the lap distance can rescue a bad ratio — they cancel.\n` +
+  `  - Nothing is cut by the frame. An element the artwork draws fully inside the canvas ` +
+  `stays fully inside it on EVERY frame of its motion — a sway, bob, breathe or overshoot ` +
+  `may not carry its ink (stroke width included) past the edge. Measure the room each ` +
+  `moving element has to the nearest edge at rest; when the motion needs more than that, ` +
+  `cut the travel TOWARD the edge (an asymmetric sway that leans away from it) and keep ` +
+  `the full amplitude on the open side — never move, scale or re-crop the artwork to make ` +
+  `room. Leaving the frame is correct only when the brief stages it (a cloud drifting off, ` +
+  `a figure walking out); check-motion.mjs fails the rest as CLIPPED BY THE FRAME.\n` +
   `  - Ink follows the pen. A hand-drawn tick strokes LEFT to right, pen-down to pen-up ` +
   `(reverse an export path authored from the right tip; a ring/circle sweep is exempt).\n` +
   `  - Scale pivots ON its artwork. ANY element whose scale animates — a pop-in dot, a ` +

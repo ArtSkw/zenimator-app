@@ -163,7 +163,9 @@ Before finishing:
    `lottie.json` and fails on parts that slide where the artwork shows them
    touching, on an occupant too still to read inside its shell, and on a body
    whose breathe only changes its SIZE — a uniform `sx === sy` swell is a zoom,
-   not a breath, and SILHOUETTE STILL is the failure it raises. Paste its
+   not a breath, and SILHOUETTE STILL is the failure it raises — and on motion
+   that pushes an element drawn inside the canvas past its edge (CLIPPED BY
+   THE FRAME). Paste its
    output into your final message. It exists because prose gates kept being
    reasoned around ("this is a floating prop", "gate N/A by construction")
    while the render still showed the character coming apart — a failing exit

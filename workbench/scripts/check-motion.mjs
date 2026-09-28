@@ -29,6 +29,9 @@
  *   7. SILHOUETTE STILL — a body that only scales UNIFORMLY is a zoom, not a
  *      breath: the outline is identical on every frame. Fires only where a
  *      breathe was already authored, or an occupant proves it is a body.
+ *   9. CLIPPED BY THE FRAME — an element drawn fully inside the canvas whose
+ *      own motion carries its ink past the edge. Travel that leaves the frame
+ *      entirely (a drifting cloud, an entrance) is exempt by construction.
  *   6. EXPORT COMPAT — Merge Paths (`ty:'mm'`) render here but not in the
  *      exported HTML (lottie-web paints the operands) or ThorVG/dotLottie;
  *      animated gradient stops render NOTHING even here. Both fail the build
@@ -1086,6 +1089,125 @@ for (const p of pairs.sort((x, y) => y.slide - x.slide).slice(0, 12)) {
       }
     }
   }
+}
+
+// ── 9. CLIPPED BY THE FRAME — motion pushes resting ink past the canvas edge ─
+// A tree drawn 1.7px from the left edge swayed ±2.5° and lost 2px of its crown
+// stroke to the canvas on every lean (reported from the live app, 2026-09-28).
+// Nothing in the brief asked for that crop; the artwork simply had less room
+// than the motion took. Measured on real ink (Bezier-sampled, stroke included)
+// over the whole timeline. Three shapes are NOT this bug and are skipped by
+// construction, with no names involved:
+//   - never fully inside: the source itself bleeds off the edge (a cropped hill)
+//   - ever fully outside: it travels — a cloud drifting across, an entrance
+//     from offscreen, an exit the brief stages
+//   - matte-clipped layers: their visible edge is the matte's (gate 2)
+{
+  const W = doc.w ?? 0, H = doc.h ?? 0
+  const EDGE_TOL = 0.5 // px — below this is antialiasing, not a visible cut
+  const SEEN = 35      // % opacity — a cut on a near-transparent fade-out doesn't read
+  /** Static props hold a bare number, animated ones a one-element array. */
+  const num = (p, t, d) => { const v = evalProp(p, t, d); return Array.isArray(v) ? v[0] ?? d : v ?? d }
+  const inkOf = (items, m, out) => {
+    const tr = (items ?? []).find((it) => it.ty === 'tr')
+    const gm = tr ? mul(m, localMatrix(tr, 0)) : m
+    for (const it of items ?? []) {
+      if (it.ty === 'gr') inkOf(it.it, gm, out)
+      else if (it.ty === 'st') out.stroke = Math.max(out.stroke, num(it.w, 0, 0))
+      else if (it.ty === 'sh') {
+        const path = it.ks?.a ? it.ks.k?.[0]?.s?.[0] : it.ks?.k
+        const v = path?.v ?? [], ii = path?.i ?? [], oo = path?.o ?? []
+        const segs = path?.c ? v.length : v.length - 1
+        for (let s = 0; s < segs; s++) {
+          const a = v[s], b = v[(s + 1) % v.length]
+          const c1 = [a[0] + (oo[s]?.[0] ?? 0), a[1] + (oo[s]?.[1] ?? 0)]
+          const c2 = [b[0] + (ii[(s + 1) % v.length]?.[0] ?? 0), b[1] + (ii[(s + 1) % v.length]?.[1] ?? 0)]
+          for (let k = 0; k < 8; k++) {
+            const u = k / 8, w = 1 - u
+            out.pts.push(apply(gm, [
+              w * w * w * a[0] + 3 * w * w * u * c1[0] + 3 * w * u * u * c2[0] + u * u * u * b[0],
+              w * w * w * a[1] + 3 * w * w * u * c1[1] + 3 * w * u * u * c2[1] + u * u * u * b[1],
+            ]))
+          }
+        }
+        if (v.length) out.pts.push(apply(gm, v[v.length - 1]))
+      } else if (it.ty === 'el') {
+        const c = evalProp(it.p, 0, [0, 0]), sz = evalProp(it.s, 0, [0, 0])
+        for (let k = 0; k < 24; k++) {
+          const q = (k / 24) * Math.PI * 2
+          out.pts.push(apply(gm, [c[0] + Math.cos(q) * sz[0] / 2, c[1] + Math.sin(q) * sz[1] / 2]))
+        }
+      } else if (it.ty === 'rc') {
+        const c = evalProp(it.p, 0, [0, 0]), sz = evalProp(it.s, 0, [0, 0])
+        for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          out.pts.push(apply(gm, [c[0] + dx * sz[0] / 2, c[1] + dy * sz[1] / 2]))
+        }
+      }
+    }
+    return out
+  }
+  const ip = doc.ip ?? 0, op = doc.op ?? 0
+  const STEP = Math.max(1, (op - ip) / 240)
+  const frames = []
+  for (let t = ip; t < op; t += STEP) frames.push(t)
+  const SIDES = ['left', 'top', 'right', 'bottom']
+  let tightest = null
+  if (W > 0 && H > 0) for (const l of shapeLayers) {
+    if (l.tt) continue
+    const ink = inkOf(l.shapes, [1, 0, 0, 1, 0, 0], { pts: [], stroke: 0 })
+    if (!ink.pts.length) continue
+    const step = Math.max(1, Math.floor(ink.pts.length / 600))
+    const pts = ink.pts.filter((_, i) => i % step === 0)
+    // "At rest" = the visible frame closest to the artwork's authored pose
+    // (unscaled, unrotated) — never the first frame, which may be mid-entrance.
+    let everInside = false, everGone = false, rest = null, restCost = Infinity
+    let worst = { over: 0, side: '', t: 0 }
+    for (const t of frames) {
+      if (t < (l.ip ?? ip) || t >= (l.op ?? op)) continue
+      if (num(l.ks?.o, t, 100) < SEEN) continue
+      const m = worldMatrix(l, t)
+      const pad = (ink.stroke / 2) * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]))
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+      for (const p of pts) {
+        const q = apply(m, p)
+        if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]
+        if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]
+      }
+      x0 -= pad; y0 -= pad; x1 += pad; y1 += pad
+      if (x1 < 0 || x0 > W || y1 < 0 || y0 > H) { everGone = true; break }
+      const gaps = [x0, y0, W - x1, H - y1] // clearance per side; negative = cut
+      const minGap = Math.min(...gaps)
+      if (minGap >= -EDGE_TOL) {
+        everInside = true
+        const cost = Math.abs(Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) - 1) + Math.abs(Math.atan2(m[1], m[0]))
+        if (cost < restCost - 1e-9) { restCost = cost; rest = gaps }
+      }
+      if (-minGap > worst.over) worst = { over: -minGap, side: SIDES[gaps.indexOf(minGap)], t }
+    }
+    if (everGone || !everInside) continue
+    const nm = l.nm ?? '?'
+    const m0 = worldMatrix(l, frames[0])
+    const moves = worst.over > 0 || frames.some((t) => worldMatrix(l, t).some((v, j) => Math.abs(v - m0[j]) > 1e-3))
+    if (moves && rest) {
+      const g = Math.min(...rest)
+      if (!tightest || g < tightest.g) tightest = { nm, g, side: SIDES[rest.indexOf(g)] }
+    }
+    if (worst.over <= EDGE_TOL) continue
+    const ok = declaredLayer(nm)
+    if (ok) { allowed.push(`${nm} crosses the ${worst.side} edge by ${worst.over.toFixed(1)}px — declared: ${ok.reason}`); continue }
+    const room = rest[SIDES.indexOf(worst.side)]
+    fail(
+      `CLIPPED BY THE FRAME  ${nm}: at rest it has ${room.toFixed(1)}px to the ${worst.side} edge, and its motion carries ` +
+      `its ink ${worst.over.toFixed(1)}px past that edge (worst at f${Math.round(worst.t)}) — the canvas cuts the artwork on screen`,
+      `Keep the motion inside the room the artwork gives it. Cut the travel TOWARD the ${worst.side} edge to under ` +
+      `${Math.max(0, room).toFixed(1)}px and keep the full amplitude on the open side: an asymmetric sway that leans AWAY from ` +
+      'the edge (wind pushes one way and recovers), or a pivot whose arc runs along the edge instead of into it. Never move, ' +
+      'scale or re-crop the artwork to make room — the composition is the source\'s. IF THE BRIEF takes it out of frame ' +
+      '(drifting off, walking out, peeking in from the edge), the crop is correct: declare { layer, reason } in ' +
+      'controls.json quoting the brief.',
+    )
+  }
+  if (tightest) console.log(`\nFrame edges: tightest moving element ${tightest.nm}, ${tightest.g.toFixed(1)}px to the ${tightest.side} edge at rest`)
 }
 
 if (failures.length) {

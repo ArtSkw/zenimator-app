@@ -524,6 +524,12 @@ try {
         p.includes('what it MEANS'))
       check(`living-motion (${kind}): mood governs the numbers`,
         p.includes('Mood governs the system'))
+      // A tree drawn 1.7px from the edge swayed 2px of its crown off-canvas
+      // (reported from the live app, 2026-09-28). The room is the artwork's;
+      // the motion fits inside it unless the brief sends it out of frame.
+      check(`living-motion (${kind}): nothing is cut by the frame`,
+        p.includes('Nothing is cut by the frame') && p.includes('TOWARD the edge') &&
+        p.includes('CLIPPED BY THE FRAME'))
     }
   }
 
