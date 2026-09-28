@@ -25,10 +25,16 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import { timingSafeEqual } from 'node:crypto'
 import { createJobTable } from './jobs.mjs'
+import { createPersistence } from './persist.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const WORKBENCH = process.env.STUDIO_WORKBENCH ?? join(__dirname, '../workbench')
-const SESSIONS_FILE = process.env.STUDIO_SESSIONS_FILE ?? join(__dirname, 'sessions.json')
+/** A mounted volume for the team's work on a hosted engine (see persist.mjs).
+ *  Unset locally: the working copy IS the persistent store there. */
+const DATA_DIR = process.env.STUDIO_DATA_DIR ?? ''
+if (DATA_DIR) mkdirSync(DATA_DIR, { recursive: true })
+const SESSIONS_FILE = process.env.STUDIO_SESSIONS_FILE ??
+  (DATA_DIR ? join(DATA_DIR, 'sessions.json') : join(__dirname, 'sessions.json'))
 const PORT = Number(process.env.STUDIO_AGENT_PORT ?? 4545)
 /** Loopback by default — the service runs model-authored bash with bypassed
  *  permissions; it must never be reachable from the LAN unless someone
@@ -56,6 +62,19 @@ const ALLOWED_ORIGINS = new Set(
 )
 
 const jobs = createJobTable({ concurrency: CONCURRENCY })
+
+// ── Persistence ──────────────────────────────────────────────────────────────
+// Restore the team's work before anything reads the workbench, then mirror
+// every write back: as each job's stream closes, after a revert, on a 30s tick (so a
+// restart mid-generation keeps the partial build for resume), and on shutdown.
+const persistence = createPersistence({ workbench: WORKBENCH, dataDir: DATA_DIR })
+if (persistence.enabled) {
+  console.log(`[studio-agent] restored ${persistence.restore()} file(s) from ${DATA_DIR}`)
+  setInterval(() => persistence.persist(), 30_000).unref()
+  for (const sig of ['SIGTERM', 'SIGINT']) {
+    process.once(sig, () => { persistence.persist(); process.exit(0) })
+  }
+}
 
 // ── Sessions ─────────────────────────────────────────────────────────────────
 // slug → {id, updatedAt}. Legacy plain-string values migrate on load; entries
@@ -761,6 +780,9 @@ const SPAWN_FLAGS = ['--verbose', '--permission-mode', 'bypassPermissions', '--s
  *  the API key just wins when both exist. */
 function claudeSpawnEnv() {
   const env = { ...process.env }
+  // Claude Code keeps its resumable session transcripts under its config dir;
+  // on the volume they outlive a deploy, so an edit resumes instead of re-seeding.
+  if (DATA_DIR && !env.CLAUDE_CONFIG_DIR) env.CLAUDE_CONFIG_DIR = join(DATA_DIR, 'claude')
   if (env.ANTHROPIC_API_KEY) {
     // Workspace key present → it's the sole auth; drop the subscription token.
     delete env.CLAUDE_CODE_OAUTH_TOKEN
@@ -1022,6 +1044,9 @@ function submitJob({
     }
   }
   const end = () => {
+    // Save BEFORE the stream closes, so a client that sees the end of a job
+    // can rely on its work already being on the volume.
+    persistence.persist()
     if (!res.writableEnded) res.end()
   }
   job = jobs.submit(slug, kind, {
@@ -1291,6 +1316,17 @@ const server = createServer(async (req, res) => {
           res.write(JSON.stringify({ type: 'error', text: 'edit needs {slug, instruction}' }) + '\n')
           return res.end()
         }
+        // An edit needs a scene to edit. Without one (typically a hosted engine
+        // reset by a redeploy while the browser still shows the animation) the
+        // agent can only end empty-handed after a full paid run — say so now.
+        if (!existsSync(join(WORKBENCH, 'public/projects', slug, 'scene-1', 'lottie.json'))) {
+          res.write(JSON.stringify({
+            type: 'error',
+            text: "This engine doesn't have this project any more — it was most likely reset by a redeploy. " +
+              'Generate it again from the same SVG and brief to keep editing.',
+          }) + '\n')
+          return res.end()
+        }
         const anchor = {
           frame: Number.isFinite(body.frame) ? Math.max(0, Math.round(body.frame)) : undefined,
           layer: typeof body.layer === 'string' && body.layer ? body.layer.slice(0, 80) : undefined,
@@ -1345,6 +1381,7 @@ const server = createServer(async (req, res) => {
         const lottieJson = readFileSync(snap, 'utf8')
         JSON.parse(lottieJson)
         writeFileSync(current, lottieJson)
+        persistence.persist()
         return res.end(JSON.stringify({ ok: true, lottieJson, versions: readHistory(slug), ...controlsPayload(`${slug}/scene-1`) }))
       } catch (e) {
         return res.end(JSON.stringify({ ok: false, error: String(e?.message ?? e) }))

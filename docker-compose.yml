@@ -22,4 +22,11 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       # The browser origin(s) allowed to drive the engine (comma-separated).
       STUDIO_ALLOWED_ORIGINS: ${STUDIO_ALLOWED_ORIGINS:-https://artskw.github.io}
+      # The team's projects and sessions survive rebuilds (server/persist.mjs).
+      STUDIO_DATA_DIR: /data
+    volumes:
+      - engine-data:/data
     restart: unless-stopped
+
+volumes:
+  engine-data:

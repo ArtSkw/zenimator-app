@@ -45,6 +45,26 @@ Render give you a URL automatically; on a bare VM, front it with Caddy/nginx TLS
 > **Never bake the tokens into the image or the app bundle.** They are runtime
 > env only. The app is public — a token in its build would be world-readable.
 
+## Keep the team's work across redeploys
+
+A container's filesystem is its image: without a volume, every redeploy,
+secret change or restart wipes every project the team generated on the engine
+(and an edit on one of them can only fail). With `STUDIO_DATA_DIR` pointing at
+a mounted volume, the engine restores projects, build scripts, learnings docs
+and resumable sessions at boot, and saves them as each job finishes.
+
+- **Fly.io** — `fly.toml` already mounts `zenimator_data` at `/data`. Create the
+  volume ONCE, in the machine's region, before the first deploy that carries
+  the mount (dashboard → the app → Volumes → Create volume, or):
+  ```
+  fly volumes create zenimator_data --size 1 --region iad -a zenimator-app
+  ```
+  1 GB holds hundreds of scenes; `fly volumes extend` grows it later.
+- **docker compose** — the `engine-data` named volume is set up for you.
+
+Only work generated AFTER the volume exists is kept; anything already on a
+running machine goes with its next restart.
+
 ## Point the app at it
 
 In the deployed app: **Settings → Studio engine**

@@ -11,7 +11,8 @@ FROM node:22-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
- && npm install -g @anthropic-ai/claude-code
+ && npm install -g @anthropic-ai/claude-code \
+ && command -v setpriv  # the entrypoint drops root with it — fail the BUILD, not the boot
 
 WORKDIR /engine
 
@@ -31,12 +32,13 @@ RUN cd workbench && npm ci
 RUN mkdir -p workbench/.claude/skills \
  && cp -r workbench/skills/text-to-lottie workbench/.claude/skills/
 
-# Run as the image's built-in non-root `node` user. Claude Code REFUSES
-# --permission-mode bypassPermissions under root/sudo for security, so the engine
-# must not be root. Give `node` ownership so it can write scenes, sessions, and
-# any runtime installs the agent does.
+# The engine runs as the image's built-in non-root `node` user. Claude Code
+# REFUSES --permission-mode bypassPermissions under root/sudo for security, so
+# the engine must not be root. Give `node` ownership so it can write scenes,
+# sessions, and any runtime installs the agent does. The container STARTS as
+# root only so the entrypoint can hand a mounted data volume to `node` (a fresh
+# volume mounts root-owned); it drops to `node` before the engine starts.
 RUN chown -R node:node /engine
-USER node
 
 # Bind all interfaces so the platform can route to the container. This is
 # off-loopback, so agent.mjs REQUIRES STUDIO_AGENT_TOKEN at runtime (fail-closed).
@@ -54,4 +56,8 @@ EXPOSE 4545
 #     ANTHROPIC_API_KEY       — workspace API key (metered; team default)
 #     CLAUDE_CODE_OAUTH_TOKEN — from `claude setup-token` (subscription auth)
 #   STUDIO_ALLOWED_ORIGINS    — the app origin, e.g. https://artskw.github.io
+# Optional:
+#   STUDIO_DATA_DIR           — a mounted volume; the team's projects and
+#                               sessions survive redeploys (server/persist.mjs)
+ENTRYPOINT ["sh", "/engine/server/entrypoint.sh"]
 CMD ["node", "server/agent.mjs"]

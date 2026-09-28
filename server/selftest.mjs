@@ -10,7 +10,7 @@
  * Zero dependencies. Exits non-zero on any failed check.
  */
 import { spawn } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync, utimesSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -50,6 +50,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     mkdirSync(join(process.cwd(), 'assets'), { recursive: true })
     writeFileSync(join(process.cwd(), 'assets', slug + '.prompt.txt'), prompt)
     writeFileSync(join(process.cwd(), 'assets', slug + '.args.json'), JSON.stringify(args)) // spawn-flag assertions
+    writeFileSync(join(process.cwd(), 'assets', slug + '.env.json'), JSON.stringify({ CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR ?? null }))
   } catch {}
   out({ type: 'system', subtype: 'init', session_id: 'stub-session-' + slug })
   // Propose flow: write a brief + BRIEF_READY, no scene.
@@ -93,6 +94,30 @@ writeFileSync(sessionsFile, JSON.stringify({
   'selftest-rz': { id: 'dead-session-id', updatedAt: Date.now() },
 }))
 
+// An expired session still has its scene on disk — that is what the fallback
+// re-seeds from. (A project with NO scene is the missing-project guard's case.)
+mkdirSync(join(wb, 'public/projects/selftest-e/scene-1'), { recursive: true })
+writeFileSync(join(wb, 'public/projects/selftest-e/scene-1/lottie.json'), '{"v":"5.7.0","layers":[]}')
+
+// A data volume holding work from before a "redeploy": restored at boot, and
+// every engine write mirrored back to it.
+const dataDir = join(tmp, 'data')
+const store = join(dataDir, 'workbench')
+const yesterday = new Date(Date.now() - 86_400_000)
+const seed = (root, rel, body, when) => {
+  mkdirSync(dirname(join(root, rel)), { recursive: true })
+  writeFileSync(join(root, rel), body)
+  if (when) utimesSync(join(root, rel), when, when)
+}
+seed(store, 'public/projects/selftest-vol/scene-1/lottie.json', '{"from":"volume"}', yesterday)
+seed(store, 'scripts/build-selftest-vol.mjs', '// volume build', yesterday)
+// A shipped scene the team edited on the engine: the image copy looks NEWER
+// (a hosted build clones fresh), and the team's edit must still win.
+seed(store, 'public/projects/selftest-new/scene-1/lottie.json', '{"from":"team-edit"}', yesterday)
+seed(wb, 'public/projects/selftest-new/scene-1/lottie.json', '{"from":"image"}')
+// …while a shipped scene nobody touched keeps the repo's copy.
+seed(wb, 'public/projects/selftest-shipped/scene-1/lottie.json', '{"from":"repo"}')
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const checks = []
@@ -128,7 +153,7 @@ async function stream(path, body, { onEvent } = {}) {
 const SLUGS = ['selftest-a', 'selftest-b', 'selftest-c', 'selftest-d', 'selftest-e']
 const cleanup = () => {
   rmSync(tmp, { recursive: true, force: true })
-  for (const s of [...SLUGS, 'selftest-f', 'selftest-g', 'selftest-p']) rmSync(`/tmp/preview-${s}.png`, { force: true })
+  for (const s of [...SLUGS, 'selftest-f', 'selftest-g', 'selftest-p', 'selftest-p2']) rmSync(`/tmp/preview-${s}.png`, { force: true })
 }
 
 // ── Run ──────────────────────────────────────────────────────────────────────
@@ -142,6 +167,7 @@ const server = spawn('node', [join(__dirname, 'agent.mjs')], {
     STUDIO_CONCURRENCY: '1',
     STUDIO_WORKBENCH: wb,
     STUDIO_SESSIONS_FILE: sessionsFile,
+    STUDIO_DATA_DIR: dataDir,
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 })
@@ -235,6 +261,35 @@ try {
     const fellBack = events.some((e) => e.type === 'status' && /session expired/i.test(e.text ?? ''))
     check('edit: dead session falls back to a fresh seeded session', fellBack)
     check('edit: fallback still delivers the scene', events.at(-1)?.type === 'done' && events.at(-1)?.scene === 'selftest-e/scene-1')
+  }
+
+  // 5b. Persistence across redeploys + the missing-project guard (2026-09-28:
+  // a Fly redeploy wiped a teammate's project, and his edit then ran a whole
+  // paid session that could only end with "no scene landed").
+  {
+    check('persist: volume work is restored at boot',
+      readFileSync(join(wb, 'public/projects/selftest-vol/scene-1/lottie.json'), 'utf8') === '{"from":"volume"}' &&
+      existsSync(join(wb, 'scripts/build-selftest-vol.mjs')))
+    check('persist: the team\'s edit of a shipped scene survives a fresh (newer-looking) image',
+      readFileSync(join(wb, 'public/projects/selftest-new/scene-1/lottie.json'), 'utf8') === '{"from":"team-edit"}')
+    check('persist: an untouched shipped scene keeps the repo copy',
+      readFileSync(join(wb, 'public/projects/selftest-shipped/scene-1/lottie.json'), 'utf8') === '{"from":"repo"}')
+    // Repo tooling changed at runtime must never shadow the next deploy's gates.
+    seed(wb, 'scripts/check-motion.mjs', '// tooling')
+    await stream('/generate', { slug: 'selftest-p2', svg: '<svg/>', brief: 'x', kind: 'loop' })
+    check('persist: a finished job\'s scene is mirrored to the volume',
+      existsSync(join(store, 'public/projects/selftest-p2/scene-1/lottie.json')) &&
+      existsSync(join(store, 'assets/selftest-p2.svg')))
+    check('persist: repo tooling is never mirrored', !existsSync(join(store, 'scripts/check-motion.mjs')))
+    const env = JSON.parse(readFileSync(join(wb, 'assets', 'selftest-p2.env.json'), 'utf8'))
+    check('persist: Claude session transcripts live on the volume', env.CLAUDE_CONFIG_DIR === join(dataDir, 'claude'))
+
+    const t0 = Date.now()
+    const gone = await stream('/edit', { slug: 'selftest-missing', instruction: 'nudge it' })
+    check('edit: a project the engine no longer has fails at once, with the reason',
+      gone.length === 1 && gone[0].type === 'error' && /doesn't have this project/.test(gone[0].text ?? '') &&
+      Date.now() - t0 < 1000)
+    check('edit: …and never spawns a run for it', !existsSync(join(wb, 'assets', 'selftest-missing.prompt.txt')))
   }
 
   // 6. Health exposes job counts
@@ -683,7 +738,11 @@ try {
     check('token: off-loopback bind without a token fails closed (non-zero exit)', exitCode !== 0 && exitCode !== -1)
   }
 } finally {
+  // Wait for the exit: the engine saves to its data volume on SIGTERM, and
+  // deleting the fixture underneath that final save races it.
+  const exited = new Promise((r) => { server.once('exit', r); setTimeout(r, 4000) })
   server.kill('SIGTERM')
+  await exited
   cleanup()
 }
 

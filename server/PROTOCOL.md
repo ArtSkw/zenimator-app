@@ -122,7 +122,16 @@ itself revertible. These are local runtime artifacts alongside the scene.
 legacy plain-string values are migrated on load. Entries older than
 `STUDIO_SESSION_TTL_DAYS` (default 30) are pruned at boot. `/edit` with a dead
 session retries once with a fresh session seeded from the scene's build script
-and learnings doc.
+and learnings doc. `/edit` on a slug with NO scene on the engine (typically a
+hosted engine reset by a redeploy while the browser still shows the animation)
+answers at once with a single `error` event saying so, and spawns nothing.
+
+With `STUDIO_DATA_DIR` set (a mounted volume), the sessions file, Claude Code's
+session transcripts (`CLAUDE_CONFIG_DIR`) and the engine-authored workbench
+files — `public/projects/**`, `scripts/build-*.mjs`, `docs/*.md`, `assets/*` —
+live on the volume and are restored at boot. The volume holds only files the
+engine wrote, and those win over the image's copy; repo tooling is never
+mirrored. See `server/persist.mjs`.
 
 ## Security posture (v1.0 — local single-user)
 
