@@ -83,6 +83,9 @@ A workspace instead of a page, and mascots that actually breathe.
 - **Bodies that breathe.** The engine now rejects a character whose body
   changes size but never shape: a uniform swell is a zoom, not a breath.
   Idles read alive instead of resized.
+- **Nothing gets cut by the frame.** A tree that sways, a spark that pops
+  in: anything your artwork draws inside the canvas now stays inside it on
+  every frame, unless your brief sends it out.
 - **A stronger motion designer by default.** The engine now runs on Claude
   Opus 5.5 at medium effort. If you never changed Model or Reasoning effort
   in Settings, you're moved over automatically.

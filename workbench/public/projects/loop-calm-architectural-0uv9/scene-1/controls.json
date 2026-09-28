@@ -1,0 +1,66 @@
+{
+  "controls": [
+    {
+      "sid": "inkColor",
+      "label": "Line ink"
+    },
+    {
+      "sid": "hatchTint",
+      "label": "Cloud hatch tint"
+    }
+  ],
+  "parameters": [
+    {
+      "id": "inkColor",
+      "kind": "color",
+      "sid": "inkColor",
+      "label": "Line ink",
+      "description": "Every outline, the floor bands and the silhouette."
+    },
+    {
+      "id": "hatchTint",
+      "kind": "color",
+      "sid": "hatchTint",
+      "label": "Cloud hatch tint",
+      "description": "The grey diagonal hatch of the drifting cloud."
+    }
+  ],
+  "layerControls": [
+    {
+      "target": "tree",
+      "kind": "amount",
+      "property": "rotation",
+      "label": "Tree sway",
+      "description": "How far the tree leans in the wind."
+    },
+    {
+      "target": "bird-large",
+      "kind": "amount",
+      "property": "position",
+      "label": "Bird wander",
+      "description": "How far the larger bird roams on its flight path."
+    },
+    {
+      "target": "box-silhouette",
+      "kind": "amount",
+      "property": "scale",
+      "label": "Silhouette breath",
+      "description": "How much the dark shape in the box rises and settles."
+    }
+  ],
+  "motionExceptions": [
+    {
+      "layer": "bird-large",
+      "reason": "brief: 'each drifts on its own slow wandering path — rising, dipping and shifting a few pixels left and right on gentle arcs … returning to their start by the loop's end' — a free bird's wander, not a streaming field"
+    },
+    {
+      "layer": "bird-small",
+      "reason": "brief: 'each drifts on its own slow wandering path — rising, dipping and shifting a few pixels left and right on gentle arcs, never in sync with each other' — a free bird's wander, not a streaming field"
+    },
+    {
+      "a": "tree-crown",
+      "b": "tree-trunk",
+      "reason": "brief: 'with the crown leading the trunk by a couple of frames so it feels organic' — crown angle = trunk angle 2f ahead, same pivot"
+    }
+  ]
+}
