@@ -59,8 +59,9 @@ and resumable sessions at boot, and saves them as each job finishes.
   'zenimator_data'" rather than creating one. Use the region the Machines page
   shows (currently `gru`, which is NOT the `primary_region` in fly.toml):
   ```
-  brew install flyctl && fly auth login
-  fly volumes create zenimator_data --size 1 --region gru -a zenimator-app --yes
+  curl -L https://fly.io/install.sh | sh        # no Homebrew or admin rights needed
+  ~/.fly/bin/flyctl auth login
+  ~/.fly/bin/flyctl volumes create zenimator_data --size 1 --region gru -a zenimator-app --yes
   ```
   1 GB holds hundreds of scenes; `fly volumes extend` grows it later.
 - **docker compose** — the `engine-data` named volume is set up for you.
