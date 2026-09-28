@@ -53,11 +53,14 @@ secret change or restart wipes every project the team generated on the engine
 a mounted volume, the engine restores projects, build scripts, learnings docs
 and resumable sessions at boot, and saves them as each job finishes.
 
-- **Fly.io** — `fly.toml` already mounts `zenimator_data` at `/data`. Create the
-  volume ONCE, in the machine's region, before the first deploy that carries
-  the mount (dashboard → the app → Volumes → Create volume, or):
+- **Fly.io** — `fly.toml` already mounts `zenimator_data` at `/data`, and the
+  first deploy that carries the mount creates the 1 GB volume itself
+  (`initial_size`), in the machine's region. The dashboard has no button for
+  volumes; if a deploy ever reports the volume missing, create it with the CLI
+  in the region the Machines page shows (currently `gru`, which is NOT the
+  `primary_region` in fly.toml):
   ```
-  fly volumes create zenimator_data --size 1 --region iad -a zenimator-app
+  fly volumes create zenimator_data --size 1 --region gru -a zenimator-app
   ```
   1 GB holds hundreds of scenes; `fly volumes extend` grows it later.
 - **docker compose** — the `engine-data` named volume is set up for you.
