@@ -721,7 +721,7 @@ function writeSourceAssets(slug, body) {
  *  or malformed falls back here rather than inheriting the machine's global
  *  CLI default — which tracks the OWNER's interactive /model switches and can
  *  silently be a slower flagship model. */
-const DEFAULT_MODEL = 'claude-sonnet-5'
+const DEFAULT_MODEL = 'claude-opus-5-5'
 // First char anchored to alphanumeric so a value can never look like a flag
 // (defense-in-depth; it's always positioned as --model's value anyway).
 const cleanModel = (m) =>
@@ -729,11 +729,11 @@ const cleanModel = (m) =>
 
 // Per-turn reasoning depth. Passed explicitly so the engine doesn't inherit the
 // host's ambient default (Claude Code's is `xhigh` — deepest and slowest). We
-// default to `high`: the documented quality/speed sweet spot, faster than xhigh
-// while still running the full write→run→look→fix loop. Lower values (`medium`,
-// `low`) trade verification for speed — the app can request them, but the floor
-// is a deliberate product choice, not the CLI's ambient default.
-const DEFAULT_EFFORT = 'high'
+// default to `medium`: Opus 5.5's own default and its quality/speed sweet spot,
+// still running the full write→run→look→fix loop. The app can request any
+// level, but the fallback is a deliberate product choice, not the CLI's ambient
+// default.
+const DEFAULT_EFFORT = 'medium'
 const EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 const cleanEffort = (e) => (typeof e === 'string' && EFFORT_LEVELS.has(e) ? e : DEFAULT_EFFORT)
 

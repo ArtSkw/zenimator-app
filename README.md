@@ -83,5 +83,8 @@ A workspace instead of a page, and mascots that actually breathe.
 - **Bodies that breathe.** The engine now rejects a character whose body
   changes size but never shape: a uniform swell is a zoom, not a breath.
   Idles read alive instead of resized.
+- **A stronger motion designer by default.** The engine now runs on Claude
+  Opus 5.5 at medium effort. If you never changed Model or Reasoning effort
+  in Settings, you're moved over automatically.
 
 Earlier releases live in the git history.

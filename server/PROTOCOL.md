@@ -52,13 +52,13 @@ and pass the bytes to the renderer — a native text layer without its font
 renders blank.
 
 **Model & effort (additive):** the three job endpoints accept optional `model`
-(a Claude model id, e.g. `claude-sonnet-5`, passed as `--model`) and `effort`
+(a Claude model id, e.g. `claude-opus-5-5`, passed as `--model`) and `effort`
 (one of `low`/`medium`/`high`/`xhigh`/`max`, passed as `--effort`). Absent or
-malformed values fall back to the service defaults (`claude-sonnet-5`,
-`high`) — never to the machine's ambient CLI state, which tracks the owner's
-interactive switches. `high` is deliberate: the quality/speed sweet spot,
-faster than the CLI's `xhigh` default while still running the full
-write→run→look→fix loop. Engine spawns also run with `--strict-mcp-config` so
+malformed values fall back to the service defaults (`claude-opus-5-5`,
+`medium`) — never to the machine's ambient CLI state, which tracks the owner's
+interactive switches. `medium` is deliberate: Opus 5.5's own default and its
+quality/speed sweet spot, faster than the CLI's `xhigh` default while still
+running the full write→run→look→fix loop. Engine spawns also run with `--strict-mcp-config` so
 user/global MCP servers are never inherited (their startup + tool definitions
 would tax every request for nothing).
 

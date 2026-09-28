@@ -75,9 +75,10 @@ against any change before redeploying.
 - Engine host: a small always-on VM/instance (single-digit $/mo on most platforms).
 - Generation:
   - With `ANTHROPIC_API_KEY` — **metered** per-token billing against the
-    workspace. Deep runs (the write→run→look→fix loop at `high` effort) use real
+    workspace. Deep runs (the write→run→look→fix loop on Opus 5.5) use real
     tokens; set a workspace **spend limit** as a guardrail.
   - With `CLAUDE_CODE_OAUTH_TOKEN` — your Claude **subscription**, no per-call
     billing, but shares that one plan's rate limits across all parallel runs.
-  - Either way, keep the app's Settings → Model on `claude-sonnet-5` (the
-    default) to keep runs fast and cheap.
+  - The default is `claude-opus-5-5` at `medium` effort — the motion-quality
+    setting. Settings → Model `claude-sonnet-5` roughly halves per-token cost
+    when a run doesn't need it.

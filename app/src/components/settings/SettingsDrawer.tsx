@@ -96,9 +96,9 @@ export function SettingsDrawer() {
               <Label className="text-sm font-semibold">Reasoning effort</Label>
               <p className="text-xs leading-relaxed text-muted-foreground">
                 How hard the engine thinks per step. Higher is more thorough but
-                slower; <span className="font-medium">high</span> is the balanced
-                default. <span className="font-medium">medium</span>/<span className="font-medium">low</span> are
-                faster but verify less; <span className="font-medium">xhigh</span>/<span className="font-medium">max</span> go
+                slower; <span className="font-medium">medium</span> is the balanced
+                default. <span className="font-medium">low</span> is faster but
+                verifies less; <span className="font-medium">high</span>/<span className="font-medium">xhigh</span>/<span className="font-medium">max</span> go
                 deeper for hero scenes.
               </p>
             </div>
