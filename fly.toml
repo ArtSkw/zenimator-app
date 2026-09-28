@@ -24,10 +24,10 @@ primary_region = "iad"   # pick one near your team — `fly platform regions` li
 
 # The team's projects, build scripts, learnings docs and resumable sessions live
 # on this volume, so a redeploy, a secret change or a restart no longer wipes
-# them (server/persist.mjs). The first deploy with this section creates the
-# volume itself, in the MACHINE's region (initial_size) — the running machine is
-# in gru, whatever primary_region says. By hand, if a deploy ever asks for it:
-#   fly volumes create zenimator_data --size 1 --region gru -a zenimator-app
+# them (server/persist.mjs). The dashboard's deploy will NOT create it (it fails
+# with "needs volumes with name 'zenimator_data'"), so create it once with the
+# CLI, in the MACHINE's region — gru, whatever primary_region says:
+#   fly volumes create zenimator_data --size 1 --region gru -a zenimator-app --yes
 [mounts]
   source = "zenimator_data"
   destination = "/data"
